@@ -224,6 +224,13 @@ def handle_webhook():
     episode_num = payload.get('episodeNumber') or payload.get('episode', {}).get('episodeNumber')
     subject = payload.get('subject') or payload.get('message')
     
+    # Intercept Maintainerr test notifications
+    if subject == "Test Notification" or payload.get('notification_type') == 'TEST':
+        msg = "Test notification received successfully"
+        logger.info(msg)
+        log_call("success", msg, payload)
+        return jsonify({"status": "success", "message": msg}), 200
+    
     series_id_parsed = try_parse_int(series_id)
     tvdb_id_parsed = try_parse_int(tvdb_id)
     season_num_parsed = try_parse_int(season_num)
