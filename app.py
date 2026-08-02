@@ -25,6 +25,7 @@ def log_call(status, message, payload=None):
 
 SONARR_URL = os.environ.get('SONARR_URL')
 SONARR_API_KEY = os.environ.get('SONARR_API_KEY')
+ROLLING_WINDOW = int(os.environ.get('ROLLING_WINDOW', 3))
 
 def get_sonarr_headers():
     if not SONARR_API_KEY:
@@ -160,7 +161,8 @@ def index():
         status_text=status_text,
         status_color=status_color,
         webhook_url=webhook_url,
-        history=list(webhook_history)
+        history=list(webhook_history),
+        rolling_window=ROLLING_WINDOW
     )
 
 @app.route('/webhook', methods=['POST'])
@@ -214,8 +216,8 @@ def handle_webhook():
                 "message": msg
             }), 200
             
-        # Get next up to 3 episodes
-        next_episodes = regular_episodes[current_index + 1 : current_index + 4]
+        # Get next up to ROLLING_WINDOW episodes
+        next_episodes = regular_episodes[current_index + 1 : current_index + 1 + ROLLING_WINDOW]
         
         if next_episodes:
             newly_monitored = []
@@ -243,7 +245,7 @@ def handle_webhook():
             if already_monitored:
                 parts.append(f"Already monitored: {', '.join(already_monitored)}")
             
-            msg = f"Ensured next 3 episodes are monitored. " + " | ".join(parts)
+            msg = f"Ensured next {ROLLING_WINDOW} episodes are monitored. " + " | ".join(parts)
             log_call("success", msg, payload)
             
             return jsonify({

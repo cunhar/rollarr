@@ -20,6 +20,7 @@ Rolarr is configured via environment variables:
 |---|---|---|
 | `SONARR_URL` | The base URL of your Sonarr instance. | `http://sonarr:8989` |
 | `SONARR_API_KEY` | Your Sonarr API key. | `abcdef0123456789...` |
+| `ROLLING_WINDOW` | Optional. How many episodes to monitor ahead. Defaults to `3`. | `3` |
 | `PORT` | Optional. The port Rolarr will listen on. Defaults to `5000`. | `5000` |
 
 ---
