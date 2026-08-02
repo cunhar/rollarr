@@ -214,30 +214,44 @@ def handle_webhook():
                 "message": msg
             }), 200
             
-        # Check if there is a next sequential episode
-        if current_index + 1 < len(regular_episodes):
-            next_episode = regular_episodes[current_index + 1]
-            next_ep_id = next_episode.get('id')
-            next_s = next_episode.get('seasonNumber')
-            next_e = next_episode.get('episodeNumber')
+        # Get next up to 3 episodes
+        next_episodes = regular_episodes[current_index + 1 : current_index + 4]
+        
+        if next_episodes:
+            newly_monitored = []
+            already_monitored = []
             
-            logger.info(f"Found next sequential episode: S{next_s}E{next_e} (episodeId: {next_ep_id})")
+            for ep in next_episodes:
+                ep_id = ep.get('id')
+                s_num = ep.get('seasonNumber')
+                e_num = ep.get('episodeNumber')
+                ep_str = f"S{s_num}E{e_num}"
+                
+                if not ep.get('monitored'):
+                    logger.info(f"Episode {ep_str} is not monitored. Enabling monitoring and triggering search.")
+                    monitor_episode(ep_id)
+                    search_episode(ep_id)
+                    newly_monitored.append(ep_str)
+                else:
+                    logger.info(f"Episode {ep_str} is already monitored.")
+                    already_monitored.append(ep_str)
             
-            # Monitor next episode
-            monitor_episode(next_ep_id)
+            # Construct a clear success message
+            parts = []
+            if newly_monitored:
+                parts.append(f"Newly monitored & searched: {', '.join(newly_monitored)}")
+            if already_monitored:
+                parts.append(f"Already monitored: {', '.join(already_monitored)}")
             
-            # Search next episode
-            search_episode(next_ep_id)
-            
-            msg = f"Monitored and searched next episode S{next_s}E{next_e}"
+            msg = f"Ensured next 3 episodes are monitored. " + " | ".join(parts)
             log_call("success", msg, payload)
+            
             return jsonify({
                 "status": "success",
                 "message": msg,
-                "nextEpisode": {
-                    "id": next_ep_id,
-                    "seasonNumber": next_s,
-                    "episodeNumber": next_e
+                "details": {
+                    "newlyMonitored": newly_monitored,
+                    "alreadyMonitored": already_monitored
                 }
             }), 200
         else:
