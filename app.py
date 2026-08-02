@@ -4,8 +4,22 @@ import os
 import logging
 from collections import deque
 import datetime
-import re
 import threading
+
+# Import custom modular components
+from utils import try_parse_int, parse_subject_title
+from sonarr_api import (
+    SONARR_URL,
+    SONARR_API_KEY,
+    ROLLING_WINDOW,
+    get_sonarr_headers,
+    find_series_id_by_title,
+    find_series_id_by_tvdb_id,
+    get_series_title,
+    get_episodes,
+    monitor_episode,
+    search_episode
+)
 
 # Configure logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s [%(levelname)s] %(message)s')
@@ -13,7 +27,7 @@ logger = logging.getLogger(__name__)
 
 app = Flask(__name__)
 
-# In-memory history buffer (holds the last 20 calls)
+# In-memory history buffer (holds the last 20 calls) with thread lock
 webhook_history = deque(maxlen=20)
 history_lock = threading.Lock()
 
@@ -27,168 +41,6 @@ def log_call(status, message, payload=None):
     with history_lock:
         webhook_history.appendleft(entry)
 
-def try_parse_int(value):
-    try:
-        return int(value)
-    except (ValueError, TypeError):
-        return None
-
-def parse_subject_title(subject):
-    if not subject:
-        return None
-    
-    # Try S01E01 style first
-    match = re.match(r'^(.+?)\s*-\s*[Ss](\d+)[Ee](\d+)(?:\s*-\s*(.+))?$', subject)
-    if match:
-        return match.group(1).strip(), int(match.group(2)), int(match.group(3))
-    
-    # Try 1x01 style
-    match = re.match(r'^(.+?)\s*-\s*(\d+)x(\d+)(?:\s*-\s*(.+))?$', subject)
-    if match:
-        return match.group(1).strip(), int(match.group(2)), int(match.group(3))
-        
-    return None
-
-SONARR_URL = os.environ.get('SONARR_URL')
-SONARR_API_KEY = os.environ.get('SONARR_API_KEY')
-ROLLING_WINDOW = int(os.environ.get('ROLLING_WINDOW', 3))
-
-def get_sonarr_headers():
-    if not SONARR_API_KEY:
-        raise ValueError("SONARR_API_KEY environment variable is not set")
-    return {
-        "X-Api-Key": SONARR_API_KEY,
-        "Content-Type": "application/json"
-    }
-
-def find_series_id_by_title(title):
-    if not SONARR_URL:
-        raise ValueError("SONARR_URL environment variable is not set")
-    
-    url = f"{SONARR_URL.rstrip('/')}/api/v3/series"
-    logger.info(f"Fetching all series from Sonarr to resolve title: '{title}'")
-    
-    try:
-        response = requests.get(url, headers=get_sonarr_headers(), timeout=10)
-        response.raise_for_status()
-        series_list = response.json()
-        
-        normalized_target = title.lower().strip()
-        for series in series_list:
-            if series.get('title', '').lower().strip() == normalized_target:
-                logger.info(f"Resolved title '{title}' to Sonarr seriesId {series.get('id')}")
-                return series.get('id'), series.get('title')
-                
-        logger.warning(f"Could not find a series with title '{title}' in Sonarr library")
-        return None, None
-    except Exception as e:
-        logger.error(f"Error fetching series list from Sonarr by title: {e}")
-        raise
-
-def find_series_id_by_tvdb_id(tvdb_id):
-    """
-    Fetch all series from Sonarr and find the internal seriesId corresponding to tvdb_id.
-    """
-    if not SONARR_URL:
-        raise ValueError("SONARR_URL environment variable is not set")
-    
-    url = f"{SONARR_URL.rstrip('/')}/api/v3/series"
-    logger.info(f"Fetching all series from Sonarr to resolve tvdbId: {tvdb_id}")
-    
-    try:
-        response = requests.get(url, headers=get_sonarr_headers(), timeout=10)
-        response.raise_for_status()
-        series_list = response.json()
-        
-        for series in series_list:
-            if series.get('tvdbId') == tvdb_id:
-                logger.info(f"Resolved tvdbId {tvdb_id} to Sonarr seriesId {series.get('id')}")
-                return series.get('id'), series.get('title')
-                
-        logger.warning(f"Could not find a series with tvdbId {tvdb_id} in Sonarr library")
-        return None, None
-    except Exception as e:
-        logger.error(f"Error fetching series list from Sonarr: {e}")
-        raise
-
-def get_series_title(series_id):
-    if not SONARR_URL:
-        raise ValueError("SONARR_URL environment variable is not set")
-    
-    url = f"{SONARR_URL.rstrip('/')}/api/v3/series/{series_id}"
-    try:
-        response = requests.get(url, headers=get_sonarr_headers(), timeout=10)
-        response.raise_for_status()
-        return response.json().get('title')
-    except Exception as e:
-        logger.error(f"Error fetching series details for ID {series_id}: {e}")
-        return f"ID {series_id}"
-
-def get_episodes(series_id):
-    """
-    Fetch all episodes for a given series ID.
-    """
-    if not SONARR_URL:
-        raise ValueError("SONARR_URL environment variable is not set")
-        
-    url = f"{SONARR_URL.rstrip('/')}/api/v3/episode"
-    params = {"seriesId": series_id}
-    logger.info(f"Fetching episodes for seriesId: {series_id}")
-    
-    try:
-        response = requests.get(url, headers=get_sonarr_headers(), params=params, timeout=10)
-        response.raise_for_status()
-        return response.json()
-    except Exception as e:
-        logger.error(f"Error fetching episodes from Sonarr: {e}")
-        raise
-
-def monitor_episode(episode_id):
-    """
-    Set monitored = true for the given episode ID.
-    """
-    if not SONARR_URL:
-        raise ValueError("SONARR_URL environment variable is not set")
-        
-    url = f"{SONARR_URL.rstrip('/')}/api/v3/episode/monitor"
-    payload = {
-        "episodeIds": [episode_id],
-        "monitored": True
-    }
-    logger.info(f"Monitoring episodeId: {episode_id}")
-    
-    try:
-        response = requests.put(url, headers=get_sonarr_headers(), json=payload, timeout=10)
-        response.raise_for_status()
-        logger.info(f"Successfully monitored episodeId: {episode_id}")
-        return True
-    except Exception as e:
-        logger.error(f"Error monitoring episodeId {episode_id}: {e}")
-        raise
-
-def search_episode(episode_id):
-    """
-    Trigger Sonarr search command for the given episode ID.
-    """
-    if not SONARR_URL:
-        raise ValueError("SONARR_URL environment variable is not set")
-        
-    url = f"{SONARR_URL.rstrip('/')}/api/v3/command"
-    payload = {
-        "name": "EpisodeSearch",
-        "episodeIds": [episode_id]
-    }
-    logger.info(f"Triggering search command for episodeId: {episode_id}")
-    
-    try:
-        response = requests.post(url, headers=get_sonarr_headers(), json=payload, timeout=10)
-        response.raise_for_status()
-        logger.info(f"Successfully triggered search for episodeId: {episode_id}")
-        return True
-    except Exception as e:
-        logger.error(f"Error triggering search for episodeId {episode_id}: {e}")
-        raise
-
 @app.route('/')
 def index():
     # Mask API key (show only last 4 chars)
@@ -197,7 +49,7 @@ def index():
     else:
         masked_key = "Not Configured"
 
-    # Check connection
+    # Check connection status
     status_text = "Disconnected"
     status_color = "#ef4444"
     if SONARR_URL and SONARR_API_KEY:
