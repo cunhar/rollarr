@@ -58,17 +58,18 @@ services:
 
 ## Webhook Setup in Maintainerr
 
-Configure Maintainerr to send a webhook notification when an episode is deleted:
+Configure Maintainerr to send a webhook notification when a rule processes an item:
 
-1. In Maintainerr, navigate to **Settings** -> **Notifications** / **Webhooks**.
-2. Add a new Webhook notification.
-3. Set the Webhook URL to: `http://<rolarr-ip-or-container-name>:5000/webhook`.
-4. Configure the JSON payload to include the following keys:
+1. In Maintainerr, navigate to **Settings** -> **Notifications**.
+2. Add a new **Webhook** notification agent.
+3. Check the **Media Handled** event type.
+4. Set the Webhook URL to: `http://<rolarr-ip-or-container-name>:5000/webhook`.
+5. Configure the **JSON Payload** using the standard variables Maintainerr exposes:
    ```json
    {
-     "seriesId": {{series_id}},
-     "seasonNumber": {{season_number}},
-     "episodeNumber": {{episode_number}}
+     "subject": "{{subject}}",
+     "message": "{{message}}"
    }
    ```
-   *Note: Alternatively, Rolarr supports `tvdbId` in place of `seriesId`, and can parse nested structures (e.g. `{"series": {"tvdbId": ...}, "episode": {"seasonNumber": ..., "episodeNumber": ...}}`).*
+
+*Note: Rolarr is intelligent. When it receives this standard payload, it automatically parses the Show Name, Season Number, and Episode Number directly out of the `subject` text (e.g. `Clarkson's Farm - 1x01 - Tractoring`) and automatically resolves the matching show and episode sequence in Sonarr.*

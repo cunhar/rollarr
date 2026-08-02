@@ -4,6 +4,7 @@ import os
 import logging
 from collections import deque
 import datetime
+import re
 
 # Configure logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s [%(levelname)s] %(message)s')
@@ -22,6 +23,52 @@ def log_call(status, message, payload=None):
         "payload": payload
     }
     webhook_history.appendleft(entry)
+
+def try_parse_int(value):
+    try:
+        return int(value)
+    except (ValueError, TypeError):
+        return None
+
+def parse_subject_title(subject):
+    if not subject:
+        return None
+    
+    # Try S01E01 style first
+    match = re.match(r'^(.+?)\s*-\s*[Ss](\d+)[Ee](\d+)(?:\s*-\s*(.+))?$', subject)
+    if match:
+        return match.group(1).strip(), int(match.group(2)), int(match.group(3))
+    
+    # Try 1x01 style
+    match = re.match(r'^(.+?)\s*-\s*(\d+)x(\d+)(?:\s*-\s*(.+))?$', subject)
+    if match:
+        return match.group(1).strip(), int(match.group(2)), int(match.group(3))
+        
+    return None
+
+def find_series_id_by_title(title):
+    if not SONARR_URL:
+        raise ValueError("SONARR_URL environment variable is not set")
+    
+    url = f"{SONARR_URL.rstrip('/')}/api/v3/series"
+    logger.info(f"Fetching all series from Sonarr to resolve title: '{title}'")
+    
+    try:
+        response = requests.get(url, headers=get_sonarr_headers(), timeout=10)
+        response.raise_for_status()
+        series_list = response.json()
+        
+        normalized_target = title.lower().strip()
+        for series in series_list:
+            if series.get('title', '').lower().strip() == normalized_target:
+                logger.info(f"Resolved title '{title}' to Sonarr seriesId {series.get('id')}")
+                return series.get('id')
+                
+        logger.warning(f"Could not find a series with title '{title}' in Sonarr library")
+        return None
+    except Exception as e:
+        logger.error(f"Error fetching series list from Sonarr by title: {e}")
+        raise
 
 SONARR_URL = os.environ.get('SONARR_URL')
 SONARR_API_KEY = os.environ.get('SONARR_API_KEY')
@@ -175,26 +222,49 @@ def handle_webhook():
     tvdb_id = payload.get('tvdbId') or payload.get('series', {}).get('tvdbId')
     season_num = payload.get('seasonNumber') or payload.get('episode', {}).get('seasonNumber')
     episode_num = payload.get('episodeNumber') or payload.get('episode', {}).get('episodeNumber')
+    subject = payload.get('subject') or payload.get('message')
     
-    if season_num is None or episode_num is None:
-        msg = "Missing seasonNumber or episodeNumber"
+    series_id_parsed = try_parse_int(series_id)
+    tvdb_id_parsed = try_parse_int(tvdb_id)
+    season_num_parsed = try_parse_int(season_num)
+    episode_num_parsed = try_parse_int(episode_num)
+    
+    # Fallback to subject parsing if season/episode are missing
+    if (season_num_parsed is None or episode_num_parsed is None) and subject:
+        logger.info(f"Missing season/episode parameters. Attempting fallback parsing on subject: '{subject}'")
+        parsed = parse_subject_title(subject)
+        if parsed:
+            show_name, s_num, e_num = parsed
+            season_num_parsed = s_num
+            episode_num_parsed = e_num
+            logger.info(f"Successfully parsed subject into: Show='{show_name}', S{s_num}E{e_num}")
+            
+            # Resolve series by title
+            if not series_id_parsed:
+                series_id_parsed = find_series_id_by_title(show_name)
+        else:
+            logger.warning(f"Could not parse show/season/episode pattern from subject: '{subject}'")
+            
+    if season_num_parsed is None or episode_num_parsed is None:
+        msg = f"Missing or invalid seasonNumber ({season_num}) or episodeNumber ({episode_num})"
         logger.error(msg)
         log_call("error", msg, payload)
         return jsonify({"status": "error", "message": msg}), 400
         
     try:
         # Resolve internal Sonarr series ID
-        if not series_id and tvdb_id:
-            series_id = find_series_id_by_tvdb_id(int(tvdb_id))
+        resolved_series_id = series_id_parsed
+        if not resolved_series_id and tvdb_id_parsed:
+            resolved_series_id = find_series_id_by_tvdb_id(tvdb_id_parsed)
             
-        if not series_id:
-            msg = "Could not resolve series ID (neither seriesId nor tvdbId matched)"
+        if not resolved_series_id:
+            msg = f"Could not resolve series ID (neither seriesId nor tvdbId matched)"
             logger.error(msg)
             log_call("error", msg, payload)
             return jsonify({"status": "error", "message": msg}), 400
             
         # Get all episodes
-        episodes = get_episodes(series_id)
+        episodes = get_episodes(resolved_series_id)
         
         # Filter out specials (season 0) and sort by (seasonNumber, episodeNumber)
         regular_episodes = [ep for ep in episodes if ep.get('seasonNumber', 0) > 0]
@@ -203,7 +273,7 @@ def handle_webhook():
         # Locate the index of the deleted episode
         current_index = None
         for i, ep in enumerate(regular_episodes):
-            if ep.get('seasonNumber') == int(season_num) and ep.get('episodeNumber') == int(episode_num):
+            if ep.get('seasonNumber') == season_num_parsed and ep.get('episodeNumber') == episode_num_parsed:
                 current_index = i
                 break
                 
