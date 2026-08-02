@@ -6,6 +6,7 @@ logger = logging.getLogger(__name__)
 
 SONARR_URL = os.environ.get('SONARR_URL')
 SONARR_API_KEY = os.environ.get('SONARR_API_KEY')
+ROLLING_WINDOW = int(os.environ.get('ROLLING_WINDOW', 3))
 
 def get_sonarr_headers():
     if not SONARR_API_KEY:
