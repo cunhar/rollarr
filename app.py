@@ -276,6 +276,7 @@ def handle_webhook():
         # Resolve internal Sonarr series ID
         resolved_series_id = series_id_parsed
         if not resolved_series_id and tvdb_id_parsed:
+            logger.info(f"Resolving Sonarr seriesId from tvdbId: {tvdb_id_parsed}")
             resolved_series_id, series_title = find_series_id_by_tvdb_id(tvdb_id_parsed)
             
         if not resolved_series_id:
@@ -286,16 +287,22 @@ def handle_webhook():
             
         # Get series title if not already retrieved
         if not series_title:
+            logger.info(f"Retrieving title for series ID {resolved_series_id} from Sonarr...")
             series_title = get_series_title(resolved_series_id)
             
+        logger.info(f"Show matched: '{series_title}' (Sonarr ID: {resolved_series_id})")
+            
         # Get all episodes
+        logger.info(f"Fetching episodes list for '{series_title}' from Sonarr...")
         episodes = get_episodes(resolved_series_id)
         
         # Filter out specials (season 0) and sort by (seasonNumber, episodeNumber)
         regular_episodes = [ep for ep in episodes if ep.get('seasonNumber', 0) > 0]
         regular_episodes.sort(key=lambda x: (x.get('seasonNumber', 0), x.get('episodeNumber', 0)))
+        logger.info(f"Found {len(regular_episodes)} regular episodes for '{series_title}'")
         
         # Locate the index of the deleted episode
+        logger.info(f"Locating index of triggering episode S{season_num_parsed}E{episode_num_parsed}...")
         current_index = None
         for i, ep in enumerate(regular_episodes):
             if ep.get('seasonNumber') == season_num_parsed and ep.get('episodeNumber') == episode_num_parsed:
@@ -311,8 +318,12 @@ def handle_webhook():
                 "message": msg
             }), 200
             
+        logger.info(f"Triggering episode S{season_num_parsed}E{episode_num_parsed} located at index {current_index}")
+            
         # Get next up to ROLLING_WINDOW episodes
         next_episodes = regular_episodes[current_index + 1 : current_index + 1 + ROLLING_WINDOW]
+        next_ep_strs = [f"S{e.get('seasonNumber')}E{e.get('episodeNumber')}" for e in next_episodes]
+        logger.info(f"Next {len(next_episodes)} episodes in rolling window: {next_ep_strs}")
         
         if next_episodes:
             newly_monitored = []
