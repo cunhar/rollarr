@@ -46,6 +46,18 @@ def parse_subject_title(subject):
         
     return None
 
+SONARR_URL = os.environ.get('SONARR_URL')
+SONARR_API_KEY = os.environ.get('SONARR_API_KEY')
+ROLLING_WINDOW = int(os.environ.get('ROLLING_WINDOW', 3))
+
+def get_sonarr_headers():
+    if not SONARR_API_KEY:
+        raise ValueError("SONARR_API_KEY environment variable is not set")
+    return {
+        "X-Api-Key": SONARR_API_KEY,
+        "Content-Type": "application/json"
+    }
+
 def find_series_id_by_title(title):
     if not SONARR_URL:
         raise ValueError("SONARR_URL environment variable is not set")
@@ -62,25 +74,13 @@ def find_series_id_by_title(title):
         for series in series_list:
             if series.get('title', '').lower().strip() == normalized_target:
                 logger.info(f"Resolved title '{title}' to Sonarr seriesId {series.get('id')}")
-                return series.get('id')
+                return series.get('id'), series.get('title')
                 
         logger.warning(f"Could not find a series with title '{title}' in Sonarr library")
-        return None
+        return None, None
     except Exception as e:
         logger.error(f"Error fetching series list from Sonarr by title: {e}")
         raise
-
-SONARR_URL = os.environ.get('SONARR_URL')
-SONARR_API_KEY = os.environ.get('SONARR_API_KEY')
-ROLLING_WINDOW = int(os.environ.get('ROLLING_WINDOW', 3))
-
-def get_sonarr_headers():
-    if not SONARR_API_KEY:
-        raise ValueError("SONARR_API_KEY environment variable is not set")
-    return {
-        "X-Api-Key": SONARR_API_KEY,
-        "Content-Type": "application/json"
-    }
 
 def find_series_id_by_tvdb_id(tvdb_id):
     """
@@ -100,13 +100,26 @@ def find_series_id_by_tvdb_id(tvdb_id):
         for series in series_list:
             if series.get('tvdbId') == tvdb_id:
                 logger.info(f"Resolved tvdbId {tvdb_id} to Sonarr seriesId {series.get('id')}")
-                return series.get('id')
+                return series.get('id'), series.get('title')
                 
         logger.warning(f"Could not find a series with tvdbId {tvdb_id} in Sonarr library")
-        return None
+        return None, None
     except Exception as e:
         logger.error(f"Error fetching series list from Sonarr: {e}")
         raise
+
+def get_series_title(series_id):
+    if not SONARR_URL:
+        raise ValueError("SONARR_URL environment variable is not set")
+    
+    url = f"{SONARR_URL.rstrip('/')}/api/v3/series/{series_id}"
+    try:
+        response = requests.get(url, headers=get_sonarr_headers(), timeout=10)
+        response.raise_for_status()
+        return response.json().get('title')
+    except Exception as e:
+        logger.error(f"Error fetching series details for ID {series_id}: {e}")
+        return f"ID {series_id}"
 
 def get_episodes(series_id):
     """
@@ -235,6 +248,7 @@ def handle_webhook():
     tvdb_id_parsed = try_parse_int(tvdb_id)
     season_num_parsed = try_parse_int(season_num)
     episode_num_parsed = try_parse_int(episode_num)
+    series_title = None
     
     # Fallback to subject parsing if season/episode are missing
     if (season_num_parsed is None or episode_num_parsed is None) and subject:
@@ -248,7 +262,7 @@ def handle_webhook():
             
             # Resolve series by title
             if not series_id_parsed:
-                series_id_parsed = find_series_id_by_title(show_name)
+                series_id_parsed, series_title = find_series_id_by_title(show_name)
         else:
             logger.warning(f"Could not parse show/season/episode pattern from subject: '{subject}'")
             
@@ -262,13 +276,17 @@ def handle_webhook():
         # Resolve internal Sonarr series ID
         resolved_series_id = series_id_parsed
         if not resolved_series_id and tvdb_id_parsed:
-            resolved_series_id = find_series_id_by_tvdb_id(tvdb_id_parsed)
+            resolved_series_id, series_title = find_series_id_by_tvdb_id(tvdb_id_parsed)
             
         if not resolved_series_id:
             msg = f"Could not resolve series ID (neither seriesId nor tvdbId matched)"
             logger.error(msg)
             log_call("error", msg, payload)
             return jsonify({"status": "error", "message": msg}), 400
+            
+        # Get series title if not already retrieved
+        if not series_title:
+            series_title = get_series_title(resolved_series_id)
             
         # Get all episodes
         episodes = get_episodes(resolved_series_id)
@@ -285,7 +303,7 @@ def handle_webhook():
                 break
                 
         if current_index is None:
-            msg = f"Episode S{season_num}E{episode_num} not found in Sonarr series {series_id}"
+            msg = f"Episode S{season_num_parsed}E{episode_num_parsed} not found in Sonarr series '{series_title}'"
             logger.warning(msg)
             log_call("warning", msg, payload)
             return jsonify({
@@ -322,19 +340,22 @@ def handle_webhook():
             if already_monitored:
                 parts.append(f"Already monitored: {', '.join(already_monitored)}")
             
-            msg = f"Ensured next {ROLLING_WINDOW} episodes are monitored. " + " | ".join(parts)
+            msg = f"Processed event for '{series_title}' (S{season_num_parsed}E{episode_num_parsed}). Ensured next {ROLLING_WINDOW} episodes are monitored. " + " | ".join(parts)
+            logger.info(msg)
             log_call("success", msg, payload)
             
             return jsonify({
                 "status": "success",
                 "message": msg,
                 "details": {
+                    "seriesTitle": series_title,
+                    "triggeringEpisode": f"S{season_num_parsed}E{episode_num_parsed}",
                     "newlyMonitored": newly_monitored,
                     "alreadyMonitored": already_monitored
                 }
             }), 200
         else:
-            msg = f"Deleted episode S{season_num}E{episode_num} was the final episode. No further episodes to monitor."
+            msg = f"Episode '{series_title}' S{season_num_parsed}E{episode_num_parsed} was the final episode. No further episodes to monitor."
             logger.info(msg)
             log_call("success", msg, payload)
             return jsonify({
