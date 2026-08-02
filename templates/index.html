@@ -31,7 +31,7 @@
         }
         .container {
             width: 100%;
-            max-width: 540px;
+            max-width: 600px;
             padding: 20px;
             box-sizing: border-box;
         }
@@ -129,6 +129,94 @@
             line-height: 1.5;
             text-align: center;
         }
+        
+        /* History & Logs styles */
+        .history-section {
+            margin-top: 32px;
+            border-top: 1px solid var(--card-border);
+            padding-top: 24px;
+        }
+        .history-title {
+            font-size: 16px;
+            font-weight: 600;
+            margin: 0 0 16px 0;
+            color: var(--text);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+        .log-list {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+            max-height: 220px;
+            overflow-y: auto;
+            padding-right: 4px;
+        }
+        .log-list::-webkit-scrollbar {
+            width: 4px;
+        }
+        .log-list::-webkit-scrollbar-thumb {
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 4px;
+        }
+        .log-item {
+            background: rgba(255, 255, 255, 0.01);
+            border: 1px solid var(--card-border);
+            border-radius: 12px;
+            padding: 12px;
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+        }
+        .log-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            font-size: 11px;
+        }
+        .log-time {
+            color: var(--text-muted);
+            font-family: monospace;
+        }
+        .log-status {
+            font-size: 9px;
+            font-weight: 600;
+            text-transform: uppercase;
+            padding: 2px 8px;
+            border-radius: 99px;
+            letter-spacing: 0.5px;
+        }
+        .status-success {
+            background: rgba(16, 185, 129, 0.1);
+            color: #10b981;
+            border: 1px solid rgba(16, 185, 129, 0.2);
+        }
+        .status-warning {
+            background: rgba(245, 158, 11, 0.1);
+            color: #f59e0b;
+            border: 1px solid rgba(245, 158, 11, 0.2);
+        }
+        .status-error {
+            background: rgba(239, 68, 68, 0.1);
+            color: #ef4444;
+            border: 1px solid rgba(239, 68, 68, 0.2);
+        }
+        .log-message {
+            font-size: 13px;
+            color: var(--text);
+            line-height: 1.4;
+        }
+        .no-logs {
+            text-align: center;
+            color: var(--text-muted);
+            font-size: 13px;
+            padding: 24px 0;
+            background: rgba(255, 255, 255, 0.01);
+            border: 1px dashed var(--card-border);
+            border-radius: 12px;
+        }
+        
         @keyframes pulse {
             0% { transform: scale(1); opacity: 1; }
             50% { transform: scale(1.2); opacity: 0.7; }
@@ -162,6 +250,34 @@
                 <div class="info-group">
                     <div class="label">Webhook Endpoint</div>
                     <div class="value">{{ webhook_url }}</div>
+                </div>
+            </div>
+
+            <!-- Webhook History Section -->
+            <div class="history-section">
+                <div class="history-title">
+                    <span>Recent Activity</span>
+                    <span style="font-size: 12px; font-weight: normal; color: var(--text-muted);">Last 20 events</span>
+                </div>
+                
+                <div class="log-list">
+                    {% if history %}
+                        {% for log in history %}
+                            <div class="log-item">
+                                <div class="log-header">
+                                    <span class="log-time">{{ log.timestamp }}</span>
+                                    <span class="log-status status-{{ log.status }}">{{ log.status }}</span>
+                                </div>
+                                <div class="log-message">
+                                    {{ log.message }}
+                                </div>
+                            </div>
+                        {% endfor %}
+                    {% else %}
+                        <div class="no-logs">
+                            No webhook calls recorded yet.
+                        </div>
+                    {% endif %}
                 </div>
             </div>
 

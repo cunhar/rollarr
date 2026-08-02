@@ -2,12 +2,26 @@ from flask import Flask, request, jsonify, render_template
 import requests
 import os
 import logging
+from collections import deque
+import datetime
 
 # Configure logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s [%(levelname)s] %(message)s')
 logger = logging.getLogger(__name__)
 
 app = Flask(__name__)
+
+# In-memory history buffer (holds the last 20 calls)
+webhook_history = deque(maxlen=20)
+
+def log_call(status, message, payload=None):
+    entry = {
+        "timestamp": datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+        "status": status,
+        "message": message,
+        "payload": payload
+    }
+    webhook_history.appendleft(entry)
 
 SONARR_URL = os.environ.get('SONARR_URL')
 SONARR_API_KEY = os.environ.get('SONARR_API_KEY')
@@ -145,7 +159,8 @@ def index():
         masked_key=masked_key,
         status_text=status_text,
         status_color=status_color,
-        webhook_url=webhook_url
+        webhook_url=webhook_url,
+        history=list(webhook_history)
     )
 
 @app.route('/webhook', methods=['POST'])
@@ -160,8 +175,10 @@ def handle_webhook():
     episode_num = payload.get('episodeNumber') or payload.get('episode', {}).get('episodeNumber')
     
     if season_num is None or episode_num is None:
-        logger.error("Missing seasonNumber or episodeNumber in webhook payload")
-        return jsonify({"status": "error", "message": "Missing seasonNumber or episodeNumber"}), 400
+        msg = "Missing seasonNumber or episodeNumber"
+        logger.error(msg)
+        log_call("error", msg, payload)
+        return jsonify({"status": "error", "message": msg}), 400
         
     try:
         # Resolve internal Sonarr series ID
@@ -169,8 +186,10 @@ def handle_webhook():
             series_id = find_series_id_by_tvdb_id(int(tvdb_id))
             
         if not series_id:
-            logger.error("Could not resolve series ID (neither seriesId nor tvdbId matched)")
-            return jsonify({"status": "error", "message": "Could not resolve series ID"}), 400
+            msg = "Could not resolve series ID (neither seriesId nor tvdbId matched)"
+            logger.error(msg)
+            log_call("error", msg, payload)
+            return jsonify({"status": "error", "message": msg}), 400
             
         # Get all episodes
         episodes = get_episodes(series_id)
@@ -187,10 +206,12 @@ def handle_webhook():
                 break
                 
         if current_index is None:
-            logger.warning(f"Deleted episode S{season_num}E{episode_num} not found in Sonarr episodes list")
+            msg = f"Episode S{season_num}E{episode_num} not found in Sonarr series {series_id}"
+            logger.warning(msg)
+            log_call("warning", msg, payload)
             return jsonify({
                 "status": "warning", 
-                "message": f"Episode S{season_num}E{episode_num} not found in Sonarr series {series_id}"
+                "message": msg
             }), 200
             
         # Check if there is a next sequential episode
@@ -208,9 +229,11 @@ def handle_webhook():
             # Search next episode
             search_episode(next_ep_id)
             
+            msg = f"Monitored and searched next episode S{next_s}E{next_e}"
+            log_call("success", msg, payload)
             return jsonify({
                 "status": "success",
-                "message": f"Monitored and searched next episode S{next_s}E{next_e}",
+                "message": msg,
                 "nextEpisode": {
                     "id": next_ep_id,
                     "seasonNumber": next_s,
@@ -218,14 +241,18 @@ def handle_webhook():
                 }
             }), 200
         else:
-            logger.info("The deleted episode was the final episode of the series. No next episode to monitor.")
+            msg = f"Deleted episode S{season_num}E{episode_num} was the final episode. No further episodes to monitor."
+            logger.info(msg)
+            log_call("success", msg, payload)
             return jsonify({
                 "status": "success",
-                "message": "Deleted episode was the final episode. No further episodes to monitor."
+                "message": msg
             }), 200
             
     except Exception as e:
-        logger.error(f"Failed to process webhook: {e}")
+        msg = f"Failed to process webhook: {str(e)}"
+        logger.error(msg)
+        log_call("error", msg, payload)
         return jsonify({"status": "error", "message": str(e)}), 500
 
 if __name__ == '__main__':
