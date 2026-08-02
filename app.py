@@ -93,7 +93,8 @@ def handle_webhook():
     tvdb_id = payload.get('tvdbId') or payload.get('series', {}).get('tvdbId')
     season_num = payload.get('seasonNumber') or payload.get('episode', {}).get('seasonNumber')
     episode_num = payload.get('episodeNumber') or payload.get('episode', {}).get('episodeNumber')
-    subject = payload.get('subject') or payload.get('message')
+    subject = payload.get('subject')
+    message = payload.get('message')
     
     # Intercept Maintainerr test notifications
     if subject == "Test Notification" or payload.get('notification_type') == 'TEST':
@@ -108,21 +109,29 @@ def handle_webhook():
     episode_num_parsed = try_parse_int(episode_num)
     series_title = None
     
-    # Fallback to subject parsing if season/episode are missing
-    if (season_num_parsed is None or episode_num_parsed is None) and subject:
-        logger.info(f"Missing season/episode parameters. Attempting fallback parsing on subject: '{subject}'")
-        parsed = parse_subject_title(subject)
+    # Fallback to subject/message parsing if season/episode are missing
+    if season_num_parsed is None or episode_num_parsed is None:
+        parsed = None
+        # Try message first since it contains the detailed description in Maintainerr
+        if message:
+            logger.info(f"Missing season/episode parameters. Attempting fallback parsing on message: '{message}'")
+            parsed = parse_subject_title(message)
+        # Try subject next if message didn't yield anything
+        if not parsed and subject:
+            logger.info(f"Missing season/episode parameters. Attempting fallback parsing on subject: '{subject}'")
+            parsed = parse_subject_title(subject)
+            
         if parsed:
             show_name, s_num, e_num = parsed
             season_num_parsed = s_num
             episode_num_parsed = e_num
-            logger.info(f"Successfully parsed subject into: Show='{show_name}', S{s_num}E{e_num}")
+            logger.info(f"Successfully parsed webhook text into: Show='{show_name}', S{s_num}E{e_num}")
             
             # Resolve series by title
             if not series_id_parsed:
                 series_id_parsed, series_title = find_series_id_by_title(show_name)
         else:
-            logger.warning(f"Could not parse show/season/episode pattern from subject: '{subject}'")
+            logger.warning(f"Could not parse show/season/episode pattern from message or subject")
             
     if season_num_parsed is None or episode_num_parsed is None:
         msg = f"Missing or invalid seasonNumber ({season_num}) or episodeNumber ({episode_num})"
