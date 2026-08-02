@@ -5,6 +5,7 @@ import logging
 from collections import deque
 import datetime
 import re
+import threading
 
 # Configure logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s [%(levelname)s] %(message)s')
@@ -14,6 +15,7 @@ app = Flask(__name__)
 
 # In-memory history buffer (holds the last 20 calls)
 webhook_history = deque(maxlen=20)
+history_lock = threading.Lock()
 
 def log_call(status, message, payload=None):
     entry = {
@@ -22,7 +24,8 @@ def log_call(status, message, payload=None):
         "message": message,
         "payload": payload
     }
-    webhook_history.appendleft(entry)
+    with history_lock:
+        webhook_history.appendleft(entry)
 
 def try_parse_int(value):
     try:
@@ -214,6 +217,9 @@ def index():
     # Retrieve current request host to display the webhook URL helper
     webhook_url = f"http://{request.host}/webhook"
 
+    with history_lock:
+        history_list = list(webhook_history)
+
     return render_template(
         "index.html",
         sonarr_url=SONARR_URL or "Not Configured",
@@ -221,7 +227,7 @@ def index():
         status_text=status_text,
         status_color=status_color,
         webhook_url=webhook_url,
-        history=list(webhook_history),
+        history=history_list,
         rolling_window=ROLLING_WINDOW
     )
 
