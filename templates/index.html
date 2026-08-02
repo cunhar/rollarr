@@ -217,6 +217,35 @@
             border-radius: 12px;
         }
         
+        .log-details {
+            margin-top: 8px;
+            font-size: 12px;
+            border-top: 1px solid rgba(255, 255, 255, 0.04);
+            padding-top: 8px;
+        }
+        .log-summary {
+            color: var(--text-muted);
+            cursor: pointer;
+            outline: none;
+            user-select: none;
+            transition: color 0.2s ease;
+        }
+        .log-summary:hover {
+            color: var(--primary);
+        }
+        .log-payload {
+            margin: 8px 0 0 0;
+            background: rgba(0, 0, 0, 0.20);
+            border: 1px solid var(--card-border);
+            border-radius: 8px;
+            padding: 8px 12px;
+            overflow-x: auto;
+            color: #10b981;
+            font-family: monospace;
+            white-space: pre-wrap;
+            word-break: break-all;
+        }
+        
         @keyframes pulse {
             0% { transform: scale(1); opacity: 1; }
             50% { transform: scale(1.2); opacity: 0.7; }
@@ -276,6 +305,12 @@
                                 <div class="log-message">
                                     {{ log.message }}
                                 </div>
+                                {% if log.payload %}
+                                    <details class="log-details">
+                                        <summary class="log-summary">View Request Payload</summary>
+                                        <pre class="log-payload"><code>{{ log.payload | tojson(indent=2) }}</code></pre>
+                                    </details>
+                                {% endif %}
                             </div>
                         {% endfor %}
                     {% else %}
