@@ -7,7 +7,7 @@ import datetime
 import threading
 
 # Import custom modular components
-from utils import try_parse_int, parse_subject_title
+from utils import try_parse_int, parse_episodes
 from sonarr_api import (
     SONARR_URL,
     SONARR_API_KEY,
@@ -88,11 +88,6 @@ def handle_webhook():
     payload = request.json or {}
     logger.info(f"Received cleanup event payload: {payload}")
     
-    # Extract parameters supporting various common nesting structures
-    series_id = payload.get('seriesId') or payload.get('series', {}).get('id')
-    tvdb_id = payload.get('tvdbId') or payload.get('series', {}).get('tvdbId')
-    season_num = payload.get('seasonNumber') or payload.get('episode', {}).get('seasonNumber')
-    episode_num = payload.get('episodeNumber') or payload.get('episode', {}).get('episodeNumber')
     subject = payload.get('subject')
     message = payload.get('message')
     
@@ -102,145 +97,163 @@ def handle_webhook():
         logger.info(msg)
         log_call("success", msg, payload)
         return jsonify({"status": "success", "message": msg}), 200
+        
+    # Gather episodes to process
+    ep_list = []
     
-    series_id_parsed = try_parse_int(series_id)
-    tvdb_id_parsed = try_parse_int(tvdb_id)
+    # Check if a single episode is explicitly provided in the payload root/nesting
+    series_id = payload.get('seriesId') or payload.get('series', {}).get('id')
+    tvdb_id = payload.get('tvdbId') or payload.get('series', {}).get('tvdbId')
+    season_num = payload.get('seasonNumber') or payload.get('episode', {}).get('seasonNumber')
+    episode_num = payload.get('episodeNumber') or payload.get('episode', {}).get('episodeNumber')
+    
     season_num_parsed = try_parse_int(season_num)
     episode_num_parsed = try_parse_int(episode_num)
-    series_title = None
     
-    # Fallback to subject/message parsing if season/episode are missing
-    if season_num_parsed is None or episode_num_parsed is None:
-        parsed = None
-        # Try message first since it contains the detailed description in Maintainerr
+    if season_num_parsed is not None and episode_num_parsed is not None:
+        ep_list.append({
+            "series_id": try_parse_int(series_id),
+            "tvdb_id": try_parse_int(tvdb_id),
+            "season": season_num_parsed,
+            "episode": episode_num_parsed,
+            "show": None
+        })
+    else:
+        # Fallback to parsing message and subject
+        parsed_items = []
         if message:
             logger.info(f"Missing season/episode parameters. Attempting fallback parsing on message: '{message}'")
-            parsed = parse_subject_title(message)
-        # Try subject next if message didn't yield anything
-        if not parsed and subject:
+            parsed_items = parse_episodes(message)
+        if not parsed_items and subject:
             logger.info(f"Missing season/episode parameters. Attempting fallback parsing on subject: '{subject}'")
-            parsed = parse_subject_title(subject)
+            parsed_items = parse_episodes(subject)
             
-        if parsed:
-            show_name, s_num, e_num = parsed
-            season_num_parsed = s_num
-            episode_num_parsed = e_num
-            logger.info(f"Successfully parsed webhook text into: Show='{show_name}', S{s_num}E{e_num}")
+        for show_name, s_num, e_num in parsed_items:
+            ep_list.append({
+                "series_id": None,
+                "tvdb_id": None,
+                "season": s_num,
+                "episode": e_num,
+                "show": show_name
+            })
             
-            # Resolve series by title
-            if not series_id_parsed:
-                series_id_parsed, series_title = find_series_id_by_title(show_name)
-        else:
-            logger.warning(f"Could not parse show/season/episode pattern from message or subject")
-            
-    if season_num_parsed is None or episode_num_parsed is None:
-        msg = f"Missing or invalid seasonNumber ({season_num}) or episodeNumber ({episode_num})"
-        logger.error(msg)
-        log_call("error", msg, payload)
-        return jsonify({"status": "error", "message": msg}), 400
+    if not ep_list:
+        msg = "No episodes could be parsed or found in the payload"
+        logger.warning(msg)
+        log_call("warning", msg, payload)
+        return jsonify({"status": "warning", "message": msg}), 200
         
     try:
-        # Resolve internal Sonarr series ID
-        resolved_series_id = series_id_parsed
-        if not resolved_series_id and tvdb_id_parsed:
-            logger.info(f"Resolving Sonarr seriesId from tvdbId: {tvdb_id_parsed}")
-            resolved_series_id, series_title = find_series_id_by_tvdb_id(tvdb_id_parsed)
-            
-        if not resolved_series_id:
-            msg = f"Could not resolve series ID (neither seriesId nor tvdbId matched)"
-            logger.error(msg)
-            log_call("error", msg, payload)
-            return jsonify({"status": "error", "message": msg}), 400
-            
-        # Get series title if not already retrieved
-        if not series_title:
-            logger.info(f"Retrieving title for series ID {resolved_series_id} from Sonarr...")
-            series_title = get_series_title(resolved_series_id)
-            
-        logger.info(f"Show matched: '{series_title}' (Sonarr ID: {resolved_series_id})")
-            
-        # Get all episodes
-        logger.info(f"Fetching episodes list for '{series_title}' from Sonarr...")
-        episodes = get_episodes(resolved_series_id)
+        results = []
+        has_success = False
         
-        # Filter out specials (season 0) and sort by (seasonNumber, episodeNumber)
-        regular_episodes = [ep for ep in episodes if ep.get('seasonNumber', 0) > 0]
-        regular_episodes.sort(key=lambda x: (x.get('seasonNumber', 0), x.get('episodeNumber', 0)))
-        logger.info(f"Found {len(regular_episodes)} regular episodes for '{series_title}'")
-        
-        # Locate the index of the deleted episode
-        logger.info(f"Locating index of triggering episode S{season_num_parsed}E{episode_num_parsed}...")
-        current_index = None
-        for i, ep in enumerate(regular_episodes):
-            if ep.get('seasonNumber') == season_num_parsed and ep.get('episodeNumber') == episode_num_parsed:
-                current_index = i
-                break
+        for ep in ep_list:
+            series_id_parsed = ep["series_id"]
+            tvdb_id_parsed = ep["tvdb_id"]
+            season_num_parsed = ep["season"]
+            episode_num_parsed = ep["episode"]
+            show_name = ep["show"]
+            series_title = None
+            
+            # Resolve series by title if we have show_name but no series_id
+            if not series_id_parsed and show_name:
+                series_id_parsed, series_title = find_series_id_by_title(show_name)
                 
-        if current_index is None:
-            msg = f"Episode S{season_num_parsed}E{episode_num_parsed} not found in Sonarr series '{series_title}'"
-            logger.warning(msg)
-            log_call("warning", msg, payload)
-            return jsonify({
-                "status": "warning", 
-                "message": msg
-            }), 200
-            
-        logger.info(f"Triggering episode S{season_num_parsed}E{episode_num_parsed} located at index {current_index}")
-            
-        # Get next up to ROLLING_WINDOW episodes
-        next_episodes = regular_episodes[current_index + 1 : current_index + 1 + ROLLING_WINDOW]
-        next_ep_strs = [f"S{e.get('seasonNumber')}E{e.get('episodeNumber')}" for e in next_episodes]
-        logger.info(f"Next {len(next_episodes)} episodes in rolling window: {next_ep_strs}")
-        
-        if next_episodes:
-            newly_monitored = []
-            already_monitored = []
-            
-            for ep in next_episodes:
-                ep_id = ep.get('id')
-                s_num = ep.get('seasonNumber')
-                e_num = ep.get('episodeNumber')
-                ep_str = f"S{s_num}E{e_num}"
+            # Resolve internal Sonarr series ID from tvdbId if not resolved
+            if not series_id_parsed and tvdb_id_parsed:
+                logger.info(f"Resolving Sonarr seriesId from tvdbId: {tvdb_id_parsed}")
+                series_id_parsed, series_title = find_series_id_by_tvdb_id(tvdb_id_parsed)
                 
-                if not ep.get('monitored'):
-                    logger.info(f"Episode {ep_str} is not monitored. Enabling monitoring and triggering search.")
-                    monitor_episode(ep_id)
-                    search_episode(ep_id)
-                    newly_monitored.append(ep_str)
-                else:
-                    logger.info(f"Episode {ep_str} is already monitored.")
-                    already_monitored.append(ep_str)
+            if not series_id_parsed:
+                err_msg = f"Could not resolve series ID for show '{show_name or 'Unknown'}'"
+                logger.error(err_msg)
+                results.append({
+                    "episode": f"S{season_num_parsed}E{episode_num_parsed}",
+                    "status": "error",
+                    "message": err_msg
+                })
+                continue
+                
+            # Get series title if not already retrieved
+            if not series_title:
+                series_title = get_series_title(series_id_parsed)
+                
+            # Fetch episodes list
+            episodes = get_episodes(series_id_parsed)
+            regular_episodes = [e for e in episodes if e.get('seasonNumber', 0) > 0]
+            regular_episodes.sort(key=lambda x: (x.get('seasonNumber', 0), x.get('episodeNumber', 0)))
             
-            # Construct a clear success message
-            parts = []
-            if newly_monitored:
-                parts.append(f"Newly monitored & searched: {', '.join(newly_monitored)}")
-            if already_monitored:
-                parts.append(f"Already monitored: {', '.join(already_monitored)}")
+            current_index = None
+            for i, e in enumerate(regular_episodes):
+                if e.get('seasonNumber') == season_num_parsed and e.get('episodeNumber') == episode_num_parsed:
+                    current_index = i
+                    break
+                    
+            if current_index is None:
+                warn_msg = f"Episode S{season_num_parsed}E{episode_num_parsed} not found in Sonarr series '{series_title}'"
+                logger.warning(warn_msg)
+                results.append({
+                    "show": series_title,
+                    "episode": f"S{season_num_parsed}E{episode_num_parsed}",
+                    "status": "warning",
+                    "message": warn_msg
+                })
+                continue
+                
+            # Get next up to ROLLING_WINDOW episodes
+            next_episodes = regular_episodes[current_index + 1 : current_index + 1 + ROLLING_WINDOW]
             
-            msg = f"Processed event for '{series_title}' (S{season_num_parsed}E{episode_num_parsed}). Ensured next {ROLLING_WINDOW} episodes are monitored. " + " | ".join(parts)
-            logger.info(msg)
-            log_call("success", msg, payload)
-            
-            return jsonify({
-                "status": "success",
-                "message": msg,
-                "details": {
-                    "seriesTitle": series_title,
-                    "triggeringEpisode": f"S{season_num_parsed}E{episode_num_parsed}",
+            if next_episodes:
+                newly_monitored = []
+                already_monitored = []
+                for e in next_episodes:
+                    ep_id = e.get('id')
+                    s_num = e.get('seasonNumber')
+                    e_num = e.get('episodeNumber')
+                    ep_str = f"S{s_num}E{e_num}"
+                    if not e.get('monitored'):
+                        monitor_episode(ep_id)
+                        search_episode(ep_id)
+                        newly_monitored.append(ep_str)
+                    else:
+                        already_monitored.append(ep_str)
+                
+                success_msg = f"Ensured next {ROLLING_WINDOW} episodes are monitored. Newly: {newly_monitored}, Already: {already_monitored}"
+                results.append({
+                    "show": series_title,
+                    "episode": f"S{season_num_parsed}E{episode_num_parsed}",
+                    "status": "success",
+                    "message": success_msg,
                     "newlyMonitored": newly_monitored,
                     "alreadyMonitored": already_monitored
-                }
-            }), 200
-        else:
-            msg = f"Episode '{series_title}' S{season_num_parsed}E{episode_num_parsed} was the final episode. No further episodes to monitor."
-            logger.info(msg)
-            log_call("success", msg, payload)
-            return jsonify({
-                "status": "success",
-                "message": msg
-            }), 200
-            
+                })
+                has_success = True
+            else:
+                final_msg = f"Final episode reached. No further episodes to monitor."
+                results.append({
+                    "show": series_title,
+                    "episode": f"S{season_num_parsed}E{episode_num_parsed}",
+                    "status": "success",
+                    "message": final_msg
+                })
+                has_success = True
+                
+        summary_messages = [f"{r.get('show', 'Unknown')} ({r['episode']}): {r['message']}" for r in results]
+        full_message = " | ".join(summary_messages)
+        
+        overall_status = "success" if has_success else "error"
+        if not has_success:
+            if any(r['status'] == 'warning' for r in results):
+                overall_status = "warning"
+                
+        log_call(overall_status, full_message, payload)
+        
+        return jsonify({
+            "status": overall_status,
+            "message": full_message,
+            "results": results
+        }), 200 if overall_status != "error" else 400
+        
     except Exception as e:
         msg = f"Failed to process webhook: {str(e)}"
         logger.error(msg)
