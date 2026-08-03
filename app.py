@@ -2,6 +2,8 @@ from flask import Flask, request, jsonify, render_template
 import requests
 import os
 import logging
+from logging.handlers import RotatingFileHandler
+import json
 from collections import deque
 import datetime
 import threading
@@ -21,15 +23,63 @@ from sonarr_api import (
     search_episode
 )
 
-# Configure logging
-logging.basicConfig(level=logging.INFO, format='%(asctime)s [%(levelname)s] %(message)s')
+# Persistent configuration directories
+CONFIG_DIR = '/config'
+if not os.path.exists(CONFIG_DIR):
+    CONFIG_DIR = os.path.dirname(os.path.abspath(__file__))
+
+HISTORY_FILE = os.path.join(CONFIG_DIR, 'history.json')
+LOG_FILE = os.path.join(CONFIG_DIR, 'rolarr.log')
+
+# Configure logging to write to both stdout/stderr and file
 logger = logging.getLogger(__name__)
+logger.setLevel(logging.INFO)
+
+formatter = logging.Formatter('%(asctime)s [%(levelname)s] %(message)s')
+
+# Console logging handler
+console_handler = logging.StreamHandler()
+console_handler.setFormatter(formatter)
+logger.addHandler(console_handler)
+
+# File logging handler
+try:
+    file_handler = RotatingFileHandler(LOG_FILE, maxBytes=10*1024*1024, backupCount=5)
+    file_handler.setFormatter(formatter)
+    logger.addHandler(file_handler)
+except Exception as e:
+    print(f"Could not initialize file logging: {e}")
 
 app = Flask(__name__)
 
 # In-memory history buffer (holds the last 20 calls) with thread lock
 webhook_history = deque(maxlen=20)
 history_lock = threading.Lock()
+
+def load_history():
+    if os.path.exists(HISTORY_FILE):
+        try:
+            with open(HISTORY_FILE, 'r') as f:
+                data = json.load(f)
+                with history_lock:
+                    webhook_history.clear()
+                    for entry in reversed(data):
+                        webhook_history.appendleft(entry)
+            logger.info("Loaded webhook history from persistent storage.")
+        except Exception as e:
+            logger.error(f"Failed to load webhook history: {e}")
+
+def save_history():
+    try:
+        with history_lock:
+            data = list(webhook_history)
+        with open(HISTORY_FILE, 'w') as f:
+            json.dump(data, f, indent=2)
+    except Exception as e:
+        logger.error(f"Failed to save webhook history: {e}")
+
+# Load persistent history on startup
+load_history()
 
 def log_call(status, message, payload=None):
     entry = {
@@ -40,6 +90,7 @@ def log_call(status, message, payload=None):
     }
     with history_lock:
         webhook_history.appendleft(entry)
+    save_history()
 
 @app.route('/')
 def index():
