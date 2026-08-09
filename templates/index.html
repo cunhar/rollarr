@@ -800,7 +800,11 @@
                     <input type="text" class="form-input" id="cfg-SSH_USER" value="{{ cfg.SSH_USER }}" placeholder="ricardo">
                 </div>
                 <div class="form-group">
-                    <label class="form-label">SSH Key Path</label>
+                    <label class="form-label">SSH Password (Optional)</label>
+                    <input type="password" class="form-input" id="cfg-SSH_PASSWORD" value="{{ cfg.SSH_PASSWORD }}" placeholder="SSH Password">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">SSH Key Path (Optional)</label>
                     <input type="text" class="form-input" id="cfg-SSH_KEY_PATH" value="{{ cfg.SSH_KEY_PATH }}" placeholder="/root/.ssh/id_rsa">
                 </div>
             </div>
@@ -1100,6 +1104,7 @@ function saveConfiguration() {
         SSH_HOST: el('cfg-SSH_HOST').value,
         SSH_PORT: parseInt(el('cfg-SSH_PORT').value) || 22,
         SSH_USER: el('cfg-SSH_USER').value,
+        SSH_PASSWORD: el('cfg-SSH_PASSWORD').value,
         SSH_KEY_PATH: el('cfg-SSH_KEY_PATH').value,
     };
 

@@ -67,6 +67,7 @@ DEFAULT_CONFIG = {
     'SSH_HOST': '172.17.0.1',
     'SSH_PORT': 22,
     'SSH_USER': '',
+    'SSH_PASSWORD': '',
     'SSH_KEY_PATH': '/root/.ssh/id_rsa',
 }
 

@@ -215,13 +215,18 @@ def _find_ssh_key(configured_path: str) -> str | None:
 
 def _ssh_shutdown(force: bool = False) -> tuple[bool, str]:
     """SSH into SSH_HOST and issue a Linux shutdown command."""
-    cmd = 'sudo shutdown -h now || sudo poweroff'
-    dry_run = bool(get_config('PLEX_SHUTDOWN_DRY_RUN', True))
     ssh_host = get_config('SSH_HOST', '')
     ssh_port = int(get_config('SSH_PORT', 22))
     ssh_user = get_config('SSH_USER', '')
+    ssh_password = get_config('SSH_PASSWORD', '')
     ssh_key_path = get_config('SSH_KEY_PATH', '/root/.ssh/id_rsa')
+    dry_run = bool(get_config('PLEX_SHUTDOWN_DRY_RUN', True))
     resolved_key_path = _find_ssh_key(ssh_key_path)
+
+    if ssh_password:
+        cmd = f'echo "{ssh_password}" | sudo -S shutdown -h now || sudo poweroff'
+    else:
+        cmd = 'sudo shutdown -h now || sudo poweroff'
 
     if dry_run and not force:
         msg = f"[DRY-RUN] Would SSH {ssh_user}@{ssh_host}:{ssh_port} and run: {cmd}"
@@ -244,7 +249,8 @@ def _ssh_shutdown(force: bool = False) -> tuple[bool, str]:
             hostname=ssh_host,
             port=ssh_port,
             username=ssh_user,
-            key_filename=resolved_key_path,
+            password=ssh_password if ssh_password else None,
+            key_filename=resolved_key_path if (resolved_key_path and not ssh_password) else resolved_key_path,
             timeout=15,
         )
         stdin, stdout, stderr = client.exec_command(cmd)
