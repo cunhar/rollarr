@@ -1,6 +1,6 @@
 """
-plex_episode_poller.py
-----------------------
+services/plex_poller.py
+-----------------------
 Background daemon thread that polls Plex watch history every PLEX_WATCH_INTERVAL
 seconds (default: 3600 = 1 hour).
 
@@ -21,8 +21,10 @@ State persistence
 A high-water mark (last processed viewedAt Unix timestamp) is saved to
 CONFIG_DIR/plex_poll_state.json so media items aren't re-processed after a restart.
 """
+from __future__ import annotations
 
 import os
+
 import json
 import time
 import threading
@@ -31,14 +33,14 @@ import datetime
 
 import requests
 
-from sonarr_api import (
+from integrations.sonarr import (
     ROLLING_WINDOW,
     find_series_id_by_title,
     get_episodes,
     monitor_episode,
     search_episode,
 )
-from radarr_api import (
+from integrations.radarr import (
     RADARR_URL,
     RADARR_API_KEY,
     find_movie_by_title_and_year,
@@ -55,7 +57,7 @@ POLL_INTERVAL = int(os.environ.get('PLEX_WATCH_INTERVAL', 3600))
 
 CONFIG_DIR = '/config'
 if not os.path.exists(CONFIG_DIR):
-    CONFIG_DIR = os.path.dirname(os.path.abspath(__file__))
+    CONFIG_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 STATE_FILE = os.path.join(CONFIG_DIR, 'plex_poll_state.json')
 
@@ -151,7 +153,6 @@ def _fetch_new_watched(since_ts: int) -> list | None:
     if data is None:
         return None
     items = data.get('MediaContainer', {}).get('Metadata') or []
-    # Include episodes (4 or 'episode') and movies (1 or 'movie')
     valid_items = []
     for i in items:
         itype = i.get('type')
@@ -161,9 +162,7 @@ def _fetch_new_watched(since_ts: int) -> list | None:
 
 
 def _enrich_metadata(item: dict) -> dict:
-    """
-    Fill in missing metadata fields from the full metadata endpoint if incomplete.
-    """
+    """Fill in missing metadata fields from the full metadata endpoint if incomplete."""
     itype = item.get('type')
     if itype in (4, 'episode'):
         if item.get('grandparentTitle') and item.get('parentIndex') is not None and item.get('index') is not None:
@@ -183,10 +182,7 @@ def _enrich_metadata(item: dict) -> dict:
 # ── Sonarr rolling-window logic (Episodes) ────────────────────────────────────
 
 def _process_episode(item: dict) -> tuple[str, str]:
-    """
-    Given a Plex history item for a TV episode, apply the Sonarr rolling window.
-    Returns (status, message).
-    """
+    """Given a Plex history item for a TV episode, apply the Sonarr rolling window."""
     item        = _enrich_metadata(item)
     show_title  = (item.get('grandparentTitle') or '').strip()
     season_num  = item.get('parentIndex')
@@ -245,10 +241,7 @@ def _process_episode(item: dict) -> tuple[str, str]:
 # ── Radarr cleanup logic (Movies) ──────────────────────────────────────────────
 
 def _process_movie(item: dict) -> tuple[str, str]:
-    """
-    Given a Plex history item for a Movie, unmonitor it and delete its file in Radarr.
-    Returns (status, message).
-    """
+    """Given a Plex history item for a Movie, unmonitor it and delete its file in Radarr."""
     item   = _enrich_metadata(item)
     title  = (item.get('title') or '').strip()
     year   = item.get('year')

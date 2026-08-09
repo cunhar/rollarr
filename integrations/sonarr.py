@@ -41,9 +41,7 @@ def find_series_id_by_title(title):
         raise
 
 def find_series_id_by_tvdb_id(tvdb_id):
-    """
-    Fetch all series from Sonarr and find the internal seriesId corresponding to tvdb_id.
-    """
+    """Fetch all series from Sonarr and find the internal seriesId corresponding to tvdb_id."""
     if not SONARR_URL:
         raise ValueError("SONARR_URL environment variable is not set")
     
@@ -80,9 +78,7 @@ def get_series_title(series_id):
         return f"ID {series_id}"
 
 def get_episodes(series_id):
-    """
-    Fetch all episodes for a given series ID.
-    """
+    """Fetch all episodes for a given series ID."""
     if not SONARR_URL:
         raise ValueError("SONARR_URL environment variable is not set")
         
@@ -99,9 +95,7 @@ def get_episodes(series_id):
         raise
 
 def monitor_episode(episode_id):
-    """
-    Set monitored = true for the given episode ID.
-    """
+    """Set monitored = true for the given episode ID."""
     if not SONARR_URL:
         raise ValueError("SONARR_URL environment variable is not set")
         
@@ -122,9 +116,7 @@ def monitor_episode(episode_id):
         raise
 
 def search_episode(episode_id):
-    """
-    Trigger Sonarr search command for the given episode ID.
-    """
+    """Trigger Sonarr search command for the given episode ID."""
     if not SONARR_URL:
         raise ValueError("SONARR_URL environment variable is not set")
         

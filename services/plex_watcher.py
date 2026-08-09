@@ -1,6 +1,6 @@
 """
-plex_watcher.py
----------------
+services/plex_watcher.py
+------------------------
 Background daemon thread that periodically polls Plex for active streams.
 If no streams are detected for PLEX_IDLE_POLLS consecutive checks (each
 separated by PLEX_POLL_INTERVAL seconds), the host machine is shut down
@@ -19,6 +19,7 @@ SSH_KEY_PATH           Path to SSH private key inside the container
                        (default: /root/.ssh/id_rsa)
 PLEX_SHUTDOWN_DRY_RUN  If 'true', log only — never actually shut down
 """
+from __future__ import annotations
 
 import os
 import time
@@ -79,10 +80,7 @@ def get_state():
 # ── Plex polling ─────────────────────────────────────────────────────────────
 
 def _get_active_streams() -> int | None:
-    """
-    Query the Plex /status/sessions endpoint.
-    Returns the number of active streams, or None on error.
-    """
+    """Query the Plex /status/sessions endpoint."""
     if not PLEX_URL or not PLEX_TOKEN:
         return None
     try:
@@ -105,18 +103,14 @@ def _get_active_streams() -> int | None:
 # ── SSH shutdown ─────────────────────────────────────────────────────────────
 
 def _ssh_shutdown():
-    """
-    SSH into SSH_HOST and issue a Linux shutdown command.
-    Uses paramiko for pure-Python SSH — no binary required.
-    """
+    """SSH into SSH_HOST and issue a Linux shutdown command."""
     cmd = 'sudo shutdown -h +1'
     if DRY_RUN:
         logger.warning(
             f"[PlexWatcher] DRY-RUN: would SSH {SSH_USER}@{SSH_HOST}:{SSH_PORT} "
             f"and run: {cmd}"
         )
-        _update_state(last_action=f"[DRY-RUN] Shutdown would have been triggered at "
-                                   f"{_now()}")
+        _update_state(last_action=f"[DRY-RUN] Shutdown would have been triggered at {_now()}")
         return
 
     if not SSH_HOST or not SSH_USER:
@@ -125,7 +119,7 @@ def _ssh_shutdown():
         return
 
     try:
-        import paramiko  # imported lazily so startup isn't affected if not installed
+        import paramiko
 
         client = paramiko.SSHClient()
         client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
@@ -182,7 +176,6 @@ def _watcher_loop():
         stream_count = _get_active_streams()
 
         if stream_count is None:
-            # Plex unreachable — don't change idle streak, just mark status
             logger.warning(f"[PlexWatcher] {now_ts} — Plex unreachable.")
             _update_state(
                 status='unreachable',
@@ -192,7 +185,6 @@ def _watcher_loop():
                 idle_streak=idle_streak,
             )
         elif stream_count > 0:
-            # Active streams — reset idle counter
             logger.info(
                 f"[PlexWatcher] {now_ts} — {stream_count} active stream(s). "
                 f"Idle streak reset."
@@ -207,7 +199,6 @@ def _watcher_loop():
                 last_action=f"{now_ts} — {stream_count} stream(s) active, idle streak reset",
             )
         else:
-            # Zero streams
             idle_streak += 1
             logger.info(
                 f"[PlexWatcher] {now_ts} — No active streams. "
@@ -231,7 +222,6 @@ def _watcher_loop():
                 )
                 _update_state(shutdown_fired=True)
                 _ssh_shutdown()
-                # Reset streak so we don't hammer shutdown on every subsequent poll
                 idle_streak = 0
                 _update_state(idle_streak=0)
 

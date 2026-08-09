@@ -8,19 +8,18 @@ from collections import deque
 import datetime
 import threading
 
-from sonarr_api import (
+from integrations.sonarr import (
     SONARR_URL,
     SONARR_API_KEY,
     ROLLING_WINDOW,
     get_sonarr_headers,
 )
-from radarr_api import (
+from integrations.radarr import (
     RADARR_URL,
     RADARR_API_KEY,
     get_radarr_headers,
 )
-import plex_watcher
-import plex_episode_poller
+from services import plex_watcher, plex_poller
 
 # Persistent configuration directories
 CONFIG_DIR = '/config'
@@ -91,8 +90,8 @@ def log_call(status: str, message: str, payload=None):
 
 # Start background services
 load_history()
-plex_episode_poller.set_log_callback(log_call)
-plex_episode_poller.start()
+plex_poller.set_log_callback(log_call)
+plex_poller.start()
 plex_watcher.start()
 
 
@@ -168,7 +167,7 @@ def index():
         history=history_list,
         rolling_window=ROLLING_WINDOW,
         plex_status=plex_watcher.get_state(),
-        poller_status=plex_episode_poller.get_state(),
+        poller_status=plex_poller.get_state(),
     )
 
 
@@ -179,7 +178,7 @@ def api_plex_status():
 
 @app.route('/api/poller-status')
 def api_poller_status():
-    return jsonify(plex_episode_poller.get_state())
+    return jsonify(plex_poller.get_state())
 
 
 @app.route('/api/clear-logs', methods=['POST'])
