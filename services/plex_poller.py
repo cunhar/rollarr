@@ -32,6 +32,8 @@ from integrations.sonarr import (
     find_series_id_by_title,
     get_episodes,
     monitor_episode,
+    unmonitor_episode,
+    delete_episode_file,
     search_episode,
 )
 from integrations.radarr import (
@@ -248,10 +250,29 @@ def _process_episode(item: dict) -> tuple[str, str]:
     if current_idx is None:
         return 'warning', f"{series_title} {ep_str} — episode not found in Sonarr"
 
+    current_ep = regular[current_idx]
+
+    # Unmonitor watched episode and delete file from disk if enabled
+    delete_enabled = bool(get_config('DELETE_WATCHED_EPISODES', True))
+    try:
+        unmonitor_episode(current_ep['id'])
+    except Exception as exc:
+        logger.warning(f"[PlexPoller] Could not unmonitor episode {current_ep['id']}: {exc}")
+
+    file_action = "unmonitored"
+    ep_file_id = current_ep.get('episodeFileId', 0)
+    if delete_enabled and ep_file_id and ep_file_id > 0:
+        try:
+            delete_episode_file(ep_file_id)
+            file_action = "unmonitored & file deleted from disk"
+        except Exception as exc:
+            logger.warning(f"[PlexPoller] Failed deleting episode file ID {ep_file_id}: {exc}")
+            file_action = f"unmonitored (file delete failed: {exc})"
+
     next_eps = regular[current_idx + 1 : current_idx + 1 + get_rolling_window()]
 
     if not next_eps:
-        return 'success', f"{series_title} {ep_str} watched — final episode, nothing to queue"
+        return 'success', f"{series_title} {ep_str} watched — {file_action}; final episode, nothing to queue"
 
     newly, already = [], []
     for e in next_eps:
@@ -264,7 +285,7 @@ def _process_episode(item: dict) -> tuple[str, str]:
             already.append(tag)
 
     return 'success', (
-        f"{series_title} {ep_str} watched — "
+        f"{series_title} {ep_str} watched — {file_action}; "
         f"queued: {newly or 'none'}, already monitored: {already or 'none'}"
     )
 

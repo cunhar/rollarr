@@ -183,3 +183,43 @@ def search_episode(episode_id):
     except Exception as e:
         logger.error(f"Error triggering search for episodeId {episode_id}: {e}")
         raise
+
+def unmonitor_episode(episode_id):
+    """Set monitored = false for the given episode ID."""
+    sonarr_url = get_sonarr_url()
+    if not sonarr_url:
+        raise ValueError("SONARR_URL is not configured")
+        
+    url = f"{sonarr_url}/api/v3/episode/monitor"
+    payload = {
+        "episodeIds": [episode_id],
+        "monitored": False
+    }
+    logger.info(f"Unmonitoring episodeId: {episode_id}")
+    
+    try:
+        response = requests.put(url, headers=get_sonarr_headers(), json=payload, timeout=10)
+        response.raise_for_status()
+        logger.info(f"Successfully unmonitored episodeId: {episode_id}")
+        return True
+    except Exception as e:
+        logger.error(f"Error unmonitoring episodeId {episode_id}: {e}")
+        raise
+
+def delete_episode_file(episode_file_id):
+    """Delete the episode media file from disk via Sonarr API."""
+    sonarr_url = get_sonarr_url()
+    if not sonarr_url:
+        raise ValueError("SONARR_URL is not configured")
+        
+    url = f"{sonarr_url}/api/v3/episodefile/{episode_file_id}"
+    logger.info(f"Deleting episode file ID {episode_file_id} in Sonarr")
+    
+    try:
+        response = requests.delete(url, headers=get_sonarr_headers(), timeout=10)
+        response.raise_for_status()
+        logger.info(f"Successfully deleted episode file ID {episode_file_id} from disk")
+        return True
+    except Exception as e:
+        logger.error(f"Error deleting episode file ID {episode_file_id}: {e}")
+        raise

@@ -6,7 +6,7 @@
 
 ## Key Features 🚀
 
-- 📦 **Rolling Window Episode Manager (Sonarr)**: Drip-feeds TV show episodes based on your configured rolling window size (e.g. keep 3 unwatched episodes). When Maintainerr or Plex marks an episode as watched/deleted, Rolarr automatically monitors and searches for the next episode in the sequence.
+- 📦 **Rolling Window Episode Manager & Cleaner (Sonarr)**: Unmonitors and automatically deletes watched episode media files from disk via Sonarr (replacing Maintainerr), then drip-feeds and searches for the next $N$ episodes based on your configured rolling window size.
 - 🍿 **Movie Unmonitor & Cleanup (Radarr)**: Automatically unmonitors and cleans up watched movies from Radarr to save storage.
 - ⚡ **AES-128 Fernet Encrypted Config**: Sensitive settings (API keys, passwords, tokens, URLs) are stored in `/config/settings.enc` encrypted using AES-128 Fernet. Manage all settings through the interactive **Config** tab in the Web UI — no container restarts required.
 - 🔒 **DOM Security & Mask Sentinel**: Passwords and API keys are never exposed in HTML DOM attributes or client-side Javascript. Inspecting elements in browser DevTools only shows mask sentinels (`••••••••`).

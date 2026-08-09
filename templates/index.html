@@ -730,6 +730,10 @@
                     <label class="form-label">Rolling Window (Episodes)</label>
                     <input type="number" class="form-input" id="cfg-ROLLING_WINDOW" value="{{ cfg.ROLLING_WINDOW }}" min="1" max="50">
                 </div>
+                <div class="form-group" style="grid-column: 1 / -1; display: flex; align-items: center; gap: 8px; margin-top: 4px;">
+                    <input type="checkbox" id="cfg-DELETE_WATCHED_EPISODES" {{ 'checked' if cfg.DELETE_WATCHED_EPISODES else '' }}>
+                    <label for="cfg-DELETE_WATCHED_EPISODES" class="form-label" style="margin-bottom: 0; cursor: pointer;">Delete watched episode media files from disk via Sonarr</label>
+                </div>
             </div>
 
             <p class="section-title">Radarr Settings</p>
@@ -1091,6 +1095,7 @@ function saveConfiguration() {
         SONARR_URL: el('cfg-SONARR_URL').value,
         SONARR_API_KEY: el('cfg-SONARR_API_KEY').value,
         ROLLING_WINDOW: parseInt(el('cfg-ROLLING_WINDOW').value) || 3,
+        DELETE_WATCHED_EPISODES: el('cfg-DELETE_WATCHED_EPISODES').checked,
         RADARR_URL: el('cfg-RADARR_URL').value,
         RADARR_API_KEY: el('cfg-RADARR_API_KEY').value,
         NZBGET_URL: el('cfg-NZBGET_URL').value,
