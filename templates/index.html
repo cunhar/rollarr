@@ -529,6 +529,10 @@
                 <span class="conn-pip {{ 'ok' if plex_conn_text == 'Connected' else ('warn' if 'Error' in plex_conn_text else 'err') }}"></span>
                 <span>Plex {{ plex_conn_text }}</span>
             </div>
+            <div class="conn-pill" id="pill-nzbget">
+                <span class="conn-pip {{ 'ok' if nzbget_status.connected else 'err' }}" id="pip-nzbget"></span>
+                <span id="label-nzbget">NZBGet {{ nzbget_status.status_text if not nzbget_status.connected else (nzbget_status.download_rate if nzbget_status.download_rate_bps > 0 else 'Connected') }}</span>
+            </div>
         </div>
 
 
@@ -543,6 +547,9 @@
 
     <!-- ══ DASHBOARD TAB ══════════════════════════════════════ -->
     <div class="tab-panel active" id="panel-dashboard">
+
+        <!-- NZBGet Active Downloads Container -->
+        <div id="nzbget-container" style="margin-bottom:16px;"></div>
 
         <!-- Active Streams List Container (Top of Dashboard) -->
         <div id="pw-streams-container" style="margin-bottom:16px;"></div>
@@ -696,6 +703,18 @@
             </div>
         </div>
 
+        <p class="section-title">NZBGet</p>
+        <div class="kv-block">
+            <div class="kv-row">
+                <span class="kv-key">NZBGet URL</span>
+                <span class="kv-val">{{ nzbget_url }}</span>
+            </div>
+            <div class="kv-row">
+                <span class="kv-key">Username</span>
+                <span class="kv-val">{{ nzbget_username }}</span>
+            </div>
+        </div>
+
         <p class="section-title">Plex</p>
         <div class="kv-block">
             <div class="kv-row">
@@ -821,6 +840,59 @@ function pollAll() {
         .then(r => r.ok ? r.json() : null)
         .then(d => { if (d) updateEpisodePoller(d); })
         .catch(() => {});
+    fetch('/api/nzbget-status')
+        .then(r => r.ok ? r.json() : null)
+        .then(d => { if (d) updateNZBGet(d); })
+        .catch(() => {});
+}
+
+function updateNZBGet(s) {
+    const pip = el('pip-nzbget');
+    const label = el('label-nzbget');
+    if (pip && label) {
+        pip.className = 'conn-pip ' + (s.connected ? 'ok' : 'err');
+        const text = !s.connected ? (s.status_text || 'Disconnected') : (s.download_rate_bps > 0 ? s.download_rate : 'Connected');
+        label.textContent = 'NZBGet ' + text;
+    }
+
+    const container = el('nzbget-container');
+    if (container) {
+        if (!s.enabled || !s.connected || !s.downloads || s.downloads.length === 0) {
+            container.innerHTML = '';
+        } else {
+            let html = `
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
+                <p class="section-title" style="margin-bottom:0;">Active Downloads (NZBGet)</p>
+                <span style="font-family:var(--mono); font-size:11px; color:var(--green); font-weight:600;">${escapeHtml(s.download_rate)}</span>
+            </div>`;
+
+            s.downloads.forEach(d => {
+                const statusBadge = d.status === 'DOWNLOADING' ? 'badge-green' : (d.status === 'PAUSED' ? 'badge-amber' : 'badge-dim');
+                html += `
+                <div class="stream-card">
+                    <div class="stream-header">
+                        <div class="stream-user">
+                            <span class="stream-user-name" style="word-break:break-all;">${escapeHtml(d.name)}</span>
+                        </div>
+                        <div class="stream-badges">
+                            <span class="badge ${statusBadge}">${escapeHtml(d.status)}</span>
+                            ${d.category ? `<span class="badge badge-dim">${escapeHtml(d.category)}</span>` : ''}
+                        </div>
+                    </div>
+                    <div class="stream-progress-wrap">
+                        <div class="stream-progress-meta">
+                            <span>${d.remaining_mb > 0 ? (d.size_mb - d.remaining_mb).toFixed(1) + ' / ' + d.size_mb + ' MB' : d.size_mb + ' MB'}</span>
+                            <span>${escapeHtml(d.eta)} (${d.progress_pct}%)</span>
+                        </div>
+                        <div class="stream-progress-track">
+                            <div class="stream-progress-fill" style="width: ${Math.min(100, Math.max(0, d.progress_pct))}%;"></div>
+                        </div>
+                    </div>
+                </div>`;
+            });
+            container.innerHTML = html;
+        }
+    }
 }
 
 function showToast(message, type = 'ok') {

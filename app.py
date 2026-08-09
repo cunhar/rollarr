@@ -19,6 +19,11 @@ from integrations.radarr import (
     RADARR_API_KEY,
     get_radarr_headers,
 )
+from integrations.nzbget import (
+    get_nzbget_status,
+    NZBGET_URL,
+    NZBGET_USERNAME,
+)
 from services import plex_watcher, plex_poller
 
 # Persistent configuration directories
@@ -172,6 +177,8 @@ def index():
     with history_lock:
         history_list = list(webhook_history)
 
+    nzbget_status = get_nzbget_status()
+
     return render_template(
         "index.html",
         sonarr_url=SONARR_URL or "Not Configured",
@@ -183,6 +190,9 @@ def index():
         radarr_status_text=radarr_status_text,
         radarr_status_color=radarr_status_color,
         plex_conn_text=plex_conn_text,
+        nzbget_url=NZBGET_URL or "Not Configured",
+        nzbget_username=NZBGET_USERNAME or "Not Configured",
+        nzbget_status=nzbget_status,
         history=history_list,
         rolling_window=ROLLING_WINDOW,
         plex_status=plex_watcher.get_state(),
@@ -217,6 +227,12 @@ def api_poller_reset_counter():
 def api_shutdown_now():
     res = plex_watcher.trigger_shutdown_now()
     return jsonify(res), 200
+
+
+@app.route('/api/nzbget-status')
+def api_nzbget_status():
+    return jsonify(get_nzbget_status())
+
 
 
 
