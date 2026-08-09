@@ -156,12 +156,14 @@ def _get_active_sessions() -> tuple[int | None, list[dict]]:
             rem_mins = round(rem_ms / 60000)
             
             v_dec = (transcode_data.get('videoDecision') or '').lower()
-            if v_dec == 'directplay' or not transcode_data:
+            if not transcode_data or v_dec in ('directplay', ''):
                 decision = 'DIRECT PLAY'
             elif v_dec == 'copy':
                 decision = 'DIRECT STREAM'
-            else:
+            elif v_dec == 'transcode':
                 decision = 'TRANSCODE'
+            else:
+                decision = 'DIRECT PLAY'
                 
             is_local = player_data.get('local', True)
             loc = 'LAN' if is_local or session_data.get('location') == 'lan' else 'WAN'
