@@ -1,6 +1,6 @@
-# Rolarr 🎬⚡
+# Rolarr — Media Recycler & Power Saver 🎬⚡
 
-**Rolarr** is an automated rolling window monitor bridge for **Sonarr**, **Radarr**, **Plex**, and **NZBGet**, designed to aggressively save disk space while automating media downloads and server power management.
+**Rolarr** is an automated media recycler and server power saver for **Sonarr**, **Radarr**, **Plex**, and **NZBGet**, designed to aggressively save disk space while automating media downloads and server power management.
 
 ---
 
