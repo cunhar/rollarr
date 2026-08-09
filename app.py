@@ -144,6 +144,15 @@ def api_plex_status():
     """Return the current Plex watcher state as JSON (polled by the dashboard)."""
     return jsonify(plex_watcher.get_state())
 
+@app.route('/api/clear-logs', methods=['POST'])
+def api_clear_logs():
+    """Clear the in-memory webhook history and the persisted history file."""
+    with history_lock:
+        webhook_history.clear()
+    save_history()
+    logger.info("Webhook history cleared via UI.")
+    return jsonify({"status": "ok", "message": "History cleared"}), 200
+
 @app.route('/webhook', methods=['POST'])
 def handle_webhook():
     payload = request.json or {}

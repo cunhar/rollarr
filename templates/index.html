@@ -335,6 +335,23 @@
             background: var(--surface);
             border: 1px solid var(--border);
         }
+        .btn-clear {
+            font: 11px/1 var(--font);
+            font-weight: 500;
+            letter-spacing: .4px;
+            text-transform: uppercase;
+            padding: 5px 12px;
+            color: var(--text-sub);
+            background: var(--surface);
+            border: 1px solid var(--border-hi);
+            cursor: pointer;
+            transition: color .15s, border-color .15s;
+        }
+        .btn-clear:hover {
+            color: var(--red);
+            border-color: var(--red);
+        }
+        .btn-clear:active { opacity: .7; }
 
         /* ── Config tab ─────────────────────────────────────── */
         .config-note {
@@ -499,7 +516,10 @@
 
         <div class="log-header-row">
             <span class="section-title">Webhook Events</span>
-            <span style="font-size:10px; color:var(--text-sub); font-family:var(--mono);">last 20</span>
+            <div style="display:flex; align-items:center; gap:12px;">
+                <span style="font-size:10px; color:var(--text-sub); font-family:var(--mono);">last 20</span>
+                <button class="btn-clear" id="btn-clear-logs" onclick="clearLogs()">Clear</button>
+            </div>
         </div>
 
         {% if history %}
@@ -646,6 +666,21 @@ function pollPlex() {
         .then(r => r.ok ? r.json() : null)
         .then(d => { if (d) updateDashboard(d); })
         .catch(() => {});
+}
+
+function clearLogs() {
+    const btn = el('btn-clear-logs');
+    if (btn) btn.disabled = true;
+    fetch('/api/clear-logs', { method: 'POST' })
+        .then(r => r.json())
+        .then(() => {
+            const list = document.querySelector('.log-list');
+            if (list) {
+                list.outerHTML = '<div class="no-logs">No webhook events recorded yet.</div>';
+            }
+        })
+        .catch(() => {})
+        .finally(() => { if (btn) btn.disabled = false; });
 }
 
 if (el('pw-streams')) {
