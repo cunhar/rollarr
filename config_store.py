@@ -50,14 +50,14 @@ _cipher = Fernet(_get_or_create_key())
 # ── Default Configuration ─────────────────────────────────────────────────────
 
 DEFAULT_CONFIG = {
-    'SONARR_URL': '',
+    'SONARR_URL': 'http://localhost:8989',
     'SONARR_API_KEY': '',
-    'RADARR_URL': '',
+    'RADARR_URL': 'http://localhost:7878',
     'RADARR_API_KEY': '',
-    'NZBGET_URL': '',
-    'NZBGET_USERNAME': '',
+    'NZBGET_URL': 'http://localhost:6789',
+    'NZBGET_USERNAME': 'nzbget',
     'NZBGET_PASSWORD': '',
-    'PLEX_URL': '',
+    'PLEX_URL': 'http://plex:32400',
     'PLEX_TOKEN': '',
     'PLEX_WATCH_INTERVAL': 3600,
     'PLEX_POLL_INTERVAL': 1200,
@@ -66,7 +66,7 @@ DEFAULT_CONFIG = {
     'ROLLING_WINDOW': 3,
     'SSH_HOST': '172.17.0.1',
     'SSH_PORT': 22,
-    'SSH_USER': '',
+    'SSH_USER': 'ricardo',
     'SSH_PASSWORD': '',
     'SSH_KEY_PATH': '/root/.ssh/id_rsa',
 }
