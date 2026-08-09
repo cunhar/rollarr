@@ -26,7 +26,6 @@ import time
 import threading
 import logging
 import datetime
-import xml.etree.ElementTree as ET
 
 import requests
 
@@ -54,6 +53,7 @@ watcher_state = {
     'plex_url':       PLEX_URL or 'Not configured',
     'status':         'starting',          # starting | ok | unreachable | not_configured
     'stream_count':   None,                # int or None
+    'active_streams': [],                  # list of detailed stream dicts
     'idle_streak':    0,                   # consecutive idle polls
     'idle_needed':    IDLE_POLLS_NEEDED,
     'poll_interval':  POLL_INTERVAL,
@@ -79,25 +79,101 @@ def get_state():
 
 # ── Plex polling ─────────────────────────────────────────────────────────────
 
-def _get_active_streams() -> int | None:
-    """Query the Plex /status/sessions endpoint."""
+def _get_active_sessions() -> tuple[int | None, list[dict]]:
+    """
+    Query the Plex /status/sessions endpoint for active stream count & metadata.
+    Returns (count, streams_list).
+    """
     if not PLEX_URL or not PLEX_TOKEN:
-        return None
+        return None, []
     try:
         url = f"{PLEX_URL}/status/sessions"
         resp = requests.get(
             url,
-            headers={'X-Plex-Token': PLEX_TOKEN, 'Accept': 'application/xml'},
+            headers={'X-Plex-Token': PLEX_TOKEN, 'Accept': 'application/json'},
             params={'X-Plex-Token': PLEX_TOKEN},
             timeout=10,
         )
         resp.raise_for_status()
-        root = ET.fromstring(resp.text)
-        count = int(root.attrib.get('size', 0))
-        return count
+        data = resp.json()
+        container = data.get('MediaContainer', {})
+        count = container.get('size', 0)
+        items = container.get('Metadata', []) or []
+        
+        streams = []
+        for item in items:
+            user_data = item.get('User') or {}
+            player_data = item.get('Player') or {}
+            session_data = item.get('Session') or {}
+            transcode_data = item.get('TranscodeSession') or {}
+            
+            user_name = user_data.get('title') or 'Unknown'
+            user_thumb = user_data.get('thumb') or ''
+            
+            p_title = player_data.get('title') or ''
+            p_device = player_data.get('device') or ''
+            player_state = player_data.get('state', 'playing')
+            device_str = f"{p_title} ({p_device})" if p_device and p_device != p_title else p_title or p_device or 'Unknown Device'
+            
+            itype = item.get('type')
+            if itype == 'episode':
+                show = item.get('grandparentTitle', '')
+                s_num = item.get('parentIndex')
+                e_num = item.get('index')
+                ep_title = item.get('title', '')
+                if s_num is not None and e_num is not None:
+                    title_str = f"{show} S{int(s_num):02d}E{int(e_num):02d}"
+                    if ep_title:
+                        title_str += f" - {ep_title}"
+                else:
+                    title_str = show or ep_title or 'TV Episode'
+            else:
+                movie_title = item.get('title', '')
+                year = item.get('year')
+                title_str = f"{movie_title} ({year})" if year else movie_title or 'Movie'
+                
+            view_offset = int(item.get('viewOffset', 0))
+            duration = int(item.get('duration', 0))
+            pct = round((view_offset / duration * 100), 1) if duration > 0 else 0
+            rem_ms = max(0, duration - view_offset)
+            rem_mins = round(rem_ms / 60000)
+            
+            v_dec = (transcode_data.get('videoDecision') or '').lower()
+            if v_dec == 'directplay' or not transcode_data:
+                decision = 'DIRECT PLAY'
+            elif v_dec == 'copy':
+                decision = 'DIRECT STREAM'
+            else:
+                decision = 'TRANSCODE'
+                
+            is_local = player_data.get('local', True)
+            loc = 'LAN' if is_local or session_data.get('location') == 'lan' else 'WAN'
+            
+            bw_kbps = int(session_data.get('bandwidth', 0) or item.get('bandwidth', 0))
+            if bw_kbps >= 1000:
+                bw_str = f"{bw_kbps / 1000:.1f} Mbps"
+            elif bw_kbps > 0:
+                bw_str = f"{bw_kbps} Kbps"
+            else:
+                bw_str = "—"
+                
+            streams.append({
+                'user': user_name,
+                'user_thumb': user_thumb,
+                'device': device_str,
+                'state': player_state,
+                'title': title_str,
+                'progress_pct': pct,
+                'remaining_mins': rem_mins,
+                'decision': decision,
+                'location': loc,
+                'bandwidth': bw_str
+            })
+            
+        return count, streams
     except Exception as exc:
         logger.warning(f"[PlexWatcher] Failed to query Plex sessions: {exc}")
-        return None
+        return None, []
 
 
 # ── SSH shutdown ─────────────────────────────────────────────────────────────
@@ -173,13 +249,14 @@ def _watcher_loop():
             datetime.datetime.now() + datetime.timedelta(seconds=POLL_INTERVAL)
         ).strftime('%Y-%m-%d %H:%M:%S')
 
-        stream_count = _get_active_streams()
+        stream_count, active_streams = _get_active_sessions()
 
         if stream_count is None:
             logger.warning(f"[PlexWatcher] {now_ts} — Plex unreachable.")
             _update_state(
                 status='unreachable',
                 stream_count=None,
+                active_streams=[],
                 last_check=now_ts,
                 next_check=next_ts,
                 idle_streak=idle_streak,
@@ -193,6 +270,7 @@ def _watcher_loop():
             _update_state(
                 status='ok',
                 stream_count=stream_count,
+                active_streams=active_streams,
                 last_check=now_ts,
                 next_check=next_ts,
                 idle_streak=0,
@@ -207,6 +285,7 @@ def _watcher_loop():
             _update_state(
                 status='ok',
                 stream_count=0,
+                active_streams=[],
                 last_check=now_ts,
                 next_check=next_ts,
                 idle_streak=idle_streak,

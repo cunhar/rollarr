@@ -245,9 +245,80 @@
             padding: 2px 7px;
             border: 1px solid;
         }
+        .badge-green { color: var(--green); border-color: var(--green); background: rgba(62,207,142,.08); }
+        .badge-blue  { color: #5b6af0; border-color: #5b6af0; background: rgba(91,106,240,.08); }
         .badge-amber { color: var(--amber); border-color: var(--amber); background: rgba(229,160,13,.08); }
         .badge-red   { color: var(--red);   border-color: var(--red);   background: rgba(224,82,82,.08); }
         .badge-dim   { color: var(--text-sub); border-color: var(--border-hi); background: transparent; }
+
+        /* ── Active Streams ─────────────────────────────────── */
+        .stream-card {
+            border: 1px solid var(--border);
+            background: var(--surface);
+            padding: 12px 16px;
+            margin-bottom: 12px;
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+        .stream-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 12px;
+            flex-wrap: wrap;
+        }
+        .stream-user {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .stream-user-name {
+            font-size: 12px;
+            font-weight: 600;
+            color: var(--text);
+        }
+        .stream-device {
+            font-size: 11px;
+            color: var(--text-sub);
+            font-family: var(--mono);
+        }
+        .stream-badges {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+        .stream-title {
+            font-size: 13px;
+            font-weight: 500;
+            color: var(--text);
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+        .stream-progress-wrap {
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+        }
+        .stream-progress-meta {
+            display: flex;
+            justify-content: space-between;
+            font-size: 10px;
+            color: var(--text-sub);
+            font-family: var(--mono);
+        }
+        .stream-progress-track {
+            height: 4px;
+            background: var(--surface-2);
+            border: 1px solid var(--border);
+        }
+        .stream-progress-fill {
+            height: 100%;
+            background: var(--green);
+            transition: width .4s ease;
+        }
+
 
         /* ── Log list ───────────────────────────────────────── */
         .log-header-row {
@@ -513,7 +584,11 @@
                 </div>
             </div>
         </div>
+
+        <!-- Active Streams List Container -->
+        <div id="pw-streams-container" style="margin-bottom:16px;"></div>
         {% endif %}
+
 
         <!-- Sonarr & Radarr summary -->
         <div class="kv-block">
@@ -649,6 +724,11 @@ const REFRESH_MS = 30000;
 function el(id) { return document.getElementById(id); }
 function setText(id, val) { const e = el(id); if (e) e.textContent = val; }
 
+function escapeHtml(str) {
+    if (!str) return '';
+    return String(str).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+}
+
 function updateShutdownWatcher(s) {
     const sc = s.stream_count !== null && s.stream_count !== undefined ? s.stream_count : '—';
     setText('pw-streams', sc);
@@ -682,7 +762,47 @@ function updateShutdownWatcher(s) {
                              : s.idle_streak > 0              ? '#e5a00d'
                              :                                  '#3ecf8e';
     }
+
+    // Render active streams
+    const container = el('pw-streams-container');
+    if (container) {
+        if (!s.active_streams || s.active_streams.length === 0) {
+            container.innerHTML = '';
+        } else {
+            let html = '<p class="section-title" style="margin-bottom:12px;">Active Streams</p>';
+            s.active_streams.forEach(st => {
+                const decBadge = st.decision === 'DIRECT PLAY' ? 'badge-green' : (st.decision === 'DIRECT STREAM' ? 'badge-blue' : 'badge-amber');
+                const remText = st.remaining_mins > 0 ? st.remaining_mins + ' min left' : '0 min left';
+                html += `
+                <div class="stream-card">
+                    <div class="stream-header">
+                        <div class="stream-user">
+                            <span class="stream-user-name">${escapeHtml(st.user)}</span>
+                            <span class="stream-device">${escapeHtml(st.device)}</span>
+                        </div>
+                        <div class="stream-badges">
+                            <span class="badge ${decBadge}">${escapeHtml(st.decision)}</span>
+                            <span class="badge badge-dim">${escapeHtml(st.location)}</span>
+                            <span style="font-family:var(--mono); font-size:10px; color:var(--text-sub);">${escapeHtml(st.bandwidth)}</span>
+                        </div>
+                    </div>
+                    <div class="stream-title">${escapeHtml(st.title)}</div>
+                    <div class="stream-progress-wrap">
+                        <div class="stream-progress-meta">
+                            <span>${escapeHtml((st.state || 'PLAYING').toUpperCase())}</span>
+                            <span>${remText} (${st.progress_pct}%)</span>
+                        </div>
+                        <div class="stream-progress-track">
+                            <div class="stream-progress-fill" style="width: ${Math.min(100, Math.max(0, st.progress_pct))}%;"></div>
+                        </div>
+                    </div>
+                </div>`;
+            });
+            container.innerHTML = html;
+        }
+    }
 }
+
 
 function updateEpisodePoller(s) {
     const cnt = el('ep-count');
