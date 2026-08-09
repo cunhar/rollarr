@@ -712,7 +712,8 @@ function switchTab(name) {
 }
 
 // ── Live polling ─────────────────────────────────────────────
-const REFRESH_MS = 30000;
+const REFRESH_MS = 10000;
+
 
 function el(id) { return document.getElementById(id); }
 function setText(id, val) { const e = el(id); if (e) e.textContent = val; }
@@ -867,6 +868,7 @@ function resetCounter() {
         .catch(() => {});
 }
 
+pollAll();
 setInterval(pollAll, REFRESH_MS);
 </script>
 </body>

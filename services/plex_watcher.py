@@ -64,6 +64,7 @@ watcher_state = {
 }
 
 _state_lock = threading.Lock()
+_last_fetch_time = 0
 
 
 def _update_state(**kwargs):
@@ -71,8 +72,21 @@ def _update_state(**kwargs):
         watcher_state.update(kwargs)
 
 
-def get_state():
-    """Return a snapshot of the watcher state (thread-safe)."""
+def get_state(refresh_live: bool = True):
+    """
+    Return a snapshot of the watcher state (thread-safe).
+    Refreshes active stream info from Plex if cache is older than 5s.
+    """
+    global _last_fetch_time
+    if refresh_live and PLEX_URL and PLEX_TOKEN:
+        now_time = time.time()
+        if now_time - _last_fetch_time > 5:
+            _last_fetch_time = now_time
+            count, streams = _get_active_sessions()
+            if count is not None:
+                _update_state(status='ok', stream_count=count, active_streams=streams, last_check=_now())
+            else:
+                _update_state(status='unreachable')
     with _state_lock:
         return dict(watcher_state)
 
@@ -92,7 +106,7 @@ def _get_active_sessions() -> tuple[int | None, list[dict]]:
             url,
             headers={'X-Plex-Token': PLEX_TOKEN, 'Accept': 'application/json'},
             params={'X-Plex-Token': PLEX_TOKEN},
-            timeout=10,
+            timeout=5,
         )
         resp.raise_for_status()
         data = resp.json()
