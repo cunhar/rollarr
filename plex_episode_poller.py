@@ -2,28 +2,24 @@
 plex_episode_poller.py
 ----------------------
 Background daemon thread that polls Plex watch history every PLEX_WATCH_INTERVAL
-seconds (default: 3600 = 1 hour). For each newly-watched TV episode found, it
-resolves the series in Sonarr and applies the rolling-window monitoring logic
-(monitor + search the next N episodes).
+seconds (default: 3600 = 1 hour).
+
+For each newly-watched TV episode found:
+  Resolves the series in Sonarr and applies the rolling-window monitoring logic
+  (monitor + search the next N episodes).
+
+For each newly-watched Movie found:
+  Resolves the movie in Radarr, unmonitors it, and deletes its media file from disk.
 
 Plex API endpoints used
 -----------------------
-GET /status/sessions/history/all?type=4&sort=viewedAt:asc
-    Episode watch history. type=4 = TV episodes only.
-
-GET /library/metadata/{ratingKey}
-    Full item metadata (fallback if top-level history fields are missing).
+GET /status/sessions/history/all?sort=viewedAt:asc
+    Watch history for episodes & movies.
 
 State persistence
 -----------------
 A high-water mark (last processed viewedAt Unix timestamp) is saved to
-CONFIG_DIR/plex_poll_state.json so episodes aren't re-processed after a restart.
-
-Environment variables
----------------------
-PLEX_URL             Base Plex URL (e.g. http://plex:32400)
-PLEX_TOKEN           Plex authentication token
-PLEX_WATCH_INTERVAL  Seconds between polls (default: 3600)
+CONFIG_DIR/plex_poll_state.json so media items aren't re-processed after a restart.
 """
 
 import os
@@ -41,6 +37,12 @@ from sonarr_api import (
     get_episodes,
     monitor_episode,
     search_episode,
+)
+from radarr_api import (
+    RADARR_URL,
+    RADARR_API_KEY,
+    find_movie_by_title_and_year,
+    unmonitor_and_delete_movie,
 )
 
 logger = logging.getLogger(__name__)
@@ -65,8 +67,8 @@ poller_state = {
     'status':            'starting',   # starting | ok | unreachable | not_configured
     'last_check':        None,
     'next_check':        None,
-    'episodes_session':  0,            # episodes processed since container start
-    'last_episode':      None,         # human-readable last processed episode
+    'episodes_session':  0,            # media processed since container start
+    'last_episode':      None,         # human-readable last processed item
     'last_error':        None,
 }
 
@@ -138,11 +140,10 @@ def _plex_get(path: str, params: dict = None) -> dict | None:
 
 def _fetch_new_watched(since_ts: int) -> list | None:
     """
-    Return episode history items with viewedAt > since_ts, sorted oldest-first.
+    Return watch history items with viewedAt > since_ts, sorted oldest-first.
     Returns None if Plex was unreachable.
     """
     data = _plex_get('/status/sessions/history/all', {
-        'type': 4,                        # TV episodes only
         'sort': 'viewedAt:asc',
         'X-Plex-Container-Start': 0,
         'X-Plex-Container-Size': 200,
@@ -150,25 +151,36 @@ def _fetch_new_watched(since_ts: int) -> list | None:
     if data is None:
         return None
     items = data.get('MediaContainer', {}).get('Metadata') or []
-    return [i for i in items if int(i.get('viewedAt', 0)) > since_ts]
+    # Include episodes (4 or 'episode') and movies (1 or 'movie')
+    valid_items = []
+    for i in items:
+        itype = i.get('type')
+        if itype in (1, 4, 'movie', 'episode') and int(i.get('viewedAt', 0)) > since_ts:
+            valid_items.append(i)
+    return valid_items
 
 
 def _enrich_metadata(item: dict) -> dict:
     """
-    Fill in missing grandparentTitle / parentIndex / index from the full
-    metadata endpoint when the history record is incomplete.
+    Fill in missing metadata fields from the full metadata endpoint if incomplete.
     """
-    if item.get('grandparentTitle') and item.get('parentIndex') is not None and item.get('index') is not None:
-        return item
+    itype = item.get('type')
+    if itype in (4, 'episode'):
+        if item.get('grandparentTitle') and item.get('parentIndex') is not None and item.get('index') is not None:
+            return item
+    elif itype in (1, 'movie'):
+        if item.get('title'):
+            return item
+
     meta_data = _plex_get(f"/library/metadata/{item['ratingKey']}")
     if meta_data:
         hit = (meta_data.get('MediaContainer', {}).get('Metadata') or [None])[0]
         if hit:
-            item = {**item, **{k: hit[k] for k in ('grandparentTitle', 'parentIndex', 'index') if k in hit}}
+            item = {**item, **hit}
     return item
 
 
-# ── Sonarr rolling-window logic ───────────────────────────────────────────────
+# ── Sonarr rolling-window logic (Episodes) ────────────────────────────────────
 
 def _process_episode(item: dict) -> tuple[str, str]:
     """
@@ -230,6 +242,33 @@ def _process_episode(item: dict) -> tuple[str, str]:
     )
 
 
+# ── Radarr cleanup logic (Movies) ──────────────────────────────────────────────
+
+def _process_movie(item: dict) -> tuple[str, str]:
+    """
+    Given a Plex history item for a Movie, unmonitor it and delete its file in Radarr.
+    Returns (status, message).
+    """
+    item   = _enrich_metadata(item)
+    title  = (item.get('title') or '').strip()
+    year   = item.get('year')
+
+    if not title:
+        return 'warning', f"Incomplete movie title for Plex ratingKey {item.get('ratingKey')} — skipped"
+
+    if not RADARR_URL or not RADARR_API_KEY:
+        return 'warning', f"Movie '{title}' watched, but Radarr is not configured (RADARR_URL / RADARR_API_KEY missing)"
+
+    movie_id, movie_title = find_movie_by_title_and_year(title, year)
+    if not movie_id:
+        return 'warning', f"Movie '{title} ({year or ''})' — not found in Radarr library, skipping"
+
+    movie_title = movie_title or title
+    _, action_detail = unmonitor_and_delete_movie(movie_id)
+
+    return 'success', f"Movie '{movie_title}' watched — {action_detail} in Radarr"
+
+
 # ── Main loop ─────────────────────────────────────────────────────────────────
 
 def _now() -> str:
@@ -238,13 +277,13 @@ def _now() -> str:
 
 def _poller_loop():
     if not PLEX_URL or not PLEX_TOKEN:
-        logger.warning("[PlexPoller] PLEX_URL or PLEX_TOKEN not set — episode poller disabled.")
+        logger.warning("[PlexPoller] PLEX_URL or PLEX_TOKEN not set — media poller disabled.")
         _update_state(status='not_configured')
         return
 
-    logger.info(f"[PlexPoller] Starting. interval={POLL_INTERVAL}s")
-    watermark       = _load_watermark()
-    episodes_total  = 0
+    logger.info(f"[PlexPoller] Starting media poller. interval={POLL_INTERVAL}s")
+    watermark     = _load_watermark()
+    media_total   = 0
 
     while True:
         now_ts  = _now()
@@ -259,25 +298,33 @@ def _poller_loop():
         else:
             _update_state(status='ok', last_check=now_ts, next_check=next_ts)
             if not new_items:
-                logger.info("[PlexPoller] No new watched episodes.")
+                logger.info("[PlexPoller] No new watched media items.")
             else:
-                logger.info(f"[PlexPoller] {len(new_items)} new watched episode(s).")
+                logger.info(f"[PlexPoller] {len(new_items)} new watched media item(s).")
                 max_ts = watermark
                 for item in new_items:
                     try:
-                        status, msg = _process_episode(item)
-                        viewed_at   = int(item.get('viewedAt', 0))
+                        itype = item.get('type')
+                        if itype in (4, 'episode'):
+                            status, msg = _process_episode(item)
+                        elif itype in (1, 'movie'):
+                            status, msg = _process_movie(item)
+                        else:
+                            continue
+
+                        viewed_at = int(item.get('viewedAt', 0))
                         if viewed_at > max_ts:
                             max_ts = viewed_at
-                        episodes_total += 1
+
+                        media_total += 1
                         _activity_log(status, msg, {
-                            'title':     item.get('title'),
-                            'viewedAt':  viewed_at,
-                            'show':      item.get('grandparentTitle'),
+                            'title':    item.get('title'),
+                            'viewedAt': viewed_at,
+                            'type':     item.get('type'),
                         })
-                        _update_state(episodes_session=episodes_total, last_episode=msg)
+                        _update_state(episodes_session=media_total, last_episode=msg)
                     except Exception as exc:
-                        _activity_log('error', f"Failed processing episode: {exc}")
+                        _activity_log('error', f"Failed processing watched item: {exc}")
 
                 if max_ts > watermark:
                     watermark = max_ts
@@ -287,7 +334,7 @@ def _poller_loop():
 
 
 def start():
-    """Start the episode poller as a background daemon thread."""
-    t = threading.Thread(target=_poller_loop, name='plex-episode-poller', daemon=True)
+    """Start the media poller as a background daemon thread."""
+    t = threading.Thread(target=_poller_loop, name='plex-media-poller', daemon=True)
     t.start()
     logger.info("[PlexPoller] Background thread started.")

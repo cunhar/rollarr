@@ -14,6 +14,11 @@ from sonarr_api import (
     ROLLING_WINDOW,
     get_sonarr_headers,
 )
+from radarr_api import (
+    RADARR_URL,
+    RADARR_API_KEY,
+    get_radarr_headers,
+)
 import plex_watcher
 import plex_episode_poller
 
@@ -95,11 +100,17 @@ plex_watcher.start()
 
 @app.route('/')
 def index():
-    # Mask API key
+    # Mask API key Sonarr
     if SONARR_API_KEY:
         masked_key = "*" * (len(SONARR_API_KEY) - 4) + SONARR_API_KEY[-4:] if len(SONARR_API_KEY) >= 4 else SONARR_API_KEY
     else:
         masked_key = "Not Configured"
+
+    # Mask API key Radarr
+    if RADARR_API_KEY:
+        radarr_masked_key = "*" * (len(RADARR_API_KEY) - 4) + RADARR_API_KEY[-4:] if len(RADARR_API_KEY) >= 4 else RADARR_API_KEY
+    else:
+        radarr_masked_key = "Not Configured"
 
     # Sonarr connection check
     status_text  = "Disconnected"
@@ -121,6 +132,26 @@ def index():
             status_text  = "Unreachable"
             status_color = "#e05252"
 
+    # Radarr connection check
+    radarr_status_text  = "Disconnected"
+    radarr_status_color = "#e05252"
+    if RADARR_URL and RADARR_API_KEY:
+        try:
+            res = requests.get(
+                f"{RADARR_URL.rstrip('/')}/api/v3/system/status",
+                headers=get_radarr_headers(),
+                timeout=2,
+            )
+            if res.status_code == 200:
+                radarr_status_text  = "Connected"
+                radarr_status_color = "#3ecf8e"
+            else:
+                radarr_status_text  = f"Error ({res.status_code})"
+                radarr_status_color = "#e5a00d"
+        except Exception:
+            radarr_status_text  = "Unreachable"
+            radarr_status_color = "#e05252"
+
     with history_lock:
         history_list = list(webhook_history)
 
@@ -130,6 +161,10 @@ def index():
         masked_key=masked_key,
         status_text=status_text,
         status_color=status_color,
+        radarr_url=RADARR_URL or "Not Configured",
+        radarr_masked_key=radarr_masked_key,
+        radarr_status_text=radarr_status_text,
+        radarr_status_color=radarr_status_color,
         history=history_list,
         rolling_window=ROLLING_WINDOW,
         plex_status=plex_watcher.get_state(),

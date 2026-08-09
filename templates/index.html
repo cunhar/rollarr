@@ -401,9 +401,15 @@
             <span class="brand-name">Rolarr</span>
             <span class="brand-sub">Rolling Window Bridge</span>
         </div>
-        <div class="conn-pill">
-            <svg class="conn-pip {{ 'ok' if status_text == 'Connected' else ('warn' if 'Error' in status_text else 'err') }}" viewBox="0 0 6 6"><rect width="6" height="6"/></svg>
-            Sonarr {{ status_text }}
+        <div style="display:flex; gap:8px;">
+            <div class="conn-pill">
+                <svg class="conn-pip {{ 'ok' if status_text == 'Connected' else ('warn' if 'Error' in status_text else 'err') }}" viewBox="0 0 6 6"><rect width="6" height="6"/></svg>
+                Sonarr {{ status_text }}
+            </div>
+            <div class="conn-pill">
+                <svg class="conn-pip {{ 'ok' if radarr_status_text == 'Connected' else ('warn' if 'Error' in radarr_status_text else 'err') }}" viewBox="0 0 6 6"><rect width="6" height="6"/></svg>
+                Radarr {{ radarr_status_text }}
+            </div>
         </div>
     </div>
 
@@ -419,10 +425,10 @@
 
         {% if poller_status.enabled %}
         <!-- Episode Poller stats -->
-        <p class="section-title" style="margin-bottom:12px;">Episode Poller</p>
+        <p class="section-title" style="margin-bottom:12px;">Media Poller</p>
         <div class="stat-grid" style="margin-bottom:16px;">
             <div class="stat-cell">
-                <span class="stat-label">Episodes queued</span>
+                <span class="stat-label">Items processed</span>
                 <span class="stat-value {{ 'green' if poller_status.episodes_session > 0 else '' }}" id="ep-count">
                     {{ poller_status.episodes_session }}
                 </span>
@@ -497,15 +503,15 @@
         </div>
         {% endif %}
 
-        <!-- Sonarr summary -->
+        <!-- Sonarr & Radarr summary -->
         <div class="kv-block">
             <div class="kv-row">
                 <span class="kv-key">Sonarr</span>
-                <span class="kv-val">{{ status_text }}</span>
+                <span class="kv-val">{{ status_text }} (Window: {{ rolling_window }} ep)</span>
             </div>
             <div class="kv-row">
-                <span class="kv-key">Rolling window</span>
-                <span class="kv-val">{{ rolling_window }} episodes</span>
+                <span class="kv-key">Radarr</span>
+                <span class="kv-val">{{ radarr_status_text }}</span>
             </div>
         </div>
 
@@ -515,7 +521,7 @@
     <div class="tab-panel" id="panel-activity">
 
         <div class="log-header-row">
-            <span class="section-title">Episode Activity</span>
+            <span class="section-title">Media Activity</span>
             <div style="display:flex; align-items:center; gap:12px;">
                 <span style="font-size:10px; color:var(--text-sub); font-family:var(--mono);">last 20</span>
                 <button class="btn-clear" id="btn-clear-logs" onclick="clearLogs()">Clear</button>
@@ -545,7 +551,7 @@
             {% endfor %}
         </div>
         {% else %}
-        <div class="no-logs">No episodes processed yet.</div>
+        <div class="no-logs">No media items processed yet.</div>
         {% endif %}
 
     </div>
@@ -573,7 +579,19 @@
             </div>
         </div>
 
-        <p class="section-title">Episode Poller</p>
+        <p class="section-title">Radarr</p>
+        <div class="kv-block">
+            <div class="kv-row">
+                <span class="kv-key">Radarr URL</span>
+                <span class="kv-val">{{ radarr_url }}</span>
+            </div>
+            <div class="kv-row">
+                <span class="kv-key">API Key</span>
+                <span class="kv-val">{{ radarr_masked_key }}</span>
+            </div>
+        </div>
+
+        <p class="section-title">Media Poller</p>
         <div class="kv-block">
             <div class="kv-row">
                 <span class="kv-key">PLEX_URL</span>
