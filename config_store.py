@@ -64,7 +64,7 @@ DEFAULT_CONFIG = {
     'PLEX_IDLE_POLLS': 3,
     'PLEX_SHUTDOWN_DRY_RUN': True,
     'ROLLING_WINDOW': 3,
-    'SSH_HOST': 'host-gateway',
+    'SSH_HOST': '172.17.0.1',
     'SSH_PORT': 22,
     'SSH_USER': '',
     'SSH_KEY_PATH': '/root/.ssh/id_rsa',
