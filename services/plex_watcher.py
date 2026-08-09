@@ -91,6 +91,17 @@ def get_state(refresh_live: bool = True):
         return dict(watcher_state)
 
 
+def trigger_shutdown_now() -> dict:
+    """Manually trigger host shutdown command immediately."""
+    logger.info("[PlexWatcher] Manual host shutdown triggered by user.")
+    _update_state(shutdown_fired=True)
+    _ssh_shutdown()
+    if DRY_RUN:
+        return {'status': 'success', 'message': '[DRY-RUN] Shutdown command simulated'}
+    return {'status': 'success', 'message': 'Shutdown command sent to host'}
+
+
+
 # ── Plex polling ─────────────────────────────────────────────────────────────
 
 def _get_active_sessions() -> tuple[int | None, list[dict]]:

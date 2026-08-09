@@ -592,7 +592,10 @@
 
         {% if plex_status.enabled %}
         <!-- Shutdown Watcher -->
-        <p class="section-title" style="margin-bottom:12px;">Shutdown Watcher</p>
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
+            <p class="section-title" style="margin-bottom:0;">Shutdown Watcher</p>
+            <button class="btn-clear" id="btn-shutdown-now" style="color:var(--red); border-color:var(--red);" onclick="triggerShutdownNow()">Shutdown Now</button>
+        </div>
         <div class="stat-grid" style="margin-bottom:16px;">
             <div class="stat-cell">
                 <span class="stat-label">Streams</span>
@@ -930,6 +933,28 @@ function resetCounter() {
             showToast('Items processed counter reset to 0', 'ok');
         })
         .catch(() => showToast('Failed to reset counter', 'err'));
+}
+
+function triggerShutdownNow() {
+    if (!confirm("Are you sure you want to send the shutdown command to the host PC now?")) return;
+    const btn = el('btn-shutdown-now');
+    if (btn) {
+        btn.disabled = true;
+        btn.textContent = 'Shutting down...';
+    }
+    fetch('/api/shutdown-now', { method: 'POST' })
+        .then(r => r.json())
+        .then(data => {
+            showToast(data.message || 'Shutdown command sent', 'warn');
+            setTimeout(pollAll, 1000);
+        })
+        .catch(() => showToast('Failed to send shutdown command', 'err'))
+        .finally(() => {
+            if (btn) {
+                btn.disabled = false;
+                btn.textContent = 'Shutdown Now';
+            }
+        });
 }
 
 pollAll();

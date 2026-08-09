@@ -213,6 +213,13 @@ def api_poller_reset_counter():
     return jsonify(res), 200
 
 
+@app.route('/api/shutdown-now', methods=['POST'])
+def api_shutdown_now():
+    res = plex_watcher.trigger_shutdown_now()
+    return jsonify(res), 200
+
+
+
 
 
 @app.route('/api/clear-logs', methods=['POST'])
