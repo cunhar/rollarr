@@ -210,30 +210,33 @@ def _enrich_metadata(item: dict) -> dict:
     return item
 
 
-def _plex_clean_section(section_id):
-    """Trigger a Plex section file scan and empty trash to remove missing files from Plex library."""
-    if not section_id:
-        return
+def _plex_delete_item(rating_key):
+    """
+    Immediately remove an item from the Plex library by its ratingKey.
+    Uses DELETE /library/metadata/{ratingKey} which is synchronous and reliable.
+    """
+    if not rating_key:
+        return False
     try:
         plex_url = (get_config('PLEX_URL') or '').rstrip('/')
         plex_token = get_config('PLEX_TOKEN') or ''
         if not plex_url or not plex_token:
-            return
-        headers = {'Accept': 'application/json'}
-        params  = {'X-Plex-Token': plex_token}
-        # 1. Scan section for file changes (picks up missing files)
-        requests.get(
-            f"{plex_url}/library/sections/{section_id}/refresh",
-            params=params, headers=headers, timeout=10,
+            return False
+        r = requests.delete(
+            f"{plex_url}/library/metadata/{rating_key}",
+            params={'X-Plex-Token': plex_token},
+            headers={'Accept': 'application/json'},
+            timeout=10,
         )
-        # 2. Empty trash so Plex removes items whose files are gone
-        requests.put(
-            f"{plex_url}/library/sections/{section_id}/emptyTrash",
-            params=params, headers=headers, timeout=10,
-        )
-        logger.info(f"[PlexPoller] Plex section {section_id} — refresh + emptyTrash triggered")
+        if r.status_code in (200, 204):
+            logger.info(f"[PlexPoller] Plex item ratingKey={rating_key} deleted from library")
+            return True
+        else:
+            logger.warning(f"[PlexPoller] Plex delete returned HTTP {r.status_code} for ratingKey={rating_key}")
+            return False
     except Exception as exc:
-        logger.warning(f"[PlexPoller] Failed Plex section cleanup for section {section_id}: {exc}")
+        logger.warning(f"[PlexPoller] Failed to delete Plex item ratingKey={rating_key}: {exc}")
+        return False
 
 
 # ── Sonarr rolling-window logic (Episodes) ────────────────────────────────────
@@ -284,17 +287,19 @@ def _process_episode(item: dict) -> tuple[str, str]:
         logger.warning(f"[PlexPoller] Could not unmonitor episode {current_ep['id']}: {exc}")
 
     ep_file_id = current_ep.get('episodeFileId', 0)
-    section_id = item.get('librarySectionID')
+    rating_key = item.get('ratingKey')
 
     if not ep_file_id or ep_file_id == 0:
-        # File already missing from disk — trigger Plex cleanup so it removes the stale entry
-        file_action = "unmonitored (file already absent from disk)"
-        _plex_clean_section(section_id)
+        # File already missing from disk — remove item directly from Plex library
+        deleted_from_plex = _plex_delete_item(rating_key)
+        plex_note = ", removed from Plex" if deleted_from_plex else ", Plex removal failed"
+        file_action = f"unmonitored (file already absent from disk{plex_note})"
     elif delete_enabled:
         try:
             delete_episode_file(ep_file_id)
-            file_action = "unmonitored & file deleted from disk"
-            _plex_clean_section(section_id)
+            deleted_from_plex = _plex_delete_item(rating_key)
+            plex_note = ", removed from Plex" if deleted_from_plex else ", Plex removal failed"
+            file_action = f"unmonitored & file deleted from disk{plex_note}"
         except Exception as exc:
             logger.warning(f"[PlexPoller] Failed deleting episode file ID {ep_file_id}: {exc}")
             file_action = f"unmonitored (file delete failed: {exc})"
@@ -343,10 +348,11 @@ def _process_movie(item: dict) -> tuple[str, str]:
     movie_title = movie_title or title
     _, action_detail = unmonitor_and_delete_movie(movie_id)
 
-    # Scan + empty trash so Plex removes the stale entry if the file is gone
-    _plex_clean_section(item.get('librarySectionID'))
+    # Remove item directly from Plex library so it won't show up on next scan
+    deleted_from_plex = _plex_delete_item(item.get('ratingKey'))
+    plex_note = ", removed from Plex" if deleted_from_plex else ", Plex removal failed"
 
-    return 'success', f"Movie '{movie_title}' watched — {action_detail} in Radarr"
+    return 'success', f"Movie '{movie_title}' watched — {action_detail} in Radarr{plex_note}"
 
 
 # ── Main loop ─────────────────────────────────────────────────────────────────
