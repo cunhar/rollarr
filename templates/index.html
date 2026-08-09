@@ -85,6 +85,14 @@
             font-weight: 500;
             color: var(--text);
             background: var(--surface);
+            text-decoration: none;
+            cursor: pointer;
+            transition: border-color .15s, background .15s;
+        }
+        .conn-pill:hover {
+            border-color: var(--accent);
+            background: var(--surface-2);
+            color: var(--text);
         }
         .conn-pip {
             width: 7px;
@@ -560,22 +568,22 @@
             <span class="brand-sub">Media Recycler & Power Saver</span>
         </div>
         <div style="display:flex; gap:8px; flex-wrap:wrap;">
-            <div class="conn-pill" id="pill-sonarr">
+            <a class="conn-pill" id="pill-sonarr" target="_blank" rel="noopener noreferrer" title="Open Sonarr">
                 <span class="conn-pip {{ 'ok' if status_text == 'Connected' else ('warn' if 'Error' in status_text else 'err') }}" id="pip-sonarr"></span>
                 <span id="label-sonarr">Sonarr</span>
-            </div>
-            <div class="conn-pill" id="pill-radarr">
+            </a>
+            <a class="conn-pill" id="pill-radarr" target="_blank" rel="noopener noreferrer" title="Open Radarr">
                 <span class="conn-pip {{ 'ok' if radarr_status_text == 'Connected' else ('warn' if 'Error' in radarr_status_text else 'err') }}" id="pip-radarr"></span>
                 <span id="label-radarr">Radarr</span>
-            </div>
-            <div class="conn-pill" id="pill-plex">
+            </a>
+            <a class="conn-pill" id="pill-plex" target="_blank" rel="noopener noreferrer" title="Open Plex">
                 <span class="conn-pip {{ 'ok' if plex_conn_text == 'Connected' else ('warn' if 'Error' in plex_conn_text else 'err') }}" id="pip-plex"></span>
                 <span id="label-plex">Plex</span>
-            </div>
-            <div class="conn-pill" id="pill-nzbget">
+            </a>
+            <a class="conn-pill" id="pill-nzbget" target="_blank" rel="noopener noreferrer" title="Open NZBGet">
                 <span class="conn-pip {{ 'ok' if nzbget_status.connected else 'err' }}" id="pip-nzbget"></span>
                 <span id="label-nzbget">NZBGet</span>
-            </div>
+            </a>
         </div>
 
 
@@ -1122,6 +1130,7 @@ function saveConfiguration() {
     .then(data => {
         if (data.status === 'success') {
             showToast('Configuration saved securely!', 'ok');
+            if (data.config) updatePillLinks(data.config);
             setTimeout(pollAll, 500);
         } else {
             showToast('Error saving config: ' + (data.message || 'Unknown error'), 'err');
@@ -1135,6 +1144,62 @@ function saveConfiguration() {
         }
     });
 }
+
+function buildServiceUrl(configuredUrl) {
+    if (!configuredUrl || configuredUrl === 'Not Configured' || configuredUrl === 'Not configured') return '#';
+    try {
+        let raw = String(configuredUrl).trim();
+        if (!/^https?:\/\//i.test(raw)) {
+            raw = 'http://' + raw;
+        }
+        const parsed = new URL(raw);
+        const currentProtocol = window.location.protocol;
+        const currentHost = window.location.hostname;
+        
+        let port = parsed.port;
+        if (!port) {
+            if (parsed.protocol === 'https:') port = '443';
+            else if (parsed.protocol === 'http:') port = '80';
+        }
+        
+        const pathname = (parsed.pathname === '/' || !parsed.pathname) ? '' : parsed.pathname;
+        const search = parsed.search || '';
+        const hash = parsed.hash || '';
+
+        const portSuffix = (port && port !== '80' && port !== '443') ? `:${port}` : '';
+        return `${currentProtocol}//${currentHost}${portSuffix}${pathname}${search}${hash}`;
+    } catch (e) {
+        return '#';
+    }
+}
+
+function updatePillLinks(urls) {
+    const mappings = {
+        sonarr: urls.SONARR_URL || urls.sonarr,
+        radarr: urls.RADARR_URL || urls.radarr,
+        plex:   urls.PLEX_URL || urls.plex,
+        nzbget: urls.NZBGET_URL || urls.nzbget
+    };
+    for (const [key, rawUrl] of Object.entries(mappings)) {
+        const pillEl = el(`pill-${key}`);
+        if (pillEl) {
+            const href = buildServiceUrl(rawUrl);
+            pillEl.href = href;
+            if (href === '#') {
+                pillEl.removeAttribute('target');
+            } else {
+                pillEl.target = '_blank';
+            }
+        }
+    }
+}
+
+updatePillLinks({
+    SONARR_URL: "{{ cfg.SONARR_URL | safe }}",
+    RADARR_URL: "{{ cfg.RADARR_URL | safe }}",
+    PLEX_URL:   "{{ cfg.PLEX_URL | safe }}",
+    NZBGET_URL: "{{ cfg.NZBGET_URL | safe }}"
+});
 
 pollAll();
 setInterval(pollAll, REFRESH_MS);
