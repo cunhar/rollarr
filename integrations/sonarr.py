@@ -1,26 +1,35 @@
-import os
+from __future__ import annotations
+
 import requests
 import logging
+from config_store import get_config
 
 logger = logging.getLogger(__name__)
 
-SONARR_URL = os.environ.get('SONARR_URL')
-SONARR_API_KEY = os.environ.get('SONARR_API_KEY')
-ROLLING_WINDOW = int(os.environ.get('ROLLING_WINDOW', 3))
+def get_sonarr_url() -> str:
+    return (get_config('SONARR_URL') or '').rstrip('/')
+
+def get_sonarr_api_key() -> str:
+    return get_config('SONARR_API_KEY') or ''
+
+def get_rolling_window() -> int:
+    return int(get_config('ROLLING_WINDOW', 3))
 
 def get_sonarr_headers():
-    if not SONARR_API_KEY:
-        raise ValueError("SONARR_API_KEY environment variable is not set")
+    api_key = get_sonarr_api_key()
+    if not api_key:
+        raise ValueError("SONARR_API_KEY is not configured")
     return {
-        "X-Api-Key": SONARR_API_KEY,
+        "X-Api-Key": api_key,
         "Content-Type": "application/json"
     }
 
 def find_series_id_by_title(title):
-    if not SONARR_URL:
-        raise ValueError("SONARR_URL environment variable is not set")
+    sonarr_url = get_sonarr_url()
+    if not sonarr_url:
+        raise ValueError("SONARR_URL is not configured")
     
-    url = f"{SONARR_URL.rstrip('/')}/api/v3/series"
+    url = f"{sonarr_url}/api/v3/series"
     logger.info(f"Fetching all series from Sonarr to resolve title: '{title}'")
     
     try:
@@ -42,10 +51,11 @@ def find_series_id_by_title(title):
 
 def find_series_id_by_tvdb_id(tvdb_id):
     """Fetch all series from Sonarr and find the internal seriesId corresponding to tvdb_id."""
-    if not SONARR_URL:
-        raise ValueError("SONARR_URL environment variable is not set")
+    sonarr_url = get_sonarr_url()
+    if not sonarr_url:
+        raise ValueError("SONARR_URL is not configured")
     
-    url = f"{SONARR_URL.rstrip('/')}/api/v3/series"
+    url = f"{sonarr_url}/api/v3/series"
     logger.info(f"Fetching all series from Sonarr to resolve tvdbId: {tvdb_id}")
     
     try:
@@ -65,10 +75,11 @@ def find_series_id_by_tvdb_id(tvdb_id):
         raise
 
 def get_series_title(series_id):
-    if not SONARR_URL:
-        raise ValueError("SONARR_URL environment variable is not set")
+    sonarr_url = get_sonarr_url()
+    if not sonarr_url:
+        raise ValueError("SONARR_URL is not configured")
     
-    url = f"{SONARR_URL.rstrip('/')}/api/v3/series/{series_id}"
+    url = f"{sonarr_url}/api/v3/series/{series_id}"
     try:
         response = requests.get(url, headers=get_sonarr_headers(), timeout=10)
         response.raise_for_status()
@@ -79,10 +90,11 @@ def get_series_title(series_id):
 
 def get_episodes(series_id):
     """Fetch all episodes for a given series ID."""
-    if not SONARR_URL:
-        raise ValueError("SONARR_URL environment variable is not set")
+    sonarr_url = get_sonarr_url()
+    if not sonarr_url:
+        raise ValueError("SONARR_URL is not configured")
         
-    url = f"{SONARR_URL.rstrip('/')}/api/v3/episode"
+    url = f"{sonarr_url}/api/v3/episode"
     params = {"seriesId": series_id}
     logger.info(f"Fetching episodes for seriesId: {series_id}")
     
@@ -96,10 +108,11 @@ def get_episodes(series_id):
 
 def monitor_episode(episode_id):
     """Set monitored = true for the given episode ID."""
-    if not SONARR_URL:
-        raise ValueError("SONARR_URL environment variable is not set")
+    sonarr_url = get_sonarr_url()
+    if not sonarr_url:
+        raise ValueError("SONARR_URL is not configured")
         
-    url = f"{SONARR_URL.rstrip('/')}/api/v3/episode/monitor"
+    url = f"{sonarr_url}/api/v3/episode/monitor"
     payload = {
         "episodeIds": [episode_id],
         "monitored": True
@@ -117,10 +130,11 @@ def monitor_episode(episode_id):
 
 def search_episode(episode_id):
     """Trigger Sonarr search command for the given episode ID."""
-    if not SONARR_URL:
-        raise ValueError("SONARR_URL environment variable is not set")
+    sonarr_url = get_sonarr_url()
+    if not sonarr_url:
+        raise ValueError("SONARR_URL is not configured")
         
-    url = f"{SONARR_URL.rstrip('/')}/api/v3/command"
+    url = f"{sonarr_url}/api/v3/command"
     payload = {
         "name": "EpisodeSearch",
         "episodeIds": [episode_id]

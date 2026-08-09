@@ -8,24 +8,24 @@ from collections import deque
 import datetime
 import threading
 
+import config_store
 from integrations.sonarr import (
-    SONARR_URL,
-    SONARR_API_KEY,
-    ROLLING_WINDOW,
+    get_sonarr_url,
+    get_sonarr_api_key,
+    get_rolling_window,
     get_sonarr_headers,
 )
 from integrations.radarr import (
-    RADARR_URL,
-    RADARR_API_KEY,
+    get_radarr_url,
+    get_radarr_api_key,
     get_radarr_headers,
 )
 from integrations.nzbget import (
     get_nzbget_status,
-    NZBGET_URL,
-    NZBGET_USERNAME,
-    NZBGET_PASSWORD,
+    get_nzbget_url,
+    get_nzbget_username,
+    get_nzbget_password,
 )
-
 from services import plex_watcher, plex_poller
 
 # Persistent configuration directories
@@ -56,7 +56,7 @@ app = Flask(__name__)
 
 # In-memory activity log (last 20 entries) with thread lock
 webhook_history = deque(maxlen=20)
-history_lock    = threading.Lock()
+history_lock = threading.Lock()
 
 
 def load_history():
@@ -66,11 +66,11 @@ def load_history():
                 data = json.load(f)
                 with history_lock:
                     webhook_history.clear()
-                    for entry in reversed(data):
-                        webhook_history.appendleft(entry)
-            logger.info("Loaded activity history from persistent storage.")
+                    for item in data:
+                        webhook_history.append(item)
+            logger.info(f"Loaded {len(data)} activity log entries from {HISTORY_FILE}")
         except Exception as e:
-            logger.error(f"Failed to load activity history: {e}")
+            logger.warning(f"Could not load activity log file: {e}")
 
 
 def save_history():
@@ -80,22 +80,22 @@ def save_history():
         with open(HISTORY_FILE, 'w') as f:
             json.dump(data, f, indent=2)
     except Exception as e:
-        logger.error(f"Failed to save activity history: {e}")
+        logger.warning(f"Could not save activity log file: {e}")
 
 
-def log_call(status: str, message: str, payload=None):
+def log_call(status, message, payload=None):
+    ts = datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')
     entry = {
-        "timestamp": datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-        "status":    status,
-        "message":   message,
-        "payload":   payload,
+        "timestamp": ts,
+        "status": status,
+        "message": message,
+        "payload": payload,
     }
     with history_lock:
         webhook_history.appendleft(entry)
     save_history()
 
 
-# Start background services
 load_history()
 plex_poller.set_log_callback(log_call)
 plex_poller.start()
@@ -106,25 +106,34 @@ plex_watcher.start()
 
 @app.route('/')
 def index():
+    cfg = config_store.get_all_config()
+
+    sonarr_url = get_sonarr_url()
+    sonarr_api_key = get_sonarr_api_key()
+    radarr_url = get_radarr_url()
+    radarr_api_key = get_radarr_api_key()
+    plex_url = (cfg.get('PLEX_URL') or '').rstrip('/')
+    plex_token = cfg.get('PLEX_TOKEN') or ''
+
     # Mask API key Sonarr
-    if SONARR_API_KEY:
-        masked_key = "*" * (len(SONARR_API_KEY) - 4) + SONARR_API_KEY[-4:] if len(SONARR_API_KEY) >= 4 else SONARR_API_KEY
+    if sonarr_api_key:
+        masked_key = "*" * (len(sonarr_api_key) - 4) + sonarr_api_key[-4:] if len(sonarr_api_key) >= 4 else sonarr_api_key
     else:
         masked_key = "Not Configured"
 
     # Mask API key Radarr
-    if RADARR_API_KEY:
-        radarr_masked_key = "*" * (len(RADARR_API_KEY) - 4) + RADARR_API_KEY[-4:] if len(RADARR_API_KEY) >= 4 else RADARR_API_KEY
+    if radarr_api_key:
+        radarr_masked_key = "*" * (len(radarr_api_key) - 4) + radarr_api_key[-4:] if len(radarr_api_key) >= 4 else radarr_api_key
     else:
         radarr_masked_key = "Not Configured"
 
     # Sonarr connection check
     status_text  = "Disconnected"
     status_color = "#e05252"
-    if SONARR_URL and SONARR_API_KEY:
+    if sonarr_url and sonarr_api_key:
         try:
             res = requests.get(
-                f"{SONARR_URL.rstrip('/')}/api/v3/system/status",
+                f"{sonarr_url}/api/v3/system/status",
                 headers=get_sonarr_headers(),
                 timeout=2,
             )
@@ -141,10 +150,10 @@ def index():
     # Radarr connection check
     radarr_status_text  = "Disconnected"
     radarr_status_color = "#e05252"
-    if RADARR_URL and RADARR_API_KEY:
+    if radarr_url and radarr_api_key:
         try:
             res = requests.get(
-                f"{RADARR_URL.rstrip('/')}/api/v3/system/status",
+                f"{radarr_url}/api/v3/system/status",
                 headers=get_radarr_headers(),
                 timeout=2,
             )
@@ -159,13 +168,11 @@ def index():
             radarr_status_color = "#e05252"
 
     # Plex connection check
-    plex_url = os.environ.get('PLEX_URL')
-    plex_token = os.environ.get('PLEX_TOKEN')
     plex_conn_text = "Disconnected"
     if plex_url and plex_token:
         try:
             res = requests.get(
-                f"{plex_url.rstrip('/')}/identity",
+                f"{plex_url}/identity",
                 headers={'X-Plex-Token': plex_token, 'Accept': 'application/json'},
                 timeout=2,
             )
@@ -180,33 +187,45 @@ def index():
         history_list = list(webhook_history)
 
     nzbget_status = get_nzbget_status()
-    if NZBGET_PASSWORD:
-        nzbget_masked_pass = "*" * (len(NZBGET_PASSWORD) - 4) + NZBGET_PASSWORD[-4:] if len(NZBGET_PASSWORD) >= 4 else NZBGET_PASSWORD
+    nzbget_pwd = get_nzbget_password()
+    if nzbget_pwd:
+        nzbget_masked_pass = "*" * (len(nzbget_pwd) - 4) + nzbget_pwd[-4:] if len(nzbget_pwd) >= 4 else nzbget_pwd
     else:
         nzbget_masked_pass = "Not Configured"
 
     return render_template(
         "index.html",
-        sonarr_url=SONARR_URL or "Not Configured",
+        cfg=cfg,
+        sonarr_url=sonarr_url or "Not Configured",
         masked_key=masked_key,
         status_text=status_text,
         status_color=status_color,
-        radarr_url=RADARR_URL or "Not Configured",
+        radarr_url=radarr_url or "Not Configured",
         radarr_masked_key=radarr_masked_key,
         radarr_status_text=radarr_status_text,
         radarr_status_color=radarr_status_color,
         plex_conn_text=plex_conn_text,
-        nzbget_url=NZBGET_URL or "Not Configured",
-        nzbget_username=NZBGET_USERNAME or "Not Configured",
+        nzbget_url=get_nzbget_url() or "Not Configured",
+        nzbget_username=get_nzbget_username() or "Not Configured",
         nzbget_masked_pass=nzbget_masked_pass,
         nzbget_status=nzbget_status,
         history=history_list,
-        rolling_window=ROLLING_WINDOW,
+        rolling_window=get_rolling_window(),
         plex_status=plex_watcher.get_state(),
         poller_status=plex_poller.get_state(),
     )
 
 
+@app.route('/api/config/save', methods=['POST'])
+def api_config_save():
+    try:
+        data = request.json or {}
+        updated = config_store.save_config(data)
+        logger.info("[App] Saved updated encrypted configuration via UI.")
+        return jsonify({'status': 'success', 'message': 'Configuration saved securely', 'config': updated}), 200
+    except Exception as exc:
+        logger.error(f"[App] Failed to save configuration: {exc}")
+        return jsonify({'status': 'error', 'message': str(exc)}), 500
 
 
 @app.route('/api/plex-status')
@@ -242,21 +261,15 @@ def api_nzbget_status():
     return jsonify(get_nzbget_status())
 
 
-
-
-
-
 @app.route('/api/clear-logs', methods=['POST'])
 def api_clear_logs():
     with history_lock:
         webhook_history.clear()
     save_history()
     logger.info("Activity history cleared via UI.")
-    return jsonify({"status": "ok", "message": "History cleared"}), 200
+    return jsonify({"status": "success"}), 200
 
 
 if __name__ == '__main__':
-    if not SONARR_URL or not SONARR_API_KEY:
-        logger.warning("SONARR_URL or SONARR_API_KEY is not defined in environment variables.")
     port = int(os.environ.get('PORT', 5000))
     app.run(host='0.0.0.0', port=port)

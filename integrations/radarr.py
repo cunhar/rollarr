@@ -1,25 +1,32 @@
-import os
+from __future__ import annotations
+
 import requests
 import logging
+from config_store import get_config
 
 logger = logging.getLogger(__name__)
 
-RADARR_URL = os.environ.get('RADARR_URL')
-RADARR_API_KEY = os.environ.get('RADARR_API_KEY')
+def get_radarr_url() -> str:
+    return (get_config('RADARR_URL') or '').rstrip('/')
+
+def get_radarr_api_key() -> str:
+    return get_config('RADARR_API_KEY') or ''
 
 def get_radarr_headers():
-    if not RADARR_API_KEY:
-        raise ValueError("RADARR_API_KEY environment variable is not set")
+    api_key = get_radarr_api_key()
+    if not api_key:
+        raise ValueError("RADARR_API_KEY is not configured")
     return {
-        "X-Api-Key": RADARR_API_KEY,
+        "X-Api-Key": api_key,
         "Content-Type": "application/json"
     }
 
 def find_movie_by_title_and_year(title, year=None):
-    if not RADARR_URL:
-        raise ValueError("RADARR_URL environment variable is not set")
+    radarr_url = get_radarr_url()
+    if not radarr_url:
+        raise ValueError("RADARR_URL is not configured")
     
-    url = f"{RADARR_URL.rstrip('/')}/api/v3/movie"
+    url = f"{radarr_url}/api/v3/movie"
     logger.info(f"Fetching movies from Radarr to resolve: '{title}' ({year})")
     
     try:
@@ -43,10 +50,11 @@ def find_movie_by_title_and_year(title, year=None):
         raise
 
 def unmonitor_and_delete_movie(movie_id):
-    if not RADARR_URL:
-        raise ValueError("RADARR_URL environment variable is not set")
+    radarr_url = get_radarr_url()
+    if not radarr_url:
+        raise ValueError("RADARR_URL is not configured")
         
-    url = f"{RADARR_URL.rstrip('/')}/api/v3/movie/{movie_id}"
+    url = f"{radarr_url}/api/v3/movie/{movie_id}"
     try:
         res = requests.get(url, headers=get_radarr_headers(), timeout=10)
         res.raise_for_status()
@@ -62,7 +70,7 @@ def unmonitor_and_delete_movie(movie_id):
         # Delete movie file if present
         movie_file_id = movie.get('movieFileId', 0)
         if movie_file_id and movie_file_id > 0:
-            file_url = f"{RADARR_URL.rstrip('/')}/api/v3/moviefile/{movie_file_id}"
+            file_url = f"{radarr_url}/api/v3/moviefile/{movie_file_id}"
             del_res = requests.delete(file_url, headers=get_radarr_headers(), timeout=10)
             del_res.raise_for_status()
             logger.info(f"Deleted movie file ID {movie_file_id} for movie ID {movie_id}")

@@ -28,26 +28,22 @@ import datetime
 import requests
 
 from integrations.sonarr import (
-    ROLLING_WINDOW,
+    get_rolling_window,
     find_series_id_by_title,
     get_episodes,
     monitor_episode,
     search_episode,
 )
 from integrations.radarr import (
-    RADARR_URL,
-    RADARR_API_KEY,
     find_movie_by_title_and_year,
     unmonitor_and_delete_movie,
 )
 
+from config_store import get_config
+
 logger = logging.getLogger(__name__)
 
 # ── Configuration ─────────────────────────────────────────────────────────────
-
-PLEX_URL      = os.environ.get('PLEX_URL', '').rstrip('/')
-PLEX_TOKEN    = os.environ.get('PLEX_TOKEN', '')
-POLL_INTERVAL = int(os.environ.get('PLEX_WATCH_INTERVAL', 3600))
 
 CONFIG_DIR = '/config'
 if not os.path.exists(CONFIG_DIR):
@@ -58,9 +54,9 @@ STATE_FILE = os.path.join(CONFIG_DIR, 'plex_poll_state.json')
 # ── Shared state (read by the Flask UI) ──────────────────────────────────────
 
 poller_state = {
-    'enabled':           bool(PLEX_URL and PLEX_TOKEN),
-    'plex_url':          PLEX_URL or 'Not configured',
-    'poll_interval':     POLL_INTERVAL,
+    'enabled':           False,
+    'plex_url':          'Not configured',
+    'poll_interval':     3600,
     'status':            'starting',   # starting | ok | unreachable | not_configured | polling
     'last_check':        None,
     'next_check':        None,
@@ -95,13 +91,25 @@ def _update_state(**kwargs):
 
 def get_state() -> dict:
     """Return a thread-safe snapshot of the poller state."""
+    plex_url = (get_config('PLEX_URL') or '').rstrip('/')
+    plex_token = get_config('PLEX_TOKEN') or ''
+    poll_interval = int(get_config('PLEX_WATCH_INTERVAL', 3600))
+
+    _update_state(
+        enabled=bool(plex_url and plex_token),
+        plex_url=plex_url or 'Not configured',
+        poll_interval=poll_interval,
+    )
     with _state_lock:
         return dict(poller_state)
 
 
 def trigger_now() -> dict:
     """Trigger a manual poll cycle immediately."""
-    if not PLEX_URL or not PLEX_TOKEN:
+    plex_url = (get_config('PLEX_URL') or '').rstrip('/')
+    plex_token = get_config('PLEX_TOKEN') or ''
+
+    if not plex_url or not plex_token:
         return {'status': 'error', 'message': 'Plex is not configured'}
     
     logger.info("[PlexPoller] Manual poll triggered by user")
@@ -141,13 +149,16 @@ def _save_persisted_state(ts: int, count: int):
 # ── Plex API helpers ──────────────────────────────────────────────────────────
 
 def _plex_get(path: str, params: dict = None) -> dict | None:
-    if not PLEX_URL or not PLEX_TOKEN:
+    plex_url = (get_config('PLEX_URL') or '').rstrip('/')
+    plex_token = get_config('PLEX_TOKEN') or ''
+
+    if not plex_url or not plex_token:
         return None
     try:
         r = requests.get(
-            f"{PLEX_URL}{path}",
+            f"{plex_url}{path}",
             headers={'Accept': 'application/json'},
-            params={'X-Plex-Token': PLEX_TOKEN, **(params or {})},
+            params={'X-Plex-Token': plex_token, **(params or {})},
             timeout=10,
         )
         r.raise_for_status()
@@ -231,7 +242,7 @@ def _process_episode(item: dict) -> tuple[str, str]:
     if current_idx is None:
         return 'warning', f"{series_title} {ep_str} — episode not found in Sonarr"
 
-    next_eps = regular[current_idx + 1 : current_idx + 1 + ROLLING_WINDOW]
+    next_eps = regular[current_idx + 1 : current_idx + 1 + get_rolling_window()]
 
     if not next_eps:
         return 'success', f"{series_title} {ep_str} watched — final episode, nothing to queue"
@@ -330,25 +341,29 @@ def _execute_poll(watermark: int, media_total: int) -> tuple[int, int]:
 
 
 def _poller_loop():
-    if not PLEX_URL or not PLEX_TOKEN:
-        logger.warning("[PlexPoller] PLEX_URL or PLEX_TOKEN not set — media poller disabled.")
-        _update_state(status='not_configured')
-        return
-
     watermark, media_total = _load_persisted_state()
     _update_state(episodes_session=media_total)
 
-    logger.info(f"[PlexPoller] Starting media poller. Interval={POLL_INTERVAL}s. Loaded watermark={watermark}, items_processed={media_total}")
+    logger.info(f"[PlexPoller] Starting media poller loop.")
 
     while True:
+        plex_url = (get_config('PLEX_URL') or '').rstrip('/')
+        plex_token = get_config('PLEX_TOKEN') or ''
+        poll_interval = int(get_config('PLEX_WATCH_INTERVAL', 3600))
+
+        if not plex_url or not plex_token:
+            _update_state(status='not_configured')
+            time.sleep(10)
+            continue
+
         with _poll_active:
             watermark, media_total = _execute_poll(watermark, media_total)
 
         # Calculate sleep until top-of-the-hour (or interval multiple)
         now_epoch = time.time()
-        sleep_sec = POLL_INTERVAL - int(now_epoch % POLL_INTERVAL)
+        sleep_sec = poll_interval - int(now_epoch % poll_interval)
         if sleep_sec <= 0:
-            sleep_sec = POLL_INTERVAL
+            sleep_sec = poll_interval
 
         next_dt = datetime.datetime.now() + datetime.timedelta(seconds=sleep_sec)
         next_ts = next_dt.strftime('%Y-%m-%d %H:%M:%S')

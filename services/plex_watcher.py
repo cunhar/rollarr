@@ -5,19 +5,6 @@ Background daemon thread that periodically polls Plex for active streams.
 If no streams are detected for PLEX_IDLE_POLLS consecutive checks (each
 separated by PLEX_POLL_INTERVAL seconds), the host machine is shut down
 via SSH.
-
-Environment variables
----------------------
-PLEX_URL               Base Plex URL (e.g. http://localhost:32400)
-PLEX_TOKEN             Plex authentication token (X-Plex-Token)
-PLEX_POLL_INTERVAL     Seconds between polls  (default: 1200 = 20 min)
-PLEX_IDLE_POLLS        Consecutive idle polls before shutdown (default: 3)
-SSH_HOST               Hostname / IP of the host to SSH into
-SSH_PORT               SSH port (default: 22)
-SSH_USER               SSH username
-SSH_KEY_PATH           Path to SSH private key inside the container
-                       (default: /root/.ssh/id_rsa)
-PLEX_SHUTDOWN_DRY_RUN  If 'true', log only — never actually shut down
 """
 from __future__ import annotations
 
@@ -28,35 +15,22 @@ import logging
 import datetime
 
 import requests
+from config_store import get_config
 
 logger = logging.getLogger(__name__)
-
-# ── Configuration ────────────────────────────────────────────────────────────
-
-PLEX_URL          = os.environ.get('PLEX_URL', '').rstrip('/')
-PLEX_TOKEN        = os.environ.get('PLEX_TOKEN', '')
-POLL_INTERVAL     = int(os.environ.get('PLEX_POLL_INTERVAL', 1200))   # seconds
-IDLE_POLLS_NEEDED = int(os.environ.get('PLEX_IDLE_POLLS', 3))
-
-SSH_HOST     = os.environ.get('SSH_HOST', '')
-SSH_PORT     = int(os.environ.get('SSH_PORT', 22))
-SSH_USER     = os.environ.get('SSH_USER', '')
-SSH_KEY_PATH = os.environ.get('SSH_KEY_PATH', '/root/.ssh/id_rsa')
-
-DRY_RUN = os.environ.get('PLEX_SHUTDOWN_DRY_RUN', 'false').lower() in ('true', '1', 'yes')
 
 # ── Shared state (read by the Flask UI) ──────────────────────────────────────
 
 watcher_state = {
-    'enabled':        bool(PLEX_URL and PLEX_TOKEN),
-    'dry_run':        DRY_RUN,
-    'plex_url':       PLEX_URL or 'Not configured',
+    'enabled':        False,
+    'dry_run':        True,
+    'plex_url':       'Not configured',
     'status':         'starting',          # starting | ok | unreachable | not_configured
     'stream_count':   None,                # int or None
     'active_streams': [],                  # list of detailed stream dicts
     'idle_streak':    0,                   # consecutive idle polls
-    'idle_needed':    IDLE_POLLS_NEEDED,
-    'poll_interval':  POLL_INTERVAL,
+    'idle_needed':    3,
+    'poll_interval':  1200,
     'last_check':     None,                # ISO timestamp string
     'next_check':     None,                # ISO timestamp string
     'last_action':    None,                # description of last significant action
@@ -78,7 +52,22 @@ def get_state(refresh_live: bool = True):
     Refreshes active stream info from Plex if cache is older than 5s.
     """
     global _last_fetch_time
-    if refresh_live and PLEX_URL and PLEX_TOKEN:
+
+    plex_url = (get_config('PLEX_URL') or '').rstrip('/')
+    plex_token = get_config('PLEX_TOKEN') or ''
+    dry_run = bool(get_config('PLEX_SHUTDOWN_DRY_RUN', True))
+    idle_needed = int(get_config('PLEX_IDLE_POLLS', 3))
+    poll_interval = int(get_config('PLEX_POLL_INTERVAL', 1200))
+
+    _update_state(
+        enabled=bool(plex_url and plex_token),
+        dry_run=dry_run,
+        plex_url=plex_url or 'Not configured',
+        idle_needed=idle_needed,
+        poll_interval=poll_interval,
+    )
+
+    if refresh_live and plex_url and plex_token:
         now_time = time.time()
         if now_time - _last_fetch_time > 5:
             _last_fetch_time = now_time
@@ -95,11 +84,11 @@ def trigger_shutdown_now() -> dict:
     """Manually trigger host shutdown command immediately."""
     logger.info("[PlexWatcher] Manual host shutdown triggered by user.")
     _update_state(shutdown_fired=True)
+    dry_run = bool(get_config('PLEX_SHUTDOWN_DRY_RUN', True))
     _ssh_shutdown()
-    if DRY_RUN:
+    if dry_run:
         return {'status': 'success', 'message': '[DRY-RUN] Shutdown command simulated'}
     return {'status': 'success', 'message': 'Shutdown command sent to host'}
-
 
 
 # ── Plex polling ─────────────────────────────────────────────────────────────
@@ -109,14 +98,17 @@ def _get_active_sessions() -> tuple[int | None, list[dict]]:
     Query the Plex /status/sessions endpoint for active stream count & metadata.
     Returns (count, streams_list).
     """
-    if not PLEX_URL or not PLEX_TOKEN:
+    plex_url = (get_config('PLEX_URL') or '').rstrip('/')
+    plex_token = get_config('PLEX_TOKEN') or ''
+
+    if not plex_url or not plex_token:
         return None, []
     try:
-        url = f"{PLEX_URL}/status/sessions"
+        url = f"{plex_url}/status/sessions"
         resp = requests.get(
             url,
-            headers={'X-Plex-Token': PLEX_TOKEN, 'Accept': 'application/json'},
-            params={'X-Plex-Token': PLEX_TOKEN},
+            headers={'X-Plex-Token': plex_token, 'Accept': 'application/json'},
+            params={'X-Plex-Token': plex_token},
             timeout=5,
         )
         resp.raise_for_status()
@@ -206,15 +198,21 @@ def _get_active_sessions() -> tuple[int | None, list[dict]]:
 def _ssh_shutdown():
     """SSH into SSH_HOST and issue a Linux shutdown command."""
     cmd = 'sudo shutdown -h +1'
-    if DRY_RUN:
+    dry_run = bool(get_config('PLEX_SHUTDOWN_DRY_RUN', True))
+    ssh_host = get_config('SSH_HOST', '')
+    ssh_port = int(get_config('SSH_PORT', 22))
+    ssh_user = get_config('SSH_USER', '')
+    ssh_key_path = get_config('SSH_KEY_PATH', '/root/.ssh/id_rsa')
+
+    if dry_run:
         logger.warning(
-            f"[PlexWatcher] DRY-RUN: would SSH {SSH_USER}@{SSH_HOST}:{SSH_PORT} "
+            f"[PlexWatcher] DRY-RUN: would SSH {ssh_user}@{ssh_host}:{ssh_port} "
             f"and run: {cmd}"
         )
         _update_state(last_action=f"[DRY-RUN] Shutdown would have been triggered at {_now()}")
         return
 
-    if not SSH_HOST or not SSH_USER:
+    if not ssh_host or not ssh_user:
         logger.error("[PlexWatcher] SSH_HOST or SSH_USER not configured — cannot shut down.")
         _update_state(last_action="Shutdown skipped: SSH_HOST or SSH_USER missing")
         return
@@ -225,10 +223,10 @@ def _ssh_shutdown():
         client = paramiko.SSHClient()
         client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
         client.connect(
-            hostname=SSH_HOST,
-            port=SSH_PORT,
-            username=SSH_USER,
-            key_filename=SSH_KEY_PATH if os.path.exists(SSH_KEY_PATH) else None,
+            hostname=ssh_host,
+            port=ssh_port,
+            username=ssh_user,
+            key_filename=ssh_key_path if os.path.exists(ssh_key_path) else None,
             timeout=15,
         )
         stdin, stdout, stderr = client.exec_command(cmd)
@@ -238,7 +236,7 @@ def _ssh_shutdown():
         client.close()
 
         msg = (
-            f"SSH shutdown sent to {SSH_HOST}. "
+            f"SSH shutdown sent to {ssh_host}. "
             f"Exit={exit_status}. stdout={out!r} stderr={err!r}"
         )
         logger.info(f"[PlexWatcher] {msg}")
@@ -256,22 +254,22 @@ def _now() -> str:
 
 
 def _watcher_loop():
-    if not PLEX_URL or not PLEX_TOKEN:
-        logger.warning("[PlexWatcher] PLEX_URL or PLEX_TOKEN not set — watcher disabled.")
-        _update_state(status='not_configured')
-        return
-
-    logger.info(
-        f"[PlexWatcher] Starting. poll_interval={POLL_INTERVAL}s  "
-        f"idle_polls_needed={IDLE_POLLS_NEEDED}  dry_run={DRY_RUN}"
-    )
-
     idle_streak = 0
 
     while True:
+        plex_url = (get_config('PLEX_URL') or '').rstrip('/')
+        plex_token = get_config('PLEX_TOKEN') or ''
+        poll_interval = int(get_config('PLEX_POLL_INTERVAL', 1200))
+        idle_needed = int(get_config('PLEX_IDLE_POLLS', 3))
+
+        if not plex_url or not plex_token:
+            _update_state(status='not_configured')
+            time.sleep(10)
+            continue
+
         now_ts = _now()
         next_ts = (
-            datetime.datetime.now() + datetime.timedelta(seconds=POLL_INTERVAL)
+            datetime.datetime.now() + datetime.timedelta(seconds=poll_interval)
         ).strftime('%Y-%m-%d %H:%M:%S')
 
         stream_count, active_streams = _get_active_sessions()
@@ -305,7 +303,7 @@ def _watcher_loop():
             idle_streak += 1
             logger.info(
                 f"[PlexWatcher] {now_ts} — No active streams. "
-                f"Idle streak: {idle_streak}/{IDLE_POLLS_NEEDED}"
+                f"Idle streak: {idle_streak}/{idle_needed}"
             )
             _update_state(
                 status='ok',
@@ -315,11 +313,11 @@ def _watcher_loop():
                 next_check=next_ts,
                 idle_streak=idle_streak,
                 last_action=(
-                    f"{now_ts} — No streams (idle streak {idle_streak}/{IDLE_POLLS_NEEDED})"
+                    f"{now_ts} — No streams (idle streak {idle_streak}/{idle_needed})"
                 ),
             )
 
-            if idle_streak >= IDLE_POLLS_NEEDED:
+            if idle_streak >= idle_needed:
                 logger.warning(
                     f"[PlexWatcher] Idle threshold reached ({idle_streak} polls). "
                     f"Triggering shutdown."
@@ -329,7 +327,7 @@ def _watcher_loop():
                 idle_streak = 0
                 _update_state(idle_streak=0)
 
-        time.sleep(POLL_INTERVAL)
+        time.sleep(poll_interval)
 
 
 def start():

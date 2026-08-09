@@ -479,6 +479,44 @@
             margin-bottom: 24px;
             font-family: var(--mono);
         }
+        .form-group {
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+            margin-bottom: 16px;
+        }
+        .form-label {
+            font-size: 11px;
+            font-family: var(--mono);
+            color: var(--text-sub);
+            text-transform: uppercase;
+            letter-spacing: .5px;
+        }
+        .form-input {
+            background: var(--surface);
+            border: 1px solid var(--border-hi);
+            color: var(--text);
+            font-family: var(--mono);
+            font-size: 12px;
+            padding: 8px 12px;
+            outline: none;
+            width: 100%;
+            transition: border-color .15s;
+            box-sizing: border-box;
+        }
+        .form-input:focus {
+            border-color: var(--accent);
+        }
+        .form-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 16px;
+            margin-bottom: 8px;
+        }
+        @media (max-width: 600px) {
+            .form-grid { grid-template-columns: 1fr; }
+        }
+
 
         /* ── Last-action bar ────────────────────────────────── */
         .last-action-bar {
@@ -672,80 +710,110 @@
     <div class="tab-panel" id="panel-config">
 
         <div class="config-note">
-            Values are read from environment variables at startup. Restart the container to apply changes.
+            Configuration is stored securely in <strong>/config/settings.enc</strong> (AES-128 Fernet encrypted).
         </div>
 
-        <p class="section-title">Sonarr</p>
-        <div class="kv-block">
-            <div class="kv-row">
-                <span class="kv-key">Sonarr URL</span>
-                <span class="kv-val">{{ sonarr_url }}</span>
-            </div>
-            <div class="kv-row">
-                <span class="kv-key">API Key</span>
-                <span class="kv-val">{{ masked_key }}</span>
-            </div>
-            <div class="kv-row">
-                <span class="kv-key">Rolling Window</span>
-                <span class="kv-val">{{ rolling_window }} episodes</span>
-            </div>
-        </div>
+        <form id="config-form" onsubmit="event.preventDefault(); saveConfiguration();">
 
-        <p class="section-title">Radarr</p>
-        <div class="kv-block">
-            <div class="kv-row">
-                <span class="kv-key">Radarr URL</span>
-                <span class="kv-val">{{ radarr_url }}</span>
+            <p class="section-title">Sonarr Settings</p>
+            <div class="form-grid">
+                <div class="form-group">
+                    <label class="form-label">Sonarr URL</label>
+                    <input type="text" class="form-input" id="cfg-SONARR_URL" value="{{ cfg.SONARR_URL }}" placeholder="http://localhost:8989">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">API Key</label>
+                    <input type="password" class="form-input" id="cfg-SONARR_API_KEY" value="{{ cfg.SONARR_API_KEY }}" placeholder="Sonarr API Key">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Rolling Window (Episodes)</label>
+                    <input type="number" class="form-input" id="cfg-ROLLING_WINDOW" value="{{ cfg.ROLLING_WINDOW }}" min="1" max="50">
+                </div>
             </div>
-            <div class="kv-row">
-                <span class="kv-key">API Key</span>
-                <span class="kv-val">{{ radarr_masked_key }}</span>
-            </div>
-        </div>
 
-        <p class="section-title">NZBGet</p>
-        <div class="kv-block">
-            <div class="kv-row">
-                <span class="kv-key">NZBGet URL</span>
-                <span class="kv-val">{{ nzbget_url }}</span>
+            <p class="section-title">Radarr Settings</p>
+            <div class="form-grid">
+                <div class="form-group">
+                    <label class="form-label">Radarr URL</label>
+                    <input type="text" class="form-input" id="cfg-RADARR_URL" value="{{ cfg.RADARR_URL }}" placeholder="http://localhost:7878">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">API Key</label>
+                    <input type="password" class="form-input" id="cfg-RADARR_API_KEY" value="{{ cfg.RADARR_API_KEY }}" placeholder="Radarr API Key">
+                </div>
             </div>
-            <div class="kv-row">
-                <span class="kv-key">Username</span>
-                <span class="kv-val">{{ nzbget_username }}</span>
-            </div>
-            <div class="kv-row">
-                <span class="kv-key">Password / API Key</span>
-                <span class="kv-val">{{ nzbget_masked_pass }}</span>
-            </div>
-        </div>
 
+            <p class="section-title">NZBGet Settings</p>
+            <div class="form-grid">
+                <div class="form-group">
+                    <label class="form-label">NZBGet URL</label>
+                    <input type="text" class="form-input" id="cfg-NZBGET_URL" value="{{ cfg.NZBGET_URL }}" placeholder="http://localhost:6789">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Username</label>
+                    <input type="text" class="form-input" id="cfg-NZBGET_USERNAME" value="{{ cfg.NZBGET_USERNAME }}" placeholder="nzbget">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Password / API Key</label>
+                    <input type="password" class="form-input" id="cfg-NZBGET_PASSWORD" value="{{ cfg.NZBGET_PASSWORD }}" placeholder="tegbzn6789">
+                </div>
+            </div>
 
-        <p class="section-title">Plex</p>
-        <div class="kv-block">
-            <div class="kv-row">
-                <span class="kv-key">Plex URL</span>
-                <span class="kv-val">{{ plex_status.plex_url }}</span>
+            <p class="section-title">Plex & Polling Settings</p>
+            <div class="form-grid">
+                <div class="form-group">
+                    <label class="form-label">Plex URL</label>
+                    <input type="text" class="form-input" id="cfg-PLEX_URL" value="{{ cfg.PLEX_URL }}" placeholder="http://plex:32400">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Plex Token</label>
+                    <input type="password" class="form-input" id="cfg-PLEX_TOKEN" value="{{ cfg.PLEX_TOKEN }}" placeholder="X-Plex-Token">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Media Poll Interval (Seconds)</label>
+                    <input type="number" class="form-input" id="cfg-PLEX_WATCH_INTERVAL" value="{{ cfg.PLEX_WATCH_INTERVAL }}">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Shutdown Poll Interval (Seconds)</label>
+                    <input type="number" class="form-input" id="cfg-PLEX_POLL_INTERVAL" value="{{ cfg.PLEX_POLL_INTERVAL }}">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Shutdown Idle Polls Threshold</label>
+                    <input type="number" class="form-input" id="cfg-PLEX_IDLE_POLLS" value="{{ cfg.PLEX_IDLE_POLLS }}">
+                </div>
+                <div class="form-group" style="justify-content:center;">
+                    <label class="form-label" style="cursor:pointer; display:flex; align-items:center; gap:8px; margin-top:20px; text-transform:none;">
+                        <input type="checkbox" id="cfg-PLEX_SHUTDOWN_DRY_RUN" {{ 'checked' if cfg.PLEX_SHUTDOWN_DRY_RUN else '' }}>
+                        <span>Enable Shutdown Dry Run (Log only)</span>
+                    </label>
+                </div>
             </div>
-            <div class="kv-row">
-                <span class="kv-key">Media Poll Interval</span>
-                <span class="kv-val">{{ poller_status.poll_interval }}s (1h top-of-hour)</span>
-            </div>
-            <div class="kv-row">
-                <span class="kv-key">Shutdown Poll Interval</span>
-                <span class="kv-val">{{ plex_status.poll_interval }}s</span>
-            </div>
-            <div class="kv-row">
-                <span class="kv-key">Shutdown Idle Threshold</span>
-                <span class="kv-val">{{ plex_status.idle_needed }} polls</span>
-            </div>
-            <div class="kv-row">
-                <span class="kv-key">Shutdown Dry Run</span>
-                <span class="kv-val {{ '' if plex_status.dry_run else 'dim' }}">
-                    {{ 'ENABLED' if plex_status.dry_run else 'disabled' }}
-                </span>
-            </div>
-        </div>
 
+            <p class="section-title">SSH Host Shutdown Settings</p>
+            <div class="form-grid">
+                <div class="form-group">
+                    <label class="form-label">SSH Host</label>
+                    <input type="text" class="form-input" id="cfg-SSH_HOST" value="{{ cfg.SSH_HOST }}" placeholder="host-gateway">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">SSH Port</label>
+                    <input type="number" class="form-input" id="cfg-SSH_PORT" value="{{ cfg.SSH_PORT }}">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">SSH User</label>
+                    <input type="text" class="form-input" id="cfg-SSH_USER" value="{{ cfg.SSH_USER }}" placeholder="ricardo">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">SSH Key Path</label>
+                    <input type="text" class="form-input" id="cfg-SSH_KEY_PATH" value="{{ cfg.SSH_KEY_PATH }}" placeholder="/root/.ssh/id_rsa">
+                </div>
+            </div>
+
+            <div style="margin-top:24px; margin-bottom:24px; display:flex; gap:12px;">
+                <button type="button" class="btn-clear" id="btn-save-cfg" style="padding:10px 24px; font-weight:600; background:var(--accent); color:#000; border-color:var(--accent);" onclick="saveConfiguration()">Save Configuration</button>
+            </div>
+
+        </form>
 
     </div>
 
@@ -989,6 +1057,57 @@ function triggerShutdownNow() {
                 btn.textContent = 'Shutdown Now';
             }
         });
+}
+
+function saveConfiguration() {
+    const btn = el('btn-save-cfg');
+    if (btn) {
+        btn.disabled = true;
+        btn.textContent = 'Saving...';
+    }
+
+    const payload = {
+        SONARR_URL: el('cfg-SONARR_URL').value,
+        SONARR_API_KEY: el('cfg-SONARR_API_KEY').value,
+        ROLLING_WINDOW: parseInt(el('cfg-ROLLING_WINDOW').value) || 3,
+        RADARR_URL: el('cfg-RADARR_URL').value,
+        RADARR_API_KEY: el('cfg-RADARR_API_KEY').value,
+        NZBGET_URL: el('cfg-NZBGET_URL').value,
+        NZBGET_USERNAME: el('cfg-NZBGET_USERNAME').value,
+        NZBGET_PASSWORD: el('cfg-NZBGET_PASSWORD').value,
+        PLEX_URL: el('cfg-PLEX_URL').value,
+        PLEX_TOKEN: el('cfg-PLEX_TOKEN').value,
+        PLEX_WATCH_INTERVAL: parseInt(el('cfg-PLEX_WATCH_INTERVAL').value) || 3600,
+        PLEX_POLL_INTERVAL: parseInt(el('cfg-PLEX_POLL_INTERVAL').value) || 1200,
+        PLEX_IDLE_POLLS: parseInt(el('cfg-PLEX_IDLE_POLLS').value) || 3,
+        PLEX_SHUTDOWN_DRY_RUN: el('cfg-PLEX_SHUTDOWN_DRY_RUN').checked,
+        SSH_HOST: el('cfg-SSH_HOST').value,
+        SSH_PORT: parseInt(el('cfg-SSH_PORT').value) || 22,
+        SSH_USER: el('cfg-SSH_USER').value,
+        SSH_KEY_PATH: el('cfg-SSH_KEY_PATH').value,
+    };
+
+    fetch('/api/config/save', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+    })
+    .then(r => r.json())
+    .then(data => {
+        if (data.status === 'success') {
+            showToast('Configuration saved securely!', 'ok');
+            setTimeout(pollAll, 500);
+        } else {
+            showToast('Error saving config: ' + (data.message || 'Unknown error'), 'err');
+        }
+    })
+    .catch(() => showToast('Failed to save configuration', 'err'))
+    .finally(() => {
+        if (btn) {
+            btn.disabled = false;
+            btn.textContent = 'Save Configuration';
+        }
+    });
 }
 
 pollAll();

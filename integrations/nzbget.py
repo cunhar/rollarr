@@ -1,25 +1,32 @@
 from __future__ import annotations
 
-import os
 import requests
 import logging
+from config_store import get_config
 
 logger = logging.getLogger(__name__)
 
-NZBGET_URL = os.environ.get('NZBGET_URL', '').rstrip('/')
-NZBGET_USERNAME = os.environ.get('NZBGET_USERNAME', '')
-NZBGET_PASSWORD = os.environ.get('NZBGET_PASSWORD') or os.environ.get('NZBGET_API_KEY', '')
+def get_nzbget_url() -> str:
+    return (get_config('NZBGET_URL') or '').rstrip('/')
 
+def get_nzbget_username() -> str:
+    return get_config('NZBGET_USERNAME') or ''
+
+def get_nzbget_password() -> str:
+    return get_config('NZBGET_PASSWORD') or ''
 
 def get_auth():
-    if NZBGET_USERNAME or NZBGET_PASSWORD:
-        return (NZBGET_USERNAME, NZBGET_PASSWORD)
+    user = get_nzbget_username()
+    pwd = get_nzbget_password()
+    if user or pwd:
+        return (user, pwd)
     return None
 
 def nzbget_rpc(method: str, params: list = None) -> dict | list | None:
-    if not NZBGET_URL:
+    nzbget_url = get_nzbget_url()
+    if not nzbget_url:
         return None
-    url = f"{NZBGET_URL}/jsonrpc"
+    url = f"{nzbget_url}/jsonrpc"
     payload = {
         "method": method,
         "params": params or []
@@ -38,7 +45,8 @@ def get_nzbget_status() -> dict:
     Query NZBGet status and listgroups.
     Returns structured status dictionary.
     """
-    if not NZBGET_URL:
+    nzbget_url = get_nzbget_url()
+    if not nzbget_url:
         return {'enabled': False, 'connected': False, 'status_text': 'Not Configured', 'downloads': []}
 
     status = nzbget_rpc('status')
@@ -62,10 +70,8 @@ def get_nzbget_status() -> dict:
         done_mb = max(0, size_mb - rem_mb)
         pct = round((done_mb / size_mb * 100), 1) if size_mb > 0 else 0
         
-        # Calculate item speed & ETA if downloading
         status_str = g.get('Status', 'QUEUED').upper()
         
-        # Determine remaining time
         if download_rate_bps > 0 and rem_mb > 0:
             rem_bytes = rem_mb * 1024 * 1024
             eta_seconds = int(rem_bytes / download_rate_bps)
