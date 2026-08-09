@@ -429,7 +429,10 @@
 
         {% if poller_status.enabled %}
         <!-- Episode Poller stats -->
-        <p class="section-title" style="margin-bottom:12px;">Media Poller</p>
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
+            <p class="section-title" style="margin-bottom:0;">Media Poller</p>
+            <button class="btn-clear" id="btn-run-poller" onclick="runPoller()">Run Now</button>
+        </div>
         <div class="stat-grid" style="margin-bottom:16px;">
             <div class="stat-cell">
                 <span class="stat-label">Items processed</span>
@@ -721,6 +724,26 @@ function clearLogs() {
         })
         .catch(() => {})
         .finally(() => { if (btn) btn.disabled = false; });
+}
+
+function runPoller() {
+    const btn = el('btn-run-poller');
+    if (btn) {
+        btn.disabled = true;
+        btn.textContent = 'Running...';
+    }
+    fetch('/api/poller-run', { method: 'POST' })
+        .then(r => r.json())
+        .then(() => {
+            setTimeout(pollAll, 1000);
+        })
+        .catch(() => {})
+        .finally(() => {
+            if (btn) {
+                btn.disabled = false;
+                btn.textContent = 'Run Now';
+            }
+        });
 }
 
 setInterval(pollAll, REFRESH_MS);

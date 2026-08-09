@@ -181,6 +181,13 @@ def api_poller_status():
     return jsonify(plex_poller.get_state())
 
 
+@app.route('/api/poller-run', methods=['POST'])
+def api_poller_run():
+    res = plex_poller.trigger_now()
+    return jsonify(res), 200 if res['status'] == 'success' else 400
+
+
+
 @app.route('/api/clear-logs', methods=['POST'])
 def api_clear_logs():
     with history_lock:
