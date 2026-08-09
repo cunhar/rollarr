@@ -35,6 +35,8 @@ from integrations.sonarr import (
     search_episode,
 )
 from integrations.radarr import (
+    get_radarr_url,
+    get_radarr_api_key,
     find_movie_by_title_and_year,
     unmonitor_and_delete_movie,
 )
@@ -171,7 +173,7 @@ def _plex_get(path: str, params: dict = None) -> dict | None:
 def _fetch_new_watched(since_ts: int) -> list | None:
     """Return watch history items with viewedAt > since_ts, sorted oldest-first."""
     data = _plex_get('/status/sessions/history/all', {
-        'sort': 'viewedAt:asc',
+        'sort': 'viewedAt:desc',
         'X-Plex-Container-Start': 0,
         'X-Plex-Container-Size': 200,
     })
@@ -180,27 +182,31 @@ def _fetch_new_watched(since_ts: int) -> list | None:
     items = data.get('MediaContainer', {}).get('Metadata') or []
     valid_items = []
     for i in items:
-        itype = i.get('type')
-        if itype in (1, 4, 'movie', 'episode') and int(i.get('viewedAt', 0)) > since_ts:
+        itype = str(i.get('type', '')).lower()
+        if itype in ('1', '4', 'movie', 'episode') and int(i.get('viewedAt', 0)) > since_ts:
             valid_items.append(i)
+    # Sort matching items oldest-first so they are processed chronologically
+    valid_items.sort(key=lambda x: int(x.get('viewedAt', 0)))
     return valid_items
 
 
 def _enrich_metadata(item: dict) -> dict:
     """Fill in missing metadata fields from the full metadata endpoint if incomplete."""
-    itype = item.get('type')
-    if itype in (4, 'episode'):
+    itype = str(item.get('type', '')).lower()
+    if itype in ('4', 'episode'):
         if item.get('grandparentTitle') and item.get('parentIndex') is not None and item.get('index') is not None:
             return item
-    elif itype in (1, 'movie'):
+    elif itype in ('1', 'movie'):
         if item.get('title'):
             return item
 
-    meta_data = _plex_get(f"/library/metadata/{item['ratingKey']}")
-    if meta_data:
-        hit = (meta_data.get('MediaContainer', {}).get('Metadata') or [None])[0]
-        if hit:
-            item = {**item, **hit}
+    rating_key = item.get('ratingKey')
+    if rating_key:
+        meta_data = _plex_get(f"/library/metadata/{rating_key}")
+        if meta_data:
+            hit = (meta_data.get('MediaContainer', {}).get('Metadata') or [None])[0]
+            if hit:
+                item = {**item, **hit}
     return item
 
 
@@ -274,7 +280,7 @@ def _process_movie(item: dict) -> tuple[str, str]:
     if not title:
         return 'warning', f"Incomplete movie title for Plex ratingKey {item.get('ratingKey')} — skipped"
 
-    if not RADARR_URL or not RADARR_API_KEY:
+    if not get_radarr_url() or not get_radarr_api_key():
         return 'warning', f"Movie '{title}' watched, but Radarr is not configured (RADARR_URL / RADARR_API_KEY missing)"
 
     movie_id, movie_title = find_movie_by_title_and_year(title, year)
@@ -310,10 +316,10 @@ def _execute_poll(watermark: int, media_total: int) -> tuple[int, int]:
             max_ts = watermark
             for item in new_items:
                 try:
-                    itype = item.get('type')
-                    if itype in (4, 'episode'):
+                    itype = str(item.get('type', '')).lower()
+                    if itype in ('4', 'episode'):
                         status, msg = _process_episode(item)
-                    elif itype in (1, 'movie'):
+                    elif itype in ('1', 'movie'):
                         status, msg = _process_movie(item)
                     else:
                         continue

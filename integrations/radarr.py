@@ -1,10 +1,17 @@
 from __future__ import annotations
 
+import re
 import requests
 import logging
 from config_store import get_config
 
 logger = logging.getLogger(__name__)
+
+def _clean_title(t: str) -> str:
+    if not t:
+        return ""
+    t = re.sub(r'\s*\(\d{4}\)\s*$', '', t)
+    return re.sub(r'[^a-z0-9]', '', t.lower())
 
 def get_radarr_url() -> str:
     return (get_config('RADARR_URL') or '').rstrip('/')
@@ -35,14 +42,47 @@ def find_movie_by_title_and_year(title, year=None):
         movies = response.json()
         
         target = title.lower().strip()
+        target_clean = _clean_title(title)
+
+        # Pass 1: Exact matches with year check
         for movie in movies:
             m_title = movie.get('title', '').lower().strip()
+            m_clean = movie.get('cleanTitle', '').lower().strip()
+            m_orig = movie.get('originalTitle', '').lower().strip()
             m_year = movie.get('year')
-            if m_title == target:
-                if year is None or m_year is None or int(m_year) == int(year):
-                    logger.info(f"Resolved movie '{title}' to Radarr movieId {movie.get('id')}")
+
+            year_matches = (year is None or m_year is None or int(m_year) == int(year))
+            
+            if target in (m_title, m_clean, m_orig) and year_matches:
+                logger.info(f"Resolved movie '{title}' to Radarr movieId {movie.get('id')} ('{movie.get('title')}')")
+                return movie.get('id'), movie.get('title')
+
+            for alt in movie.get('alternateTitles', []):
+                if alt.get('title', '').lower().strip() == target and year_matches:
+                    logger.info(f"Resolved movie '{title}' via alternateTitle to Radarr movieId {movie.get('id')}")
                     return movie.get('id'), movie.get('title')
-                    
+
+        # Pass 2: Clean alphanumeric match
+        if target_clean:
+            for movie in movies:
+                m_year = movie.get('year')
+                year_matches = (year is None or m_year is None or int(m_year) == int(year))
+                
+                if not year_matches:
+                    continue
+
+                candidates = [
+                    _clean_title(movie.get('title')),
+                    _clean_title(movie.get('cleanTitle')),
+                    _clean_title(movie.get('originalTitle')),
+                ]
+                for alt in movie.get('alternateTitles', []):
+                    candidates.append(_clean_title(alt.get('title')))
+
+                if target_clean in candidates:
+                    logger.info(f"Resolved movie '{title}' via clean title match to Radarr movieId {movie.get('id')} ('{movie.get('title')}')")
+                    return movie.get('id'), movie.get('title')
+
         logger.warning(f"Could not find movie '{title}' in Radarr library")
         return None, None
     except Exception as e:

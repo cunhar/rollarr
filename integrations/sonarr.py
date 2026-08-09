@@ -1,10 +1,17 @@
 from __future__ import annotations
 
+import re
 import requests
 import logging
 from config_store import get_config
 
 logger = logging.getLogger(__name__)
+
+def _clean_title(t: str) -> str:
+    if not t:
+        return ""
+    t = re.sub(r'\s*\(\d{4}\)\s*$', '', t)
+    return re.sub(r'[^a-z0-9]', '', t.lower())
 
 def get_sonarr_url() -> str:
     return (get_config('SONARR_URL') or '').rstrip('/')
@@ -38,11 +45,38 @@ def find_series_id_by_title(title):
         series_list = response.json()
         
         normalized_target = title.lower().strip()
+        target_clean = _clean_title(title)
+
+        # Pass 1: Exact matches (title, cleanTitle, alternateTitles)
         for series in series_list:
-            if series.get('title', '').lower().strip() == normalized_target:
-                logger.info(f"Resolved title '{title}' to Sonarr seriesId {series.get('id')}")
+            s_title = series.get('title', '').lower().strip()
+            s_clean = series.get('cleanTitle', '').lower().strip()
+            s_sort = series.get('sortTitle', '').lower().strip()
+            
+            if normalized_target in (s_title, s_clean, s_sort):
+                logger.info(f"Resolved title '{title}' to Sonarr seriesId {series.get('id')} ('{series.get('title')}')")
                 return series.get('id'), series.get('title')
                 
+            for alt in series.get('alternateTitles', []):
+                if alt.get('title', '').lower().strip() == normalized_target:
+                    logger.info(f"Resolved title '{title}' via alternateTitle to Sonarr seriesId {series.get('id')}")
+                    return series.get('id'), series.get('title')
+
+        # Pass 2: Clean alphanumeric match (ignoring punctuation, spaces, year suffixes)
+        if target_clean:
+            for series in series_list:
+                candidates = [
+                    _clean_title(series.get('title')),
+                    _clean_title(series.get('sortTitle')),
+                    _clean_title(series.get('cleanTitle')),
+                ]
+                for alt in series.get('alternateTitles', []):
+                    candidates.append(_clean_title(alt.get('title')))
+
+                if target_clean in candidates:
+                    logger.info(f"Resolved title '{title}' via clean title match to Sonarr seriesId {series.get('id')} ('{series.get('title')}')")
+                    return series.get('id'), series.get('title')
+
         logger.warning(f"Could not find a series with title '{title}' in Sonarr library")
         return None, None
     except Exception as e:

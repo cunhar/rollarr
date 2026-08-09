@@ -144,3 +144,11 @@ cython_debug/
 # OS files
 .DS_Store
 Thumbs.db
+
+# Rolarr local runtime state & secrets
+secret.key
+settings.enc
+history.json
+plex_poll_state.json
+*.log
+
