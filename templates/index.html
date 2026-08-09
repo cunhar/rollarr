@@ -3,577 +3,654 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Rolarr - Sonarr Companion</title>
-    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;800&display=swap" rel="stylesheet">
+    <title>Rolarr — Sonarr Companion</title>
+    <meta name="description" content="Rolarr rolling window monitor bridge for Sonarr and Plex">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
     <link rel="icon" type="image/png" href="{{ url_for('static', filename='favicon.png') }}">
     <style>
+        *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
         :root {
-            --bg: #090d16;
-            --card-bg: rgba(17, 24, 39, 0.7);
-            --card-border: rgba(255, 255, 255, 0.08);
-            --text: #f3f4f6;
-            --text-muted: #9ca3af;
-            --primary: #6366f1;
-            --primary-glow: rgba(99, 102, 241, 0.15);
+            --bg:          #0c0c0e;
+            --surface:     #111114;
+            --surface-2:   #18181c;
+            --border:      #242428;
+            --border-hi:   #38383f;
+            --text:        #e8e8ec;
+            --text-sub:    #666672;
+            --text-muted:  #3a3a42;
+            --accent:      #5b6af0;
+            --accent-dim:  rgba(91,106,240,.12);
+            --green:       #3ecf8e;
+            --amber:       #e5a00d;
+            --red:         #e05252;
+            --font:        'Inter', system-ui, sans-serif;
+            --mono:        'JetBrains Mono', 'Fira Code', monospace;
         }
+
         body {
-            margin: 0;
-            padding: 0;
-            font-family: 'Outfit', sans-serif;
-            background-color: var(--bg);
+            font-family: var(--font);
+            background: var(--bg);
             color: var(--text);
             min-height: 100vh;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            background-image: 
-                radial-gradient(circle at 10% 20%, rgba(99, 102, 241, 0.08) 0%, transparent 40%),
-                radial-gradient(circle at 90% 80%, rgba(168, 85, 247, 0.08) 0%, transparent 40%);
-        }
-        .container {
-            width: 100%;
-            max-width: 600px;
-            padding: 20px;
-            box-sizing: border-box;
-        }
-        .card {
-            background: var(--card-bg);
-            backdrop-filter: blur(16px);
-            border: 1px solid var(--card-border);
-            border-radius: 24px;
-            padding: 40px;
-            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.3), inset 0 1px 0 rgba(255, 255, 255, 0.1);
-            position: relative;
-            overflow: hidden;
-        }
-        .card::before {
-            content: '';
-            position: absolute;
-            top: 0;
-            left: 0;
-            right: 0;
-            height: 3px;
-            background: linear-gradient(90deg, #6366f1, #a855f7);
-        }
-        .header {
-            text-align: center;
-            margin-bottom: 32px;
-        }
-        h1 {
-            font-size: 32px;
-            font-weight: 800;
-            margin: 0 0 8px 0;
-            background: linear-gradient(135deg, #fff 40%, var(--text-muted));
-            -webkit-background-clip: text;
-            -webkit-text-fill-color: transparent;
-            letter-spacing: -0.5px;
-        }
-        .subtitle {
-            font-size: 14px;
-            color: var(--text-muted);
-            margin: 0;
-        }
-        .status-badge {
-            display: inline-flex;
-            align-items: center;
-            gap: 8px;
-            background: rgba(255, 255, 255, 0.04);
-            border: 1px solid var(--card-border);
-            padding: 6px 16px;
-            border-radius: 99px;
             font-size: 13px;
-            font-weight: 600;
-            margin-top: 12px;
-        }
-        .status-dot {
-            width: 8px;
-            height: 8px;
-            background-color: {{ status_color }};
-            border-radius: 50%;
-            box-shadow: 0 0 12px {{ status_color }};
-            animation: pulse 2s infinite;
-        }
-        .info-section {
-            display: flex;
-            flex-direction: column;
-            gap: 20px;
-        }
-        .info-group {
-            background: rgba(255, 255, 255, 0.02);
-            border: 1px solid var(--card-border);
-            border-radius: 16px;
-            padding: 16px;
-            transition: border-color 0.3s ease, background 0.3s ease;
-        }
-        .info-group:hover {
-            border-color: rgba(99, 102, 241, 0.3);
-            background: rgba(99, 102, 241, 0.02);
-        }
-        .label {
-            font-size: 12px;
-            font-weight: 600;
-            text-transform: uppercase;
-            color: var(--text-muted);
-            letter-spacing: 1px;
-            margin-bottom: 6px;
-        }
-        .value {
-            font-size: 15px;
-            font-family: monospace;
-            color: var(--text);
-            word-break: break-all;
-        }
-        .helper-box {
-            margin-top: 18px;
-            font-size: 13px;
-            color: var(--text-muted);
             line-height: 1.5;
-            text-align: center;
         }
-        
-        /* History & Logs styles */
-        .history-section {
-            margin-top: 32px;
-            border-top: 1px solid var(--card-border);
-            padding-top: 24px;
+
+        /* ── Layout ─────────────────────────────────────────── */
+        .shell {
+            max-width: 780px;
+            margin: 0 auto;
+            padding: 32px 20px 64px;
         }
-        .history-title {
-            font-size: 16px;
-            font-weight: 600;
-            margin: 0 0 16px 0;
-            color: var(--text);
+
+        /* ── Topbar ─────────────────────────────────────────── */
+        .topbar {
             display: flex;
             align-items: center;
             justify-content: space-between;
+            padding-bottom: 24px;
+            border-bottom: 1px solid var(--border);
+            margin-bottom: 0;
         }
-        .log-list {
+        .brand {
             display: flex;
-            flex-direction: column;
-            gap: 12px;
-            max-height: 220px;
-            overflow-y: auto;
-            padding-right: 4px;
+            align-items: baseline;
+            gap: 10px;
         }
-        .log-list::-webkit-scrollbar {
-            width: 4px;
+        .brand-name {
+            font-size: 17px;
+            font-weight: 600;
+            letter-spacing: -.3px;
+            color: var(--text);
         }
-        .log-list::-webkit-scrollbar-thumb {
-            background: rgba(255, 255, 255, 0.1);
-            border-radius: 4px;
+        .brand-sub {
+            font-size: 11px;
+            color: var(--text-sub);
+            letter-spacing: .5px;
+            text-transform: uppercase;
         }
-        .log-item {
-            background: rgba(255, 255, 255, 0.01);
-            border: 1px solid var(--card-border);
-            border-radius: 12px;
-            padding: 12px;
+        .conn-pill {
+            display: inline-flex;
+            align-items: center;
+            gap: 7px;
+            border: 1px solid var(--border-hi);
+            padding: 4px 12px 4px 9px;
+            font-size: 11px;
+            font-weight: 500;
+            color: var(--text-sub);
+            background: var(--surface);
+        }
+        .conn-pip {
+            width: 6px;
+            height: 6px;
+            flex-shrink: 0;
+        }
+        .conn-pip.ok   { background: var(--green); }
+        .conn-pip.err  { background: var(--red); }
+        .conn-pip.warn { background: var(--amber); }
+
+        /* ── Tab bar ────────────────────────────────────────── */
+        .tabbar {
+            display: flex;
+            border-bottom: 1px solid var(--border);
+        }
+        .tab-btn {
+            padding: 12px 20px;
+            font: 12px/1 var(--font);
+            font-weight: 500;
+            letter-spacing: .4px;
+            text-transform: uppercase;
+            color: var(--text-sub);
+            background: none;
+            border: none;
+            border-bottom: 2px solid transparent;
+            cursor: pointer;
+            transition: color .15s, border-color .15s;
+            margin-bottom: -1px;
+        }
+        .tab-btn:hover { color: var(--text); }
+        .tab-btn.active {
+            color: var(--text);
+            border-bottom-color: var(--accent);
+        }
+
+        /* ── Tab panels ─────────────────────────────────────── */
+        .tab-panel { display: none; padding-top: 28px; }
+        .tab-panel.active { display: block; }
+
+        /* ── Section title ──────────────────────────────────── */
+        .section-title {
+            font-size: 10px;
+            font-weight: 600;
+            letter-spacing: 1.2px;
+            text-transform: uppercase;
+            color: var(--text-sub);
+            margin-bottom: 12px;
+        }
+
+        /* ── Key-value table ────────────────────────────────── */
+        .kv-block {
+            border: 1px solid var(--border);
+            background: var(--surface);
+            margin-bottom: 24px;
+        }
+        .kv-row {
+            display: flex;
+            align-items: baseline;
+            padding: 11px 16px;
+            border-bottom: 1px solid var(--border);
+            gap: 16px;
+        }
+        .kv-row:last-child { border-bottom: none; }
+        .kv-key {
+            min-width: 160px;
+            font-size: 11px;
+            font-weight: 500;
+            text-transform: uppercase;
+            letter-spacing: .6px;
+            color: var(--text-sub);
+            flex-shrink: 0;
+        }
+        .kv-val {
+            font-family: var(--mono);
+            font-size: 12px;
+            color: var(--text);
+            word-break: break-all;
+        }
+        .kv-val.dim { color: var(--text-sub); }
+
+        /* ── Status grid (dashboard top) ────────────────────── */
+        .stat-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 1px;
+            background: var(--border);
+            border: 1px solid var(--border);
+            margin-bottom: 24px;
+        }
+        .stat-cell {
+            background: var(--surface);
+            padding: 16px;
             display: flex;
             flex-direction: column;
             gap: 6px;
         }
-        .log-header {
+        .stat-label {
+            font-size: 10px;
+            font-weight: 600;
+            letter-spacing: 1px;
+            text-transform: uppercase;
+            color: var(--text-sub);
+        }
+        .stat-value {
+            font-size: 22px;
+            font-weight: 600;
+            font-family: var(--mono);
+            color: var(--text);
+            line-height: 1;
+        }
+        .stat-value.green { color: var(--green); }
+        .stat-value.amber { color: var(--amber); }
+        .stat-value.red   { color: var(--red); }
+        .stat-meta {
+            font-size: 10px;
+            color: var(--text-sub);
+            font-family: var(--mono);
+        }
+
+        /* ── Idle bar ───────────────────────────────────────── */
+        .idle-section {
+            border: 1px solid var(--border);
+            background: var(--surface);
+            padding: 14px 16px;
+            margin-bottom: 24px;
+        }
+        .idle-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 10px;
+        }
+        .idle-label {
+            font-size: 10px;
+            font-weight: 600;
+            letter-spacing: 1px;
+            text-transform: uppercase;
+            color: var(--text-sub);
+        }
+        .idle-count {
+            font-family: var(--mono);
+            font-size: 11px;
+            color: var(--text-sub);
+        }
+        .idle-track {
+            height: 4px;
+            background: var(--surface-2);
+            border: 1px solid var(--border);
+        }
+        .idle-fill {
+            height: 100%;
+            transition: width .6s ease, background .4s;
+        }
+        .badge {
+            display: inline-block;
+            font-size: 9px;
+            font-weight: 600;
+            letter-spacing: .8px;
+            text-transform: uppercase;
+            padding: 2px 7px;
+            border: 1px solid;
+        }
+        .badge-amber { color: var(--amber); border-color: var(--amber); background: rgba(229,160,13,.08); }
+        .badge-red   { color: var(--red);   border-color: var(--red);   background: rgba(224,82,82,.08); }
+        .badge-dim   { color: var(--text-sub); border-color: var(--border-hi); background: transparent; }
+
+        /* ── Log list ───────────────────────────────────────── */
+        .log-header-row {
             display: flex;
             align-items: center;
             justify-content: space-between;
+            margin-bottom: 12px;
+        }
+        .log-list {
+            border: 1px solid var(--border);
+            max-height: 420px;
+            overflow-y: auto;
+        }
+        .log-list::-webkit-scrollbar { width: 4px; }
+        .log-list::-webkit-scrollbar-thumb { background: var(--border-hi); }
+        .log-entry {
+            display: flex;
+            gap: 0;
+            border-bottom: 1px solid var(--border);
+            font-family: var(--mono);
             font-size: 11px;
         }
-        .log-time {
-            color: var(--text-muted);
-            font-family: monospace;
+        .log-entry:last-child { border-bottom: none; }
+        .log-gutter {
+            width: 4px;
+            flex-shrink: 0;
         }
-        .log-status {
+        .log-gutter.ok   { background: var(--green); }
+        .log-gutter.warn { background: var(--amber); }
+        .log-gutter.err  { background: var(--red); }
+        .log-body {
+            padding: 10px 14px;
+            flex: 1;
+            min-width: 0;
+        }
+        .log-meta {
+            display: flex;
+            gap: 12px;
+            align-items: center;
+            margin-bottom: 4px;
+        }
+        .log-ts {
+            color: var(--text-sub);
+            font-size: 10px;
+        }
+        .log-tag {
             font-size: 9px;
             font-weight: 600;
+            letter-spacing: .6px;
             text-transform: uppercase;
-            padding: 2px 8px;
-            border-radius: 99px;
-            letter-spacing: 0.5px;
+            padding: 1px 5px;
+            border: 1px solid;
         }
-        .status-success {
-            background: rgba(16, 185, 129, 0.1);
-            color: #10b981;
-            border: 1px solid rgba(16, 185, 129, 0.2);
-        }
-        .status-warning {
-            background: rgba(245, 158, 11, 0.1);
-            color: #f59e0b;
-            border: 1px solid rgba(245, 158, 11, 0.2);
-        }
-        .status-error {
-            background: rgba(239, 68, 68, 0.1);
-            color: #ef4444;
-            border: 1px solid rgba(239, 68, 68, 0.2);
-        }
-        .log-message {
-            font-size: 13px;
+        .log-tag.ok   { color: var(--green); border-color: var(--green); }
+        .log-tag.warn { color: var(--amber); border-color: var(--amber); }
+        .log-tag.err  { color: var(--red);   border-color: var(--red); }
+        .log-msg {
             color: var(--text);
-            line-height: 1.4;
+            font-size: 11px;
+            line-height: 1.45;
+            white-space: normal;
+            word-break: break-word;
         }
-        .no-logs {
-            text-align: center;
-            color: var(--text-muted);
-            font-size: 13px;
-            padding: 24px 0;
-            background: rgba(255, 255, 255, 0.01);
-            border: 1px dashed var(--card-border);
-            border-radius: 12px;
-        }
-        
-        .log-details {
-            margin-top: 8px;
-            font-size: 12px;
-            border-top: 1px solid rgba(255, 255, 255, 0.04);
-            padding-top: 8px;
-        }
-        .log-summary {
-            color: var(--text-muted);
+        .log-payload-toggle {
+            margin-top: 6px;
+            font-size: 10px;
+            color: var(--text-sub);
             cursor: pointer;
-            outline: none;
             user-select: none;
-            transition: color 0.2s ease;
         }
-        .log-summary:hover {
-            color: var(--primary);
-        }
-        .log-payload {
-            margin: 8px 0 0 0;
-            background: rgba(0, 0, 0, 0.20);
-            border: 1px solid var(--card-border);
-            border-radius: 8px;
-            padding: 8px 12px;
+        .log-payload-toggle:hover { color: var(--accent); }
+        .log-payload-pre {
+            margin-top: 6px;
+            padding: 8px 10px;
+            background: var(--bg);
+            border: 1px solid var(--border);
+            color: var(--green);
+            font-size: 10px;
             overflow-x: auto;
-            color: #10b981;
-            font-family: monospace;
             white-space: pre-wrap;
             word-break: break-all;
         }
-        
-        @keyframes pulse {
-            0% { transform: scale(1); opacity: 1; }
-            50% { transform: scale(1.2); opacity: 0.7; }
-            100% { transform: scale(1); opacity: 1; }
-        }
-
-        /* ── Plex Watcher Card ───────────────────────────── */
-        .plex-card {
-            margin-top: 24px;
-            background: rgba(255, 255, 255, 0.02);
-            border: 1px solid var(--card-border);
-            border-radius: 20px;
-            padding: 24px;
-            position: relative;
-            overflow: hidden;
-            transition: border-color 0.3s ease;
-        }
-        .plex-card::before {
-            content: '';
-            position: absolute;
-            top: 0; left: 0; right: 0;
-            height: 2px;
-            background: linear-gradient(90deg, #e5a00d, #cc7b19);
-        }
-        .plex-card:hover {
-            border-color: rgba(229, 160, 13, 0.3);
-        }
-        .plex-card-header {
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            margin-bottom: 16px;
-        }
-        .plex-card-title {
-            font-size: 13px;
-            font-weight: 700;
-            text-transform: uppercase;
-            letter-spacing: 1px;
-            color: #e5a00d;
-            display: flex;
-            align-items: center;
-            gap: 8px;
-        }
-        .plex-card-title svg {
-            width: 16px; height: 16px; fill: #e5a00d;
-        }
-        .dry-run-badge {
-            font-size: 9px;
-            font-weight: 700;
-            text-transform: uppercase;
-            letter-spacing: 0.5px;
-            padding: 3px 8px;
-            border-radius: 99px;
-            background: rgba(245, 158, 11, 0.15);
-            color: #f59e0b;
-            border: 1px solid rgba(245, 158, 11, 0.3);
-        }
-        .plex-rows {
-            display: flex;
-            flex-direction: column;
-            gap: 12px;
-        }
-        .plex-row {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            font-size: 13px;
-        }
-        .plex-row-label {
-            color: var(--text-muted);
-            font-size: 12px;
-        }
-        .plex-row-val {
-            font-family: monospace;
-            font-size: 13px;
-            color: var(--text);
-        }
-        .stream-dot {
-            display: inline-block;
-            width: 8px; height: 8px;
-            border-radius: 50%;
-            margin-right: 6px;
-            background: #10b981;
-            box-shadow: 0 0 8px #10b981;
-        }
-        .stream-dot.idle {
-            background: #6b7280;
-            box-shadow: none;
-        }
-        .stream-dot.unknown {
-            background: #f59e0b;
-            box-shadow: 0 0 8px rgba(245,158,11,0.5);
-        }
-        /* Idle streak progress bar */
-        .idle-bar-wrap {
-            margin-top: 16px;
-        }
-        .idle-bar-header {
-            display: flex;
-            justify-content: space-between;
-            font-size: 11px;
-            color: var(--text-muted);
-            margin-bottom: 6px;
-        }
-        .idle-bar-track {
-            height: 6px;
-            border-radius: 99px;
-            background: rgba(255,255,255,0.06);
-            overflow: hidden;
-        }
-        .idle-bar-fill {
-            height: 100%;
-            border-radius: 99px;
-            transition: width 0.6s ease, background 0.4s ease;
-        }
-        .plex-disabled-notice {
-            font-size: 13px;
-            color: var(--text-muted);
+        .no-logs {
+            padding: 28px;
             text-align: center;
-            padding: 16px 0 4px;
+            color: var(--text-sub);
+            font-size: 12px;
+            background: var(--surface);
+            border: 1px solid var(--border);
         }
 
+        /* ── Config tab ─────────────────────────────────────── */
+        .config-note {
+            font-size: 12px;
+            color: var(--text-sub);
+            border: 1px solid var(--border);
+            border-left: 3px solid var(--accent);
+            padding: 10px 14px;
+            background: var(--surface);
+            margin-bottom: 24px;
+            font-family: var(--mono);
+        }
+
+        /* ── Last-action bar ────────────────────────────────── */
+        .last-action-bar {
+            font-family: var(--mono);
+            font-size: 11px;
+            color: var(--text-sub);
+            border: 1px solid var(--border);
+            background: var(--surface);
+            padding: 9px 14px;
+            margin-bottom: 24px;
+            word-break: break-word;
+        }
+        .last-action-bar strong {
+            color: var(--text-sub);
+            font-weight: 600;
+            text-transform: uppercase;
+            font-size: 9px;
+            letter-spacing: .8px;
+            margin-right: 8px;
+        }
+
+        /* ── Responsive ─────────────────────────────────────── */
+        @media (max-width: 520px) {
+            .stat-grid { grid-template-columns: 1fr 1fr; }
+            .kv-key { min-width: 120px; }
+        }
     </style>
 </head>
 <body>
-    <div class="container">
-        <div class="card">
-            <div class="header">
-                <h1>Rolarr</h1>
-                <p class="subtitle">Rolling Window Monitor Bridge</p>
-                <div class="status-badge">
-                    <span class="status-dot"></span>
-                    <span style="color: {{ status_color }}">{{ status_text }}</span>
-                </div>
-            </div>
-            
-            <div class="info-section">
-                <div class="info-group">
-                    <div class="label">Sonarr URL</div>
-                    <div class="value">{{ sonarr_url }}</div>
-                </div>
-                
-                <div class="info-group">
-                    <div class="label">Sonarr API Key</div>
-                    <div class="value">{{ masked_key }}</div>
-                </div>
+<div class="shell">
 
-                <div class="info-group">
-                    <div class="label">Webhook Endpoint</div>
-                    <div class="value">{{ webhook_url }}</div>
-                </div>
-
-                <div class="info-group">
-                    <div class="label">Rolling Window Size</div>
-                    <div class="value">{{ rolling_window }} episodes</div>
-                </div>
-            </div>
-
-            <!-- Plex Watcher Card -->
-            <div class="plex-card">
-                <div class="plex-card-header">
-                    <div class="plex-card-title">
-                        <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-                            <path d="M12 2C6.477 2 2 6.477 2 12s4.477 10 10 10 10-4.477 10-10S17.523 2 12 2zm-1.5 14.5v-9l7 4.5-7 4.5z"/>
-                        </svg>
-                        Plex Watcher
-                    </div>
-                    {% if plex_status.dry_run %}
-                        <span class="dry-run-badge">Dry Run</span>
-                    {% endif %}
-                </div>
-
-                {% if plex_status.enabled %}
-                <div class="plex-rows" id="plex-rows">
-                    <div class="plex-row">
-                        <span class="plex-row-label">Plex URL</span>
-                        <span class="plex-row-val" id="pw-url">{{ plex_status.plex_url }}</span>
-                    </div>
-                    <div class="plex-row">
-                        <span class="plex-row-label">Status</span>
-                        <span class="plex-row-val" id="pw-status">
-                            {% if plex_status.status == 'ok' %}
-                                <span class="stream-dot" id="pw-dot"></span>
-                            {% elif plex_status.status == 'unreachable' %}
-                                <span class="stream-dot unknown" id="pw-dot"></span>
-                            {% else %}
-                                <span class="stream-dot idle" id="pw-dot"></span>
-                            {% endif %}
-                            <span id="pw-status-text">{{ plex_status.status | capitalize }}</span>
-                        </span>
-                    </div>
-                    <div class="plex-row">
-                        <span class="plex-row-label">Active Streams</span>
-                        <span class="plex-row-val" id="pw-streams">
-                            {% if plex_status.stream_count is none %}
-                                &mdash;
-                            {% else %}
-                                {{ plex_status.stream_count }}
-                            {% endif %}
-                        </span>
-                    </div>
-                    <div class="plex-row">
-                        <span class="plex-row-label">Last Check</span>
-                        <span class="plex-row-val" id="pw-last">{{ plex_status.last_check or '&mdash;' }}</span>
-                    </div>
-                    <div class="plex-row">
-                        <span class="plex-row-label">Next Check</span>
-                        <span class="plex-row-val" id="pw-next">{{ plex_status.next_check or '&mdash;' }}</span>
-                    </div>
-                    {% if plex_status.last_action %}
-                    <div class="plex-row" style="flex-direction:column; align-items:flex-start; gap:4px;">
-                        <span class="plex-row-label">Last Action</span>
-                        <span class="plex-row-val" id="pw-action" style="font-size:12px; color: var(--text-muted); font-family:inherit;">{{ plex_status.last_action }}</span>
-                    </div>
-                    {% endif %}
-
-                    <!-- Idle streak progress bar -->
-                    <div class="idle-bar-wrap">
-                        <div class="idle-bar-header">
-                            <span>Idle Streak</span>
-                            <span id="pw-streak">{{ plex_status.idle_streak }} / {{ plex_status.idle_needed }} polls</span>
-                        </div>
-                        <div class="idle-bar-track">
-                            <div class="idle-bar-fill" id="pw-bar"
-                                style="
-                                    width: {{ [[plex_status.idle_streak / plex_status.idle_needed * 100, 100] | min, 0] | max }}%;
-                                    background: {{ '#ef4444' if plex_status.idle_streak >= plex_status.idle_needed else ('#f59e0b' if plex_status.idle_streak > 0 else '#10b981') }};
-                                "
-                            ></div>
-                        </div>
-                    </div>
-                </div>
-                {% else %}
-                <div class="plex-disabled-notice" id="plex-disabled">
-                    Set <code>PLEX_URL</code> and <code>PLEX_TOKEN</code> environment variables to enable Plex monitoring.
-                </div>
-                {% endif %}
-            </div>
-
-            <!-- Webhook History Section -->
-            <div class="history-section">
-                <div class="history-title">
-                    <span>Recent Activity</span>
-                    <span style="font-size: 12px; font-weight: normal; color: var(--text-muted);">Last 20 events</span>
-                </div>
-                
-                <div class="log-list">
-                    {% if history %}
-                        {% for log in history %}
-                            <div class="log-item">
-                                <div class="log-header">
-                                    <span class="log-time">{{ log.timestamp }}</span>
-                                    <span class="log-status status-{{ log.status }}">{{ log.status }}</span>
-                                </div>
-                                <div class="log-message">
-                                    {{ log.message }}
-                                </div>
-                                {% if log.payload %}
-                                    <details class="log-details">
-                                        <summary class="log-summary">View Request Payload</summary>
-                                        <pre class="log-payload"><code>{{ log.payload | tojson(indent=2) }}</code></pre>
-                                    </details>
-                                {% endif %}
-                            </div>
-                        {% endfor %}
-                    {% else %}
-                        <div class="no-logs">
-                            No webhook calls recorded yet.
-                        </div>
-                    {% endif %}
-                </div>
-            </div>
-
-            <div class="helper-box">
-                Configure Maintainerr notifications to send HTTP POST requests to the Webhook Endpoint.
-            </div>
+    <!-- Topbar -->
+    <div class="topbar">
+        <div class="brand">
+            <span class="brand-name">Rolarr</span>
+            <span class="brand-sub">Rolling Window Bridge</span>
+        </div>
+        <div class="conn-pill">
+            <svg class="conn-pip {{ 'ok' if status_text == 'Connected' else ('warn' if 'Error' in status_text else 'err') }}" viewBox="0 0 6 6"><rect width="6" height="6"/></svg>
+            Sonarr {{ status_text }}
         </div>
     </div>
 
-    <script>
-    // ── Plex watcher live updater ─────────────────────────────────────────
-    const REFRESH_MS = 30000; // poll /api/plex-status every 30s
+    <!-- Tab bar -->
+    <div class="tabbar">
+        <button class="tab-btn active" id="tab-dashboard" onclick="switchTab('dashboard')">Dashboard</button>
+        <button class="tab-btn" id="tab-activity" onclick="switchTab('activity')">Activity</button>
+        <button class="tab-btn" id="tab-config" onclick="switchTab('config')">Config</button>
+    </div>
 
-    function setEl(id, val) {
-        const el = document.getElementById(id);
-        if (el) el.textContent = val;
+    <!-- ══ DASHBOARD TAB ══════════════════════════════════════ -->
+    <div class="tab-panel active" id="panel-dashboard">
+
+        {% if plex_status.enabled %}
+        <!-- Stat grid -->
+        <div class="stat-grid">
+            <div class="stat-cell">
+                <span class="stat-label">Streams</span>
+                <span class="stat-value {{ 'green' if plex_status.stream_count and plex_status.stream_count > 0 else 'dim' }}" id="pw-streams">
+                    {{ plex_status.stream_count if plex_status.stream_count is not none else '—' }}
+                </span>
+                <span class="stat-meta">active now</span>
+            </div>
+            <div class="stat-cell">
+                <span class="stat-label">Idle streak</span>
+                <span class="stat-value {{ 'red' if plex_status.idle_streak >= plex_status.idle_needed else ('amber' if plex_status.idle_streak > 0 else '') }}" id="pw-streak-val">
+                    {{ plex_status.idle_streak }}/{{ plex_status.idle_needed }}
+                </span>
+                <span class="stat-meta">polls</span>
+            </div>
+            <div class="stat-cell">
+                <span class="stat-label">Plex status</span>
+                <span class="stat-value {{ 'green' if plex_status.status == 'ok' else ('amber' if plex_status.status == 'unreachable' else '') }}" id="pw-status-val" style="font-size:14px; padding-top:4px;">
+                    {{ plex_status.status | upper }}
+                </span>
+                {% if plex_status.dry_run %}
+                <span class="badge badge-amber" style="width:fit-content; margin-top:4px;">Dry Run</span>
+                {% endif %}
+            </div>
+        </div>
+
+        <!-- Idle bar -->
+        <div class="idle-section">
+            <div class="idle-header">
+                <span class="idle-label">Idle shutdown threshold</span>
+                <span class="idle-count" id="pw-streak-label">{{ plex_status.idle_streak }} of {{ plex_status.idle_needed }} polls with no streams</span>
+            </div>
+            <div class="idle-track">
+                <div class="idle-fill" id="pw-bar"
+                    style="width: {{ [[plex_status.idle_streak / plex_status.idle_needed * 100, 100] | min, 0] | max }}%;
+                           background: {{ '#e05252' if plex_status.idle_streak >= plex_status.idle_needed else ('#e5a00d' if plex_status.idle_streak > 0 else '#3ecf8e') }};">
+                </div>
+            </div>
+        </div>
+
+        <!-- Poll times -->
+        <div class="kv-block">
+            <div class="kv-row">
+                <span class="kv-key">Plex URL</span>
+                <span class="kv-val" id="pw-url">{{ plex_status.plex_url }}</span>
+            </div>
+            <div class="kv-row">
+                <span class="kv-key">Last check</span>
+                <span class="kv-val" id="pw-last">{{ plex_status.last_check or '—' }}</span>
+            </div>
+            <div class="kv-row">
+                <span class="kv-key">Next check</span>
+                <span class="kv-val" id="pw-next">{{ plex_status.next_check or '—' }}</span>
+            </div>
+            <div class="kv-row">
+                <span class="kv-key">Poll interval</span>
+                <span class="kv-val">{{ plex_status.poll_interval }}s ({{ (plex_status.poll_interval // 60) }}m)</span>
+            </div>
+        </div>
+
+        <!-- Last action -->
+        {% if plex_status.last_action %}
+        <div class="last-action-bar">
+            <strong>Last action</strong><span id="pw-action">{{ plex_status.last_action }}</span>
+        </div>
+        {% endif %}
+
+        {% else %}
+        <!-- Plex not configured -->
+        <div class="config-note" style="margin-top:0;">
+            Plex monitoring disabled — set <strong>PLEX_URL</strong> and <strong>PLEX_TOKEN</strong> environment variables to enable.
+        </div>
+        {% endif %}
+
+        <!-- Sonarr status summary -->
+        <div class="kv-block">
+            <div class="kv-row">
+                <span class="kv-key">Sonarr</span>
+                <span class="kv-val">{{ status_text }}</span>
+            </div>
+            <div class="kv-row">
+                <span class="kv-key">Rolling window</span>
+                <span class="kv-val">{{ rolling_window }} episodes</span>
+            </div>
+            <div class="kv-row">
+                <span class="kv-key">Webhook</span>
+                <span class="kv-val">{{ webhook_url }}</span>
+            </div>
+        </div>
+
+    </div>
+
+    <!-- ══ ACTIVITY TAB ═══════════════════════════════════════ -->
+    <div class="tab-panel" id="panel-activity">
+
+        <div class="log-header-row">
+            <span class="section-title">Webhook Events</span>
+            <span style="font-size:10px; color:var(--text-sub); font-family:var(--mono);">last 20</span>
+        </div>
+
+        {% if history %}
+        <div class="log-list">
+            {% for log in history %}
+            {% set gutter = 'ok' if log.status == 'success' else ('warn' if log.status == 'warning' else 'err') %}
+            <div class="log-entry">
+                <div class="log-gutter {{ gutter }}"></div>
+                <div class="log-body">
+                    <div class="log-meta">
+                        <span class="log-ts">{{ log.timestamp }}</span>
+                        <span class="log-tag {{ gutter }}">{{ log.status }}</span>
+                    </div>
+                    <div class="log-msg">{{ log.message }}</div>
+                    {% if log.payload %}
+                    <details>
+                        <summary class="log-payload-toggle">View payload</summary>
+                        <pre class="log-payload-pre"><code>{{ log.payload | tojson(indent=2) }}</code></pre>
+                    </details>
+                    {% endif %}
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+        {% else %}
+        <div class="no-logs">No webhook events recorded yet.</div>
+        {% endif %}
+
+    </div>
+
+    <!-- ══ CONFIG TAB ═════════════════════════════════════════ -->
+    <div class="tab-panel" id="panel-config">
+
+        <div class="config-note">
+            Values are read from environment variables at startup. Restart the container to apply changes.
+        </div>
+
+        <p class="section-title">Sonarr</p>
+        <div class="kv-block">
+            <div class="kv-row">
+                <span class="kv-key">Sonarr URL</span>
+                <span class="kv-val">{{ sonarr_url }}</span>
+            </div>
+            <div class="kv-row">
+                <span class="kv-key">API Key</span>
+                <span class="kv-val">{{ masked_key }}</span>
+            </div>
+            <div class="kv-row">
+                <span class="kv-key">Rolling Window</span>
+                <span class="kv-val">{{ rolling_window }} episodes</span>
+            </div>
+            <div class="kv-row">
+                <span class="kv-key">Webhook Endpoint</span>
+                <span class="kv-val">{{ webhook_url }}</span>
+            </div>
+        </div>
+
+        <p class="section-title">Plex Watcher</p>
+        <div class="kv-block">
+            <div class="kv-row">
+                <span class="kv-key">PLEX_URL</span>
+                <span class="kv-val">{{ plex_status.plex_url }}</span>
+            </div>
+            <div class="kv-row">
+                <span class="kv-key">Poll Interval</span>
+                <span class="kv-val">{{ plex_status.poll_interval }}s</span>
+            </div>
+            <div class="kv-row">
+                <span class="kv-key">Idle Polls Needed</span>
+                <span class="kv-val">{{ plex_status.idle_needed }}</span>
+            </div>
+            <div class="kv-row">
+                <span class="kv-key">Dry Run</span>
+                <span class="kv-val {{ '' if plex_status.dry_run else 'dim' }}">
+                    {{ 'ENABLED' if plex_status.dry_run else 'disabled' }}
+                </span>
+            </div>
+        </div>
+
+    </div>
+
+</div><!-- /shell -->
+
+<script>
+// ── Tab switching ────────────────────────────────────────────
+function switchTab(name) {
+    document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+    document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
+    document.getElementById('tab-' + name).classList.add('active');
+    document.getElementById('panel-' + name).classList.add('active');
+}
+
+// ── Plex watcher live poll ───────────────────────────────────
+const REFRESH_MS = 30000;
+
+function el(id) { return document.getElementById(id); }
+function setText(id, val) { const e = el(id); if (e) e.textContent = val; }
+
+function updateDashboard(s) {
+    setText('pw-url',          s.plex_url || '—');
+    setText('pw-last',         s.last_check || '—');
+    setText('pw-next',         s.next_check || '—');
+    setText('pw-action',       s.last_action || '');
+
+    const sc = s.stream_count !== null && s.stream_count !== undefined ? s.stream_count : '—';
+    setText('pw-streams', sc);
+    const streams = el('pw-streams');
+    if (streams) {
+        streams.className = 'stat-value';
+        if (sc > 0) streams.classList.add('green');
     }
 
-    function updatePlexCard(s) {
-        setEl('pw-url', s.plex_url || '—');
-        setEl('pw-status-text', s.status ? s.status.charAt(0).toUpperCase() + s.status.slice(1) : '—');
-        setEl('pw-streams', s.stream_count !== null && s.stream_count !== undefined ? s.stream_count : '—');
-        setEl('pw-last', s.last_check || '—');
-        setEl('pw-next', s.next_check || '—');
-        setEl('pw-action', s.last_action || '');
-        setEl('pw-streak', `${s.idle_streak} / ${s.idle_needed} polls`);
-
-        // Update dot colour
-        const dot = document.getElementById('pw-dot');
-        if (dot) {
-            dot.className = 'stream-dot';
-            if (s.status === 'unreachable') dot.classList.add('unknown');
-            else if (s.status !== 'ok') dot.classList.add('idle');
-        }
-
-        // Update idle bar
-        const bar = document.getElementById('pw-bar');
-        if (bar) {
-            const pct = Math.min((s.idle_streak / s.idle_needed) * 100, 100);
-            bar.style.width = pct + '%';
-            if (s.idle_streak >= s.idle_needed) bar.style.background = '#ef4444';
-            else if (s.idle_streak > 0) bar.style.background = '#f59e0b';
-            else bar.style.background = '#10b981';
-        }
+    setText('pw-streak-val',   `${s.idle_streak}/${s.idle_needed}`);
+    setText('pw-streak-label', `${s.idle_streak} of ${s.idle_needed} polls with no streams`);
+    const sv = el('pw-streak-val');
+    if (sv) {
+        sv.className = 'stat-value';
+        if (s.idle_streak >= s.idle_needed) sv.classList.add('red');
+        else if (s.idle_streak > 0) sv.classList.add('amber');
     }
 
-    function fetchPlexStatus() {
-        fetch('/api/plex-status')
-            .then(r => r.ok ? r.json() : null)
-            .then(data => { if (data) updatePlexCard(data); })
-            .catch(() => {});
+    const stv = el('pw-status-val');
+    if (stv) {
+        stv.textContent = (s.status || '').toUpperCase();
+        stv.className = 'stat-value';
+        if (s.status === 'ok') stv.classList.add('green');
+        else if (s.status === 'unreachable') stv.classList.add('amber');
+        stv.style.fontSize = '14px';
+        stv.style.paddingTop = '4px';
     }
 
-    // Only start polling if the Plex card is rendered (enabled)
-    if (document.getElementById('plex-rows')) {
-        setInterval(fetchPlexStatus, REFRESH_MS);
+    const bar = el('pw-bar');
+    if (bar) {
+        const pct = Math.min((s.idle_streak / s.idle_needed) * 100, 100);
+        bar.style.width = pct + '%';
+        bar.style.background = s.idle_streak >= s.idle_needed ? '#e05252'
+                             : s.idle_streak > 0              ? '#e5a00d'
+                             :                                  '#3ecf8e';
     }
-    </script>
+}
+
+function pollPlex() {
+    fetch('/api/plex-status')
+        .then(r => r.ok ? r.json() : null)
+        .then(d => { if (d) updateDashboard(d); })
+        .catch(() => {});
+}
+
+if (el('pw-streams')) {
+    setInterval(pollPlex, REFRESH_MS);
+}
+</script>
 </body>
 </html>
