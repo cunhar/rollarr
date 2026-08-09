@@ -511,11 +511,14 @@
         </div>
         <div class="stat-grid" style="margin-bottom:16px;">
             <div class="stat-cell">
-                <span class="stat-label">Items processed</span>
+                <div style="display:flex; justify-content:space-between; align-items:center;">
+                    <span class="stat-label">Items processed</span>
+                    <button class="btn-clear" style="padding:2px 6px; font-size:9px;" title="Reset counter to 0" onclick="resetCounter()">Reset</button>
+                </div>
                 <span class="stat-value {{ 'green' if poller_status.episodes_session > 0 else '' }}" id="ep-count">
                     {{ poller_status.episodes_session }}
                 </span>
-                <span class="stat-meta">this session</span>
+                <span class="stat-meta">total processed</span>
             </div>
             <div class="stat-cell">
                 <span class="stat-label">Last check</span>
@@ -858,6 +861,20 @@ function runPoller() {
                 btn.textContent = 'Run Now';
             }
         });
+}
+
+function resetCounter() {
+    if (!confirm("Reset items processed counter to 0?")) return;
+    fetch('/api/poller-reset-counter', { method: 'POST' })
+        .then(r => r.json())
+        .then(() => {
+            const cnt = el('ep-count');
+            if (cnt) {
+                cnt.textContent = '0';
+                cnt.className = 'stat-value';
+            }
+        })
+        .catch(() => {});
 }
 
 setInterval(pollAll, REFRESH_MS);

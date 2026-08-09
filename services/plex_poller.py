@@ -13,8 +13,8 @@ For each newly-watched Movie found:
 
 State persistence
 -----------------
-A high-water mark (last processed viewedAt Unix timestamp) is saved to
-CONFIG_DIR/plex_poll_state.json so media items aren't re-processed after a restart.
+A high-water mark (last processed viewedAt Unix timestamp) and total items processed
+counter are saved to CONFIG_DIR/plex_poll_state.json so stats persist across container restarts.
 """
 from __future__ import annotations
 
@@ -64,11 +64,10 @@ poller_state = {
     'status':            'starting',   # starting | ok | unreachable | not_configured | polling
     'last_check':        None,
     'next_check':        None,
-    'episodes_session':  0,            # media processed since container start
+    'episodes_session':  0,            # media processed total (persisted)
     'last_episode':      None,         # human-readable last processed item
     'last_error':        None,
 }
-
 
 _state_lock  = threading.Lock()
 _wake_event  = threading.Event()
@@ -110,23 +109,33 @@ def trigger_now() -> dict:
     return {'status': 'success', 'message': 'Poll cycle triggered'}
 
 
-# ── High-water mark persistence ───────────────────────────────────────────────
+def reset_counter() -> dict:
+    """Reset the items processed counter to 0."""
+    watermark, _ = _load_persisted_state()
+    _save_persisted_state(watermark, 0)
+    _update_state(episodes_session=0)
+    logger.info("[PlexPoller] Items processed counter reset to 0 by user.")
+    return {'status': 'success', 'message': 'Counter reset to 0'}
 
-def _load_watermark() -> int:
-    """Return the last saved viewedAt timestamp (Unix seconds), or 0."""
+
+# ── State persistence ─────────────────────────────────────────────────────────
+
+def _load_persisted_state() -> tuple[int, int]:
+    """Return (last_viewed_at, items_processed) from STATE_FILE."""
     try:
         with open(STATE_FILE, 'r') as f:
-            return int(json.load(f).get('last_viewed_at', 0))
+            data = json.load(f)
+            return int(data.get('last_viewed_at', 0)), int(data.get('items_processed', 0))
     except Exception:
-        return 0
+        return 0, 0
 
 
-def _save_watermark(ts: int):
+def _save_persisted_state(ts: int, count: int):
     try:
         with open(STATE_FILE, 'w') as f:
-            json.dump({'last_viewed_at': ts}, f)
+            json.dump({'last_viewed_at': ts, 'items_processed': count}, f)
     except Exception as e:
-        logger.warning(f"[PlexPoller] Could not save watermark: {e}")
+        logger.warning(f"[PlexPoller] Could not save persisted state: {e}")
 
 
 # ── Plex API helpers ──────────────────────────────────────────────────────────
@@ -314,7 +323,8 @@ def _execute_poll(watermark: int, media_total: int) -> tuple[int, int]:
 
             if max_ts > watermark:
                 watermark = max_ts
-                _save_watermark(watermark)
+
+            _save_persisted_state(watermark, media_total)
 
     return watermark, media_total
 
@@ -325,9 +335,10 @@ def _poller_loop():
         _update_state(status='not_configured')
         return
 
-    logger.info(f"[PlexPoller] Starting media poller. Interval={POLL_INTERVAL}s (aligned to top-of-hour)")
-    watermark   = _load_watermark()
-    media_total = 0
+    watermark, media_total = _load_persisted_state()
+    _update_state(episodes_session=media_total)
+
+    logger.info(f"[PlexPoller] Starting media poller. Interval={POLL_INTERVAL}s. Loaded watermark={watermark}, items_processed={media_total}")
 
     while True:
         with _poll_active:

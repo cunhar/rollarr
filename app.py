@@ -207,6 +207,13 @@ def api_poller_run():
     return jsonify(res), 200 if res['status'] == 'success' else 400
 
 
+@app.route('/api/poller-reset-counter', methods=['POST'])
+def api_poller_reset_counter():
+    res = plex_poller.reset_counter()
+    return jsonify(res), 200
+
+
+
 
 @app.route('/api/clear-logs', methods=['POST'])
 def api_clear_logs():
