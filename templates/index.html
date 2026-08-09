@@ -719,7 +719,7 @@
                 </div>
                 <div class="form-group">
                     <label class="form-label">API Key</label>
-                    <input type="password" class="form-input" id="cfg-SONARR_API_KEY" value="{{ cfg.SONARR_API_KEY }}" placeholder="Sonarr API Key">
+                    <input type="password" class="form-input" id="cfg-SONARR_API_KEY" value="{{ '••••••••' if cfg.SONARR_API_KEY else '' }}" placeholder="Sonarr API Key">
                 </div>
                 <div class="form-group">
                     <label class="form-label">Rolling Window (Episodes)</label>
@@ -735,7 +735,7 @@
                 </div>
                 <div class="form-group">
                     <label class="form-label">API Key</label>
-                    <input type="password" class="form-input" id="cfg-RADARR_API_KEY" value="{{ cfg.RADARR_API_KEY }}" placeholder="Radarr API Key">
+                    <input type="password" class="form-input" id="cfg-RADARR_API_KEY" value="{{ '••••••••' if cfg.RADARR_API_KEY else '' }}" placeholder="Radarr API Key">
                 </div>
             </div>
 
@@ -751,7 +751,7 @@
                 </div>
                 <div class="form-group">
                     <label class="form-label">Password / API Key</label>
-                    <input type="password" class="form-input" id="cfg-NZBGET_PASSWORD" value="{{ cfg.NZBGET_PASSWORD }}" placeholder="tegbzn6789">
+                    <input type="password" class="form-input" id="cfg-NZBGET_PASSWORD" value="{{ '••••••••' if cfg.NZBGET_PASSWORD else '' }}" placeholder="NZBGet Password">
                 </div>
             </div>
 
@@ -763,7 +763,7 @@
                 </div>
                 <div class="form-group">
                     <label class="form-label">Plex Token</label>
-                    <input type="password" class="form-input" id="cfg-PLEX_TOKEN" value="{{ cfg.PLEX_TOKEN }}" placeholder="X-Plex-Token">
+                    <input type="password" class="form-input" id="cfg-PLEX_TOKEN" value="{{ '••••••••' if cfg.PLEX_TOKEN else '' }}" placeholder="X-Plex-Token">
                 </div>
                 <div class="form-group">
                     <label class="form-label">Media Poll Interval (Seconds)</label>
@@ -801,7 +801,7 @@
                 </div>
                 <div class="form-group">
                     <label class="form-label">SSH Password</label>
-                    <input type="password" class="form-input" id="cfg-SSH_PASSWORD" value="{{ cfg.SSH_PASSWORD }}" placeholder="SSH Password">
+                    <input type="password" class="form-input" id="cfg-SSH_PASSWORD" value="{{ '••••••••' if cfg.SSH_PASSWORD else '' }}" placeholder="SSH Password">
                 </div>
             </div>
 

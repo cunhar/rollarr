@@ -116,6 +116,9 @@ def _load_initial_config() -> dict[str, Any]:
     return config
 
 
+SECRET_KEYS = {'SONARR_API_KEY', 'RADARR_API_KEY', 'NZBGET_PASSWORD', 'PLEX_TOKEN', 'SSH_PASSWORD'}
+MASK_SENTINEL = '••••••••'
+
 def save_config(new_settings: dict[str, Any]) -> dict[str, Any]:
     """Encrypt and save configuration settings to disk."""
     global _current_config
@@ -124,6 +127,10 @@ def save_config(new_settings: dict[str, Any]) -> dict[str, Any]:
     updated = dict(_current_config)
     for k, v in new_settings.items():
         if k in DEFAULT_CONFIG:
+            # Preserve existing secret if mask sentinel is submitted
+            if k in SECRET_KEYS and (v == MASK_SENTINEL or str(v).startswith('••••')):
+                continue
+
             target_type = type(DEFAULT_CONFIG[k])
             if target_type == int:
                 try:
@@ -137,6 +144,7 @@ def save_config(new_settings: dict[str, Any]) -> dict[str, Any]:
                     updated[k] = str(v).lower() in ('true', '1', 'yes')
             else:
                 updated[k] = str(v).strip()
+
 
     _current_config = updated
 
