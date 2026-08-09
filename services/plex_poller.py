@@ -117,6 +117,7 @@ def trigger_now() -> dict:
         return {'status': 'error', 'message': 'Plex is not configured'}
     
     logger.info("[PlexPoller] Manual poll triggered by user")
+    _activity_log('ok', "Manual poll cycle triggered by user")
     _wake_event.set()
     return {'status': 'success', 'message': 'Poll cycle triggered'}
 
@@ -127,7 +128,18 @@ def reset_counter() -> dict:
     _save_persisted_state(watermark, 0)
     _update_state(episodes_session=0)
     logger.info("[PlexPoller] Items processed counter reset to 0 by user.")
+    _activity_log('ok', "Items processed counter reset to 0 by user")
     return {'status': 'success', 'message': 'Counter reset to 0'}
+
+
+def reset_watermark() -> dict:
+    """Reset last_viewed_at watermark to 0 to force re-scanning watched history."""
+    _, count = _load_persisted_state()
+    _save_persisted_state(0, count)
+    logger.info("[PlexPoller] Poller watermark reset to 0 by user — re-evaluating watched history.")
+    _activity_log('ok', "Poller watermark reset to 0 — re-evaluating Plex watched history")
+    _wake_event.set()
+    return {'status': 'success', 'message': 'Watermark reset to 0 — re-evaluating history'}
 
 
 # ── State persistence ─────────────────────────────────────────────────────────
@@ -322,18 +334,23 @@ def _now() -> str:
 
 def _execute_poll(watermark: int, media_total: int) -> tuple[int, int]:
     now_ts = _now()
-    logger.info(f"[PlexPoller] Checking Plex history (since viewedAt={watermark})")
+    watermark_str = datetime.datetime.fromtimestamp(watermark).strftime('%Y-%m-%d %H:%M:%S') if watermark > 0 else 'beginning'
+    logger.info(f"[PlexPoller] Checking Plex history (since viewedAt={watermark} / {watermark_str})")
     new_items = _fetch_new_watched(watermark)
 
     if new_items is None:
-        logger.warning("[PlexPoller] Plex unreachable.")
-        _update_state(status='unreachable', last_check=now_ts)
+        msg = "Plex history check failed — Plex server unreachable or invalid token"
+        logger.warning(f"[PlexPoller] {msg}")
+        _update_state(status='unreachable', last_check=now_ts, last_error=msg)
+        _activity_log('warning', msg)
     else:
-        _update_state(status='ok', last_check=now_ts)
+        _update_state(status='ok', last_check=now_ts, last_error=None)
         if not new_items:
-            logger.info("[PlexPoller] No new watched media items.")
+            msg = f"Plex history checked — 0 new watched items (since {watermark_str})"
+            logger.info(f"[PlexPoller] {msg}")
+            _activity_log('ok', msg)
         else:
-            logger.info(f"[PlexPoller] {len(new_items)} new watched media item(s).")
+            logger.info(f"[PlexPoller] Found {len(new_items)} new watched media item(s).")
             max_ts = watermark
             for item in new_items:
                 try:

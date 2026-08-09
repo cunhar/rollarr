@@ -261,6 +261,12 @@ def api_poller_reset_counter():
     return jsonify(res), 200
 
 
+@app.route('/api/poller-reset-watermark', methods=['POST'])
+def api_poller_reset_watermark():
+    res = plex_poller.reset_watermark()
+    return jsonify(res), 200
+
+
 @app.route('/api/shutdown-now', methods=['POST'])
 def api_shutdown_now():
     res = plex_watcher.trigger_shutdown_now()

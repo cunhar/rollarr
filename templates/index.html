@@ -697,7 +697,10 @@
         <!-- Episode Poller stats -->
         <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
             <p class="section-title" style="margin-bottom:0;">Media Poller</p>
-            <button class="btn-clear" id="btn-run-poller" onclick="runPoller()">Run Now</button>
+            <div style="display:flex; gap:8px;">
+                <button class="btn-clear" id="btn-reset-watermark" title="Reset watermark to re-check all Plex watched history" onclick="resetWatermark()">Re-check All</button>
+                <button class="btn-clear" id="btn-run-poller" onclick="runPoller()">Run Now</button>
+            </div>
         </div>
         <div class="stat-grid" style="margin-bottom:16px;">
             <div class="stat-cell">
@@ -1155,6 +1158,20 @@ function resetCounter() {
             showToast('Items processed counter reset to 0', 'ok');
         })
         .catch(() => showToast('Failed to reset counter', 'err'));
+}
+
+function resetWatermark() {
+    if (!confirm("Reset poller watermark? This forces Rolarr to re-scan all Plex watched history on the next check.")) return;
+    const btn = el('btn-reset-watermark');
+    if (btn) btn.disabled = true;
+    fetch('/api/poller-reset-watermark', { method: 'POST' })
+        .then(r => r.json())
+        .then(data => {
+            showToast(data.message || 'Watermark reset — re-evaluating history', 'ok');
+            setTimeout(pollAll, 1000);
+        })
+        .catch(() => showToast('Failed to reset watermark', 'err'))
+        .finally(() => { if (btn) btn.disabled = false; });
 }
 
 function triggerShutdownNow() {
