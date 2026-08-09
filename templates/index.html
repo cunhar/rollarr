@@ -598,43 +598,32 @@
             </div>
         </div>
 
-        <p class="section-title">Media Poller</p>
+        <p class="section-title">Plex</p>
         <div class="kv-block">
             <div class="kv-row">
-                <span class="kv-key">PLEX_URL</span>
-                <span class="kv-val">{{ poller_status.plex_url if poller_status.enabled else 'Not configured' }}</span>
-            </div>
-            <div class="kv-row">
-                <span class="kv-key">PLEX_WATCH_INTERVAL</span>
-                <span class="kv-val">{{ poller_status.poll_interval }}s</span>
-            </div>
-            <div class="kv-row">
-                <span class="kv-key">Enabled</span>
-                <span class="kv-val {{ '' if poller_status.enabled else 'dim' }}">{{ 'yes' if poller_status.enabled else 'no' }}</span>
-            </div>
-        </div>
-
-        <p class="section-title">Shutdown Watcher</p>
-        <div class="kv-block">
-            <div class="kv-row">
-                <span class="kv-key">PLEX_URL</span>
+                <span class="kv-key">Plex URL</span>
                 <span class="kv-val">{{ plex_status.plex_url }}</span>
             </div>
             <div class="kv-row">
-                <span class="kv-key">Poll Interval</span>
+                <span class="kv-key">Media Poll Interval</span>
+                <span class="kv-val">{{ poller_status.poll_interval }}s (1h top-of-hour)</span>
+            </div>
+            <div class="kv-row">
+                <span class="kv-key">Shutdown Poll Interval</span>
                 <span class="kv-val">{{ plex_status.poll_interval }}s</span>
             </div>
             <div class="kv-row">
-                <span class="kv-key">Idle Polls Needed</span>
-                <span class="kv-val">{{ plex_status.idle_needed }}</span>
+                <span class="kv-key">Shutdown Idle Threshold</span>
+                <span class="kv-val">{{ plex_status.idle_needed }} polls</span>
             </div>
             <div class="kv-row">
-                <span class="kv-key">Dry Run</span>
+                <span class="kv-key">Shutdown Dry Run</span>
                 <span class="kv-val {{ '' if plex_status.dry_run else 'dim' }}">
                     {{ 'ENABLED' if plex_status.dry_run else 'disabled' }}
                 </span>
             </div>
         </div>
+
 
     </div>
 

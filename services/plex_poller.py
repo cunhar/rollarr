@@ -59,6 +59,7 @@ STATE_FILE = os.path.join(CONFIG_DIR, 'plex_poll_state.json')
 
 poller_state = {
     'enabled':           bool(PLEX_URL and PLEX_TOKEN),
+    'plex_url':          PLEX_URL or 'Not configured',
     'poll_interval':     POLL_INTERVAL,
     'status':            'starting',   # starting | ok | unreachable | not_configured | polling
     'last_check':        None,
@@ -67,6 +68,7 @@ poller_state = {
     'last_episode':      None,         # human-readable last processed item
     'last_error':        None,
 }
+
 
 _state_lock  = threading.Lock()
 _wake_event  = threading.Event()
