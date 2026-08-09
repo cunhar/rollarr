@@ -197,6 +197,22 @@ def _get_active_sessions() -> tuple[int | None, list[dict]]:
 
 # ── SSH shutdown ─────────────────────────────────────────────────────────────
 
+def _find_ssh_key(configured_path: str) -> str | None:
+    if configured_path and os.path.exists(configured_path):
+        return configured_path
+    candidates = [
+        '/root/.ssh/id_ed25519',
+        '/root/.ssh/id_rsa',
+        '/root/.ssh/id_ecdsa',
+        '/root/.ssh/id_dsa',
+    ]
+    for c in candidates:
+        if os.path.exists(c):
+            logger.info(f"[PlexWatcher] Auto-detected SSH key at {c}")
+            return c
+    return None
+
+
 def _ssh_shutdown(force: bool = False) -> tuple[bool, str]:
     """SSH into SSH_HOST and issue a Linux shutdown command."""
     cmd = 'sudo shutdown -h now || sudo poweroff'
@@ -205,6 +221,7 @@ def _ssh_shutdown(force: bool = False) -> tuple[bool, str]:
     ssh_port = int(get_config('SSH_PORT', 22))
     ssh_user = get_config('SSH_USER', '')
     ssh_key_path = get_config('SSH_KEY_PATH', '/root/.ssh/id_rsa')
+    resolved_key_path = _find_ssh_key(ssh_key_path)
 
     if dry_run and not force:
         msg = f"[DRY-RUN] Would SSH {ssh_user}@{ssh_host}:{ssh_port} and run: {cmd}"
@@ -227,7 +244,7 @@ def _ssh_shutdown(force: bool = False) -> tuple[bool, str]:
             hostname=ssh_host,
             port=ssh_port,
             username=ssh_user,
-            key_filename=ssh_key_path if os.path.exists(ssh_key_path) else None,
+            key_filename=resolved_key_path,
             timeout=15,
         )
         stdin, stdout, stderr = client.exec_command(cmd)
