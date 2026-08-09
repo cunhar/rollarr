@@ -697,21 +697,15 @@
         <!-- Episode Poller stats -->
         <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
             <p class="section-title" style="margin-bottom:0;">Media Poller</p>
-            <div style="display:flex; gap:8px;">
-                <button class="btn-clear" id="btn-reset-watermark" title="Reset watermark to re-check all Plex watched history" onclick="resetWatermark()">Re-check All</button>
-                <button class="btn-clear" id="btn-run-poller" onclick="runPoller()">Run Now</button>
-            </div>
+            <button class="btn-clear" id="btn-run-poller" onclick="runPoller()">Re-check Now</button>
         </div>
         <div class="stat-grid" style="margin-bottom:16px;">
             <div class="stat-cell">
-                <div style="display:flex; justify-content:space-between; align-items:center;">
-                    <span class="stat-label">Items processed</span>
-                    <button class="btn-clear" style="padding:2px 6px; font-size:9px;" title="Reset counter to 0" onclick="resetCounter()">Reset</button>
-                </div>
+                <span class="stat-label">Items processed</span>
                 <span class="stat-value {{ 'green' if poller_status.episodes_session > 0 else '' }}" id="ep-count">
                     {{ poller_status.episodes_session }}
                 </span>
-                <span class="stat-meta">total processed</span>
+                <span class="stat-meta">processed in session</span>
             </div>
             <div class="stat-cell">
                 <span class="stat-label">Last check</span>
@@ -1128,50 +1122,21 @@ function runPoller() {
     const btn = el('btn-run-poller');
     if (btn) {
         btn.disabled = true;
-        btn.textContent = 'Running...';
+        btn.textContent = 'Re-checking...';
     }
     fetch('/api/poller-run', { method: 'POST' })
         .then(r => r.json())
         .then(data => {
-            showToast(data.message || 'Media poll completed', 'ok');
+            showToast(data.message || 'Stateless re-check completed', 'ok');
             setTimeout(pollAll, 1000);
         })
-        .catch(() => showToast('Failed to trigger media poll', 'err'))
+        .catch(() => showToast('Failed to trigger re-check', 'err'))
         .finally(() => {
             if (btn) {
                 btn.disabled = false;
-                btn.textContent = 'Run Now';
+                btn.textContent = 'Re-check Now';
             }
         });
-}
-
-function resetCounter() {
-    if (!confirm("Reset items processed counter to 0?")) return;
-    fetch('/api/poller-reset-counter', { method: 'POST' })
-        .then(r => r.json())
-        .then(() => {
-            const cnt = el('ep-count');
-            if (cnt) {
-                cnt.textContent = '0';
-                cnt.className = 'stat-value';
-            }
-            showToast('Items processed counter reset to 0', 'ok');
-        })
-        .catch(() => showToast('Failed to reset counter', 'err'));
-}
-
-function resetWatermark() {
-    if (!confirm("Reset poller watermark? This forces Rolarr to re-scan all Plex watched history on the next check.")) return;
-    const btn = el('btn-reset-watermark');
-    if (btn) btn.disabled = true;
-    fetch('/api/poller-reset-watermark', { method: 'POST' })
-        .then(r => r.json())
-        .then(data => {
-            showToast(data.message || 'Watermark reset — re-evaluating history', 'ok');
-            setTimeout(pollAll, 1000);
-        })
-        .catch(() => showToast('Failed to reset watermark', 'err'))
-        .finally(() => { if (btn) btn.disabled = false; });
 }
 
 function triggerShutdownNow() {

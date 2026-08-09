@@ -1,25 +1,18 @@
 """
 services/plex_poller.py
 -----------------------
-Background daemon thread that polls Plex watch history.
-By default, polls at the top of every hour (HH:00:00).
+Stateless background daemon thread that polls Plex watch history.
 
-For each newly-watched TV episode found:
-  Resolves the series in Sonarr and applies the rolling-window monitoring logic
-  (monitor + search the next N episodes).
+For each watched TV episode found in recent Plex history:
+  Unmonitors the episode, deletes its file from disk via Sonarr (if enabled),
+  and applies the rolling-window monitoring logic (monitor + search the next N episodes).
 
-For each newly-watched Movie found:
+For each watched Movie found in recent Plex history:
   Resolves the movie in Radarr, unmonitors it, and deletes its media file from disk.
-
-State persistence
------------------
-A high-water mark (last processed viewedAt Unix timestamp) and total items processed
-counter are saved to CONFIG_DIR/plex_poll_state.json so stats persist across container restarts.
 """
 from __future__ import annotations
 
 import os
-import json
 import time
 import threading
 import logging
@@ -47,14 +40,6 @@ from config_store import get_config
 
 logger = logging.getLogger(__name__)
 
-# ── Configuration ─────────────────────────────────────────────────────────────
-
-CONFIG_DIR = '/config'
-if not os.path.exists(CONFIG_DIR):
-    CONFIG_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-
-STATE_FILE = os.path.join(CONFIG_DIR, 'plex_poll_state.json')
-
 # ── Shared state (read by the Flask UI) ──────────────────────────────────────
 
 poller_state = {
@@ -64,7 +49,7 @@ poller_state = {
     'status':            'starting',   # starting | ok | unreachable | not_configured | polling
     'last_check':        None,
     'next_check':        None,
-    'episodes_session':  0,            # media processed total (persisted)
+    'episodes_session':  0,            # media processed total in current session
     'last_episode':      None,         # human-readable last processed item
     'last_error':        None,
 }
@@ -109,57 +94,17 @@ def get_state() -> dict:
 
 
 def trigger_now() -> dict:
-    """Trigger a manual poll cycle immediately."""
+    """Trigger an immediate stateless re-check cycle."""
     plex_url = (get_config('PLEX_URL') or '').rstrip('/')
     plex_token = get_config('PLEX_TOKEN') or ''
 
     if not plex_url or not plex_token:
         return {'status': 'error', 'message': 'Plex is not configured'}
     
-    logger.info("[PlexPoller] Manual poll triggered by user")
-    _activity_log('ok', "Manual poll cycle triggered by user")
+    logger.info("[PlexPoller] Stateless re-check triggered by user")
+    _activity_log('ok', "Stateless re-check triggered by user")
     _wake_event.set()
-    return {'status': 'success', 'message': 'Poll cycle triggered'}
-
-
-def reset_counter() -> dict:
-    """Reset the items processed counter to 0."""
-    watermark, _ = _load_persisted_state()
-    _save_persisted_state(watermark, 0)
-    _update_state(episodes_session=0)
-    logger.info("[PlexPoller] Items processed counter reset to 0 by user.")
-    _activity_log('ok', "Items processed counter reset to 0 by user")
-    return {'status': 'success', 'message': 'Counter reset to 0'}
-
-
-def reset_watermark() -> dict:
-    """Reset last_viewed_at watermark to 0 to force re-scanning watched history."""
-    _, count = _load_persisted_state()
-    _save_persisted_state(0, count)
-    logger.info("[PlexPoller] Poller watermark reset to 0 by user — re-evaluating watched history.")
-    _activity_log('ok', "Poller watermark reset to 0 — re-evaluating Plex watched history")
-    _wake_event.set()
-    return {'status': 'success', 'message': 'Watermark reset to 0 — re-evaluating history'}
-
-
-# ── State persistence ─────────────────────────────────────────────────────────
-
-def _load_persisted_state() -> tuple[int, int]:
-    """Return (last_viewed_at, items_processed) from STATE_FILE."""
-    try:
-        with open(STATE_FILE, 'r') as f:
-            data = json.load(f)
-            return int(data.get('last_viewed_at', 0)), int(data.get('items_processed', 0))
-    except Exception:
-        return 0, 0
-
-
-def _save_persisted_state(ts: int, count: int):
-    try:
-        with open(STATE_FILE, 'w') as f:
-            json.dump({'last_viewed_at': ts, 'items_processed': count}, f)
-    except Exception as e:
-        logger.warning(f"[PlexPoller] Could not save persisted state: {e}")
+    return {'status': 'success', 'message': 'Re-check cycle triggered'}
 
 
 # ── Plex API helpers ──────────────────────────────────────────────────────────
@@ -184,24 +129,65 @@ def _plex_get(path: str, params: dict = None) -> dict | None:
         return None
 
 
-def _fetch_new_watched(since_ts: int) -> list | None:
-    """Return watch history items with viewedAt > since_ts, sorted oldest-first."""
-    data = _plex_get('/status/sessions/history/all', {
-        'sort': 'viewedAt:desc',
-        'X-Plex-Container-Start': 0,
-        'X-Plex-Container-Size': 200,
-    })
+def _get_library_sections() -> list:
+    """Return list of library sections from Plex."""
+    data = _plex_get('/library/sections')
     if data is None:
+        return []
+    return data.get('MediaContainer', {}).get('Directory') or []
+
+
+def _fetch_all_watched_from_library() -> list | None:
+    """
+    Scan all Plex library sections and return every item with a watched tick mark
+    (viewCount > 0), for both Movies and TV episodes.
+    Returns None on Plex connectivity failure.
+    """
+    sections = _get_library_sections()
+    if sections is None:
         return None
-    items = data.get('MediaContainer', {}).get('Metadata') or []
-    valid_items = []
-    for i in items:
-        itype = str(i.get('type', '')).lower()
-        if itype in ('1', '4', 'movie', 'episode') and int(i.get('viewedAt', 0)) > since_ts:
-            valid_items.append(i)
-    # Sort matching items oldest-first so they are processed chronologically
-    valid_items.sort(key=lambda x: int(x.get('viewedAt', 0)))
-    return valid_items
+
+    watched_items = []
+    plex_reachable = False
+
+    for section in sections:
+        stype = section.get('type', '')
+        skey = section.get('key', '')
+
+        if stype == 'movie':
+            # Fetch all watched movies in this section
+            data = _plex_get(f'/library/sections/{skey}/all', {
+                'type': 1,
+                'viewCount>>': 0,
+                'X-Plex-Container-Start': 0,
+                'X-Plex-Container-Size': 10000,
+            })
+            if data is not None:
+                plex_reachable = True
+                for item in (data.get('MediaContainer', {}).get('Metadata') or []):
+                    if int(item.get('viewCount', 0)) > 0:
+                        item['type'] = 'movie'
+                        watched_items.append(item)
+
+        elif stype == 'show':
+            # Fetch all watched episodes in this section
+            data = _plex_get(f'/library/sections/{skey}/all', {
+                'type': 4,
+                'viewCount>>': 0,
+                'X-Plex-Container-Start': 0,
+                'X-Plex-Container-Size': 10000,
+            })
+            if data is not None:
+                plex_reachable = True
+                for item in (data.get('MediaContainer', {}).get('Metadata') or []):
+                    if int(item.get('viewCount', 0)) > 0:
+                        item['type'] = 'episode'
+                        watched_items.append(item)
+
+    if not plex_reachable and not sections:
+        return None
+
+    return watched_items
 
 
 def _enrich_metadata(item: dict) -> dict:
@@ -227,7 +213,7 @@ def _enrich_metadata(item: dict) -> dict:
 # ── Sonarr rolling-window logic (Episodes) ────────────────────────────────────
 
 def _process_episode(item: dict) -> tuple[str, str]:
-    """Given a Plex history item for a TV episode, apply the Sonarr rolling window."""
+    """Given a Plex history item for a TV episode, unmonitor/delete it and apply the Sonarr rolling window."""
     item        = _enrich_metadata(item)
     show_title  = (item.get('grandparentTitle') or '').strip()
     season_num  = item.get('parentIndex')
@@ -332,63 +318,52 @@ def _now() -> str:
     return datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')
 
 
-def _execute_poll(watermark: int, media_total: int) -> tuple[int, int]:
+def _execute_poll() -> int:
     now_ts = _now()
-    watermark_str = datetime.datetime.fromtimestamp(watermark).strftime('%Y-%m-%d %H:%M:%S') if watermark > 0 else 'beginning'
-    logger.info(f"[PlexPoller] Checking Plex history (since viewedAt={watermark} / {watermark_str})")
-    new_items = _fetch_new_watched(watermark)
+    logger.info("[PlexPoller] Scanning Plex library for all watched items (viewCount > 0)...")
+    items = _fetch_all_watched_from_library()
 
-    if new_items is None:
-        msg = "Plex history check failed — Plex server unreachable or invalid token"
+    if items is None:
+        msg = "Plex library scan failed — Plex server unreachable or invalid token"
         logger.warning(f"[PlexPoller] {msg}")
         _update_state(status='unreachable', last_check=now_ts, last_error=msg)
         _activity_log('warning', msg)
-    else:
-        _update_state(status='ok', last_check=now_ts, last_error=None)
-        if not new_items:
-            msg = f"Plex history checked — 0 new watched items (since {watermark_str})"
-            logger.info(f"[PlexPoller] {msg}")
-            _activity_log('ok', msg)
-        else:
-            logger.info(f"[PlexPoller] Found {len(new_items)} new watched media item(s).")
-            max_ts = watermark
-            for item in new_items:
-                try:
-                    itype = str(item.get('type', '')).lower()
-                    if itype in ('4', 'episode'):
-                        status, msg = _process_episode(item)
-                    elif itype in ('1', 'movie'):
-                        status, msg = _process_movie(item)
-                    else:
-                        continue
+        return 0
 
-                    viewed_at = int(item.get('viewedAt', 0))
-                    if viewed_at > max_ts:
-                        max_ts = viewed_at
+    _update_state(status='ok', last_check=now_ts, last_error=None)
+    if not items:
+        msg = "Plex library scanned — 0 items with watched tick mark found"
+        logger.info(f"[PlexPoller] {msg}")
+        _activity_log('ok', msg)
+        return 0
 
-                    media_total += 1
-                    _activity_log(status, msg, {
-                        'title':    item.get('title'),
-                        'viewedAt': viewed_at,
-                        'type':     item.get('type'),
-                    })
-                    _update_state(episodes_session=media_total, last_episode=msg)
-                except Exception as exc:
-                    _activity_log('error', f"Failed processing watched item: {exc}")
+    logger.info(f"[PlexPoller] Found {len(items)} watched item(s) across all libraries.")
+    _activity_log('ok', f"Plex library scanned — {len(items)} watched item(s) found, processing...")
+    processed_count = 0
+    for item in items:
+        try:
+            itype = str(item.get('type', '')).lower()
+            if itype in ('4', 'episode'):
+                status, msg = _process_episode(item)
+            elif itype in ('1', 'movie'):
+                status, msg = _process_movie(item)
+            else:
+                continue
 
-            if max_ts > watermark:
-                watermark = max_ts
+            processed_count += 1
+            _activity_log(status, msg, {
+                'title': item.get('title') or item.get('grandparentTitle'),
+                'type':  item.get('type'),
+            })
+            _update_state(episodes_session=processed_count, last_episode=msg)
+        except Exception as exc:
+            _activity_log('error', f"Failed processing watched item: {exc}")
 
-            _save_persisted_state(watermark, media_total)
-
-    return watermark, media_total
+    return processed_count
 
 
 def _poller_loop():
-    watermark, media_total = _load_persisted_state()
-    _update_state(episodes_session=media_total)
-
-    logger.info(f"[PlexPoller] Starting media poller loop.")
+    logger.info(f"[PlexPoller] Starting stateless media poller loop.")
 
     while True:
         plex_url = (get_config('PLEX_URL') or '').rstrip('/')
@@ -401,7 +376,7 @@ def _poller_loop():
             continue
 
         with _poll_active:
-            watermark, media_total = _execute_poll(watermark, media_total)
+            _execute_poll()
 
         # Calculate sleep until top-of-the-hour (or interval multiple)
         now_epoch = time.time()
