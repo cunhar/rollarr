@@ -417,12 +417,50 @@
     <!-- ══ DASHBOARD TAB ══════════════════════════════════════ -->
     <div class="tab-panel active" id="panel-dashboard">
 
+        {% if poller_status.enabled %}
+        <!-- Episode Poller stats -->
+        <p class="section-title" style="margin-bottom:12px;">Episode Poller</p>
+        <div class="stat-grid" style="margin-bottom:16px;">
+            <div class="stat-cell">
+                <span class="stat-label">Episodes queued</span>
+                <span class="stat-value {{ 'green' if poller_status.episodes_session > 0 else '' }}" id="ep-count">
+                    {{ poller_status.episodes_session }}
+                </span>
+                <span class="stat-meta">this session</span>
+            </div>
+            <div class="stat-cell">
+                <span class="stat-label">Last check</span>
+                <span class="stat-value" style="font-size:11px; padding-top:6px; font-family:var(--mono);" id="ep-last">
+                    {{ poller_status.last_check or '—' }}
+                </span>
+            </div>
+            <div class="stat-cell">
+                <span class="stat-label">Next check</span>
+                <span class="stat-value" style="font-size:11px; padding-top:6px; font-family:var(--mono);" id="ep-next">
+                    {{ poller_status.next_check or '—' }}
+                </span>
+            </div>
+        </div>
+
+        {% if poller_status.last_episode %}
+        <div class="last-action-bar" style="margin-bottom:24px;">
+            <strong>Last episode</strong><span id="ep-last-ep">{{ poller_status.last_episode }}</span>
+        </div>
+        {% endif %}
+
+        {% else %}
+        <div class="config-note" style="margin-top:0; margin-bottom:24px;">
+            Episode poller disabled — set <strong>PLEX_URL</strong> and <strong>PLEX_TOKEN</strong> environment variables to enable.
+        </div>
+        {% endif %}
+
         {% if plex_status.enabled %}
-        <!-- Stat grid -->
-        <div class="stat-grid">
+        <!-- Shutdown Watcher -->
+        <p class="section-title" style="margin-bottom:12px;">Shutdown Watcher</p>
+        <div class="stat-grid" style="margin-bottom:16px;">
             <div class="stat-cell">
                 <span class="stat-label">Streams</span>
-                <span class="stat-value {{ 'green' if plex_status.stream_count and plex_status.stream_count > 0 else 'dim' }}" id="pw-streams">
+                <span class="stat-value {{ 'green' if plex_status.stream_count and plex_status.stream_count > 0 else '' }}" id="pw-streams">
                     {{ plex_status.stream_count if plex_status.stream_count is not none else '—' }}
                 </span>
                 <span class="stat-meta">active now</span>
@@ -435,7 +473,7 @@
                 <span class="stat-meta">polls</span>
             </div>
             <div class="stat-cell">
-                <span class="stat-label">Plex status</span>
+                <span class="stat-label">Status</span>
                 <span class="stat-value {{ 'green' if plex_status.status == 'ok' else ('amber' if plex_status.status == 'unreachable' else '') }}" id="pw-status-val" style="font-size:14px; padding-top:4px;">
                     {{ plex_status.status | upper }}
                 </span>
@@ -445,7 +483,6 @@
             </div>
         </div>
 
-        <!-- Idle bar -->
         <div class="idle-section">
             <div class="idle-header">
                 <span class="idle-label">Idle shutdown threshold</span>
@@ -458,42 +495,9 @@
                 </div>
             </div>
         </div>
-
-        <!-- Poll times -->
-        <div class="kv-block">
-            <div class="kv-row">
-                <span class="kv-key">Plex URL</span>
-                <span class="kv-val" id="pw-url">{{ plex_status.plex_url }}</span>
-            </div>
-            <div class="kv-row">
-                <span class="kv-key">Last check</span>
-                <span class="kv-val" id="pw-last">{{ plex_status.last_check or '—' }}</span>
-            </div>
-            <div class="kv-row">
-                <span class="kv-key">Next check</span>
-                <span class="kv-val" id="pw-next">{{ plex_status.next_check or '—' }}</span>
-            </div>
-            <div class="kv-row">
-                <span class="kv-key">Poll interval</span>
-                <span class="kv-val">{{ plex_status.poll_interval }}s ({{ (plex_status.poll_interval // 60) }}m)</span>
-            </div>
-        </div>
-
-        <!-- Last action -->
-        {% if plex_status.last_action %}
-        <div class="last-action-bar">
-            <strong>Last action</strong><span id="pw-action">{{ plex_status.last_action }}</span>
-        </div>
         {% endif %}
 
-        {% else %}
-        <!-- Plex not configured -->
-        <div class="config-note" style="margin-top:0;">
-            Plex monitoring disabled — set <strong>PLEX_URL</strong> and <strong>PLEX_TOKEN</strong> environment variables to enable.
-        </div>
-        {% endif %}
-
-        <!-- Sonarr status summary -->
+        <!-- Sonarr summary -->
         <div class="kv-block">
             <div class="kv-row">
                 <span class="kv-key">Sonarr</span>
@@ -503,10 +507,6 @@
                 <span class="kv-key">Rolling window</span>
                 <span class="kv-val">{{ rolling_window }} episodes</span>
             </div>
-            <div class="kv-row">
-                <span class="kv-key">Webhook</span>
-                <span class="kv-val">{{ webhook_url }}</span>
-            </div>
         </div>
 
     </div>
@@ -515,7 +515,7 @@
     <div class="tab-panel" id="panel-activity">
 
         <div class="log-header-row">
-            <span class="section-title">Webhook Events</span>
+            <span class="section-title">Episode Activity</span>
             <div style="display:flex; align-items:center; gap:12px;">
                 <span style="font-size:10px; color:var(--text-sub); font-family:var(--mono);">last 20</span>
                 <button class="btn-clear" id="btn-clear-logs" onclick="clearLogs()">Clear</button>
@@ -545,7 +545,7 @@
             {% endfor %}
         </div>
         {% else %}
-        <div class="no-logs">No webhook events recorded yet.</div>
+        <div class="no-logs">No episodes processed yet.</div>
         {% endif %}
 
     </div>
@@ -571,13 +571,25 @@
                 <span class="kv-key">Rolling Window</span>
                 <span class="kv-val">{{ rolling_window }} episodes</span>
             </div>
+        </div>
+
+        <p class="section-title">Episode Poller</p>
+        <div class="kv-block">
             <div class="kv-row">
-                <span class="kv-key">Webhook Endpoint</span>
-                <span class="kv-val">{{ webhook_url }}</span>
+                <span class="kv-key">PLEX_URL</span>
+                <span class="kv-val">{{ poller_status.plex_url if poller_status.enabled else 'Not configured' }}</span>
+            </div>
+            <div class="kv-row">
+                <span class="kv-key">PLEX_WATCH_INTERVAL</span>
+                <span class="kv-val">{{ poller_status.poll_interval }}s</span>
+            </div>
+            <div class="kv-row">
+                <span class="kv-key">Enabled</span>
+                <span class="kv-val {{ '' if poller_status.enabled else 'dim' }}">{{ 'yes' if poller_status.enabled else 'no' }}</span>
             </div>
         </div>
 
-        <p class="section-title">Plex Watcher</p>
+        <p class="section-title">Shutdown Watcher</p>
         <div class="kv-block">
             <div class="kv-row">
                 <span class="kv-key">PLEX_URL</span>
@@ -612,18 +624,13 @@ function switchTab(name) {
     document.getElementById('panel-' + name).classList.add('active');
 }
 
-// ── Plex watcher live poll ───────────────────────────────────
+// ── Live polling ─────────────────────────────────────────────
 const REFRESH_MS = 30000;
 
 function el(id) { return document.getElementById(id); }
 function setText(id, val) { const e = el(id); if (e) e.textContent = val; }
 
-function updateDashboard(s) {
-    setText('pw-url',          s.plex_url || '—');
-    setText('pw-last',         s.last_check || '—');
-    setText('pw-next',         s.next_check || '—');
-    setText('pw-action',       s.last_action || '');
-
+function updateShutdownWatcher(s) {
     const sc = s.stream_count !== null && s.stream_count !== undefined ? s.stream_count : '—';
     setText('pw-streams', sc);
     const streams = el('pw-streams');
@@ -631,7 +638,6 @@ function updateDashboard(s) {
         streams.className = 'stat-value';
         if (sc > 0) streams.classList.add('green');
     }
-
     setText('pw-streak-val',   `${s.idle_streak}/${s.idle_needed}`);
     setText('pw-streak-label', `${s.idle_streak} of ${s.idle_needed} polls with no streams`);
     const sv = el('pw-streak-val');
@@ -640,7 +646,6 @@ function updateDashboard(s) {
         if (s.idle_streak >= s.idle_needed) sv.classList.add('red');
         else if (s.idle_streak > 0) sv.classList.add('amber');
     }
-
     const stv = el('pw-status-val');
     if (stv) {
         stv.textContent = (s.status || '').toUpperCase();
@@ -650,7 +655,6 @@ function updateDashboard(s) {
         stv.style.fontSize = '14px';
         stv.style.paddingTop = '4px';
     }
-
     const bar = el('pw-bar');
     if (bar) {
         const pct = Math.min((s.idle_streak / s.idle_needed) * 100, 100);
@@ -661,10 +665,26 @@ function updateDashboard(s) {
     }
 }
 
-function pollPlex() {
+function updateEpisodePoller(s) {
+    const cnt = el('ep-count');
+    if (cnt) {
+        cnt.textContent = s.episodes_session;
+        cnt.className = 'stat-value';
+        if (s.episodes_session > 0) cnt.classList.add('green');
+    }
+    setText('ep-last',    s.last_check || '—');
+    setText('ep-next',    s.next_check || '—');
+    setText('ep-last-ep', s.last_episode || '');
+}
+
+function pollAll() {
     fetch('/api/plex-status')
         .then(r => r.ok ? r.json() : null)
-        .then(d => { if (d) updateDashboard(d); })
+        .then(d => { if (d) updateShutdownWatcher(d); })
+        .catch(() => {});
+    fetch('/api/poller-status')
+        .then(r => r.ok ? r.json() : null)
+        .then(d => { if (d) updateEpisodePoller(d); })
         .catch(() => {});
 }
 
@@ -675,17 +695,13 @@ function clearLogs() {
         .then(r => r.json())
         .then(() => {
             const list = document.querySelector('.log-list');
-            if (list) {
-                list.outerHTML = '<div class="no-logs">No webhook events recorded yet.</div>';
-            }
+            if (list) list.outerHTML = '<div class="no-logs">No episodes processed yet.</div>';
         })
         .catch(() => {})
         .finally(() => { if (btn) btn.disabled = false; });
 }
 
-if (el('pw-streams')) {
-    setInterval(pollPlex, REFRESH_MS);
-}
+setInterval(pollAll, REFRESH_MS);
 </script>
 </body>
 </html>
