@@ -210,6 +210,26 @@ def _enrich_metadata(item: dict) -> dict:
     return item
 
 
+def _plex_refresh_item(rating_key):
+    """Tell Plex to refresh/analyse the metadata for a single item by ratingKey."""
+    if not rating_key:
+        return
+    try:
+        plex_url = (get_config('PLEX_URL') or '').rstrip('/')
+        plex_token = get_config('PLEX_TOKEN') or ''
+        if not plex_url or not plex_token:
+            return
+        requests.put(
+            f"{plex_url}/library/metadata/{rating_key}/refresh",
+            params={'X-Plex-Token': plex_token},
+            headers={'Accept': 'application/json'},
+            timeout=10,
+        )
+        logger.info(f"[PlexPoller] Plex refresh triggered for ratingKey={rating_key}")
+    except Exception as exc:
+        logger.warning(f"[PlexPoller] Failed to refresh Plex item {rating_key}: {exc}")
+
+
 # ── Sonarr rolling-window logic (Episodes) ────────────────────────────────────
 
 def _process_episode(item: dict) -> tuple[str, str]:
@@ -263,6 +283,8 @@ def _process_episode(item: dict) -> tuple[str, str]:
         try:
             delete_episode_file(ep_file_id)
             file_action = "unmonitored & file deleted from disk"
+            # Refresh Plex so it picks up the missing file immediately
+            _plex_refresh_item(item.get('ratingKey') or item.get('grandparentRatingKey'))
         except Exception as exc:
             logger.warning(f"[PlexPoller] Failed deleting episode file ID {ep_file_id}: {exc}")
             file_action = f"unmonitored (file delete failed: {exc})"
@@ -308,6 +330,9 @@ def _process_movie(item: dict) -> tuple[str, str]:
 
     movie_title = movie_title or title
     _, action_detail = unmonitor_and_delete_movie(movie_id)
+
+    # Refresh Plex so it picks up the missing file immediately
+    _plex_refresh_item(item.get('ratingKey'))
 
     return 'success', f"Movie '{movie_title}' watched — {action_detail} in Radarr"
 
