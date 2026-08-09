@@ -319,6 +319,47 @@
             transition: width .4s ease;
         }
 
+        /* ── Toast Notifications ────────────────────────────── */
+        .toast-container {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            z-index: 9999;
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            pointer-events: none;
+        }
+        .toast {
+            pointer-events: auto;
+            background: var(--surface-2);
+            border: 1px solid var(--border-hi);
+            border-left: 3px solid var(--accent);
+            padding: 10px 16px;
+            font-size: 11px;
+            font-family: var(--mono);
+            color: var(--text);
+            box-shadow: 0 4px 16px rgba(0,0,0,0.6);
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            animation: toastSlideIn .25s ease-out;
+            max-width: 340px;
+        }
+        .toast.ok   { border-left-color: var(--green); }
+        .toast.err  { border-left-color: var(--red); }
+        .toast.warn { border-left-color: var(--amber); }
+
+        @keyframes toastSlideIn {
+            from { transform: translateX(100%); opacity: 0; }
+            to   { transform: translateX(0); opacity: 1; }
+        }
+        @keyframes toastFadeOut {
+            from { opacity: 1; transform: translateX(0); }
+            to   { opacity: 0; transform: translateX(20px); }
+        }
+
+
 
         /* ── Log list ───────────────────────────────────────── */
         .log-header-row {
@@ -822,6 +863,25 @@ function pollAll() {
         .catch(() => {});
 }
 
+function showToast(message, type = 'ok') {
+    let container = el('toast-container');
+    if (!container) {
+        container = document.createElement('div');
+        container.id = 'toast-container';
+        container.className = 'toast-container';
+        document.body.appendChild(container);
+    }
+    const toast = document.createElement('div');
+    toast.className = `toast ${type}`;
+    toast.innerHTML = `<span>${escapeHtml(message)}</span>`;
+    container.appendChild(toast);
+
+    setTimeout(() => {
+        toast.style.animation = 'toastFadeOut .3s ease-in forwards';
+        setTimeout(() => toast.remove(), 300);
+    }, 3500);
+}
+
 function clearLogs() {
     const btn = el('btn-clear-logs');
     if (btn) btn.disabled = true;
@@ -830,8 +890,9 @@ function clearLogs() {
         .then(() => {
             const list = document.querySelector('.log-list');
             if (list) list.outerHTML = '<div class="no-logs">No episodes processed yet.</div>';
+            showToast('Activity logs cleared', 'ok');
         })
-        .catch(() => {})
+        .catch(() => showToast('Failed to clear logs', 'err'))
         .finally(() => { if (btn) btn.disabled = false; });
 }
 
@@ -843,10 +904,11 @@ function runPoller() {
     }
     fetch('/api/poller-run', { method: 'POST' })
         .then(r => r.json())
-        .then(() => {
+        .then(data => {
+            showToast(data.message || 'Media poll completed', 'ok');
             setTimeout(pollAll, 1000);
         })
-        .catch(() => {})
+        .catch(() => showToast('Failed to trigger media poll', 'err'))
         .finally(() => {
             if (btn) {
                 btn.disabled = false;
@@ -865,8 +927,9 @@ function resetCounter() {
                 cnt.textContent = '0';
                 cnt.className = 'stat-value';
             }
+            showToast('Items processed counter reset to 0', 'ok');
         })
-        .catch(() => {});
+        .catch(() => showToast('Failed to reset counter', 'err'));
 }
 
 pollAll();
