@@ -593,33 +593,13 @@
         {% if plex_status.enabled %}
         <!-- Shutdown Watcher -->
         <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
-            <p class="section-title" style="margin-bottom:0;">Shutdown Watcher</p>
-            <button class="btn-clear" id="btn-shutdown-now" onclick="triggerShutdownNow()">Shutdown Now</button>
-        </div>
-        <div class="stat-grid" style="margin-bottom:16px;">
-            <div class="stat-cell">
-                <span class="stat-label">Streams</span>
-                <span class="stat-value {{ 'green' if plex_status.stream_count and plex_status.stream_count > 0 else '' }}" id="pw-streams">
-                    {{ plex_status.stream_count if plex_status.stream_count is not none else '—' }}
-                </span>
-                <span class="stat-meta">active now</span>
-            </div>
-            <div class="stat-cell">
-                <span class="stat-label">Idle streak</span>
-                <span class="stat-value {{ 'red' if plex_status.idle_streak >= plex_status.idle_needed else ('amber' if plex_status.idle_streak > 0 else '') }}" id="pw-streak-val">
-                    {{ plex_status.idle_streak }}/{{ plex_status.idle_needed }}
-                </span>
-                <span class="stat-meta">polls</span>
-            </div>
-            <div class="stat-cell">
-                <span class="stat-label">Status</span>
-                <span class="stat-value {{ 'green' if plex_status.status == 'ok' else ('amber' if plex_status.status == 'unreachable' else '') }}" id="pw-status-val" style="font-size:14px; padding-top:4px;">
-                    {{ plex_status.status | upper }}
-                </span>
+            <div style="display:flex; align-items:center; gap:10px;">
+                <p class="section-title" style="margin-bottom:0;">Shutdown Watcher</p>
                 {% if plex_status.dry_run %}
-                <span class="badge badge-amber" style="width:fit-content; margin-top:4px;">Dry Run</span>
+                <span class="badge badge-amber">Dry Run</span>
                 {% endif %}
             </div>
+            <button class="btn-clear" id="btn-shutdown-now" onclick="triggerShutdownNow()">Shutdown Now</button>
         </div>
 
         <div class="idle-section">
@@ -769,30 +749,7 @@ function escapeHtml(str) {
 }
 
 function updateShutdownWatcher(s) {
-    const sc = s.stream_count !== null && s.stream_count !== undefined ? s.stream_count : '—';
-    setText('pw-streams', sc);
-    const streams = el('pw-streams');
-    if (streams) {
-        streams.className = 'stat-value';
-        if (sc > 0) streams.classList.add('green');
-    }
-    setText('pw-streak-val',   `${s.idle_streak}/${s.idle_needed}`);
     setText('pw-streak-label', `${s.idle_streak} of ${s.idle_needed} polls with no streams`);
-    const sv = el('pw-streak-val');
-    if (sv) {
-        sv.className = 'stat-value';
-        if (s.idle_streak >= s.idle_needed) sv.classList.add('red');
-        else if (s.idle_streak > 0) sv.classList.add('amber');
-    }
-    const stv = el('pw-status-val');
-    if (stv) {
-        stv.textContent = (s.status || '').toUpperCase();
-        stv.className = 'stat-value';
-        if (s.status === 'ok') stv.classList.add('green');
-        else if (s.status === 'unreachable') stv.classList.add('amber');
-        stv.style.fontSize = '14px';
-        stv.style.paddingTop = '4px';
-    }
     const bar = el('pw-bar');
     if (bar) {
         const pct = Math.min((s.idle_streak / s.idle_needed) * 100, 100);
