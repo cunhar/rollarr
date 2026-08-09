@@ -264,7 +264,8 @@ def api_poller_reset_counter():
 @app.route('/api/shutdown-now', methods=['POST'])
 def api_shutdown_now():
     res = plex_watcher.trigger_shutdown_now()
-    return jsonify(res), 200
+    return jsonify(res), 200 if res['status'] == 'success' else 400
+
 
 
 @app.route('/api/nzbget-status')

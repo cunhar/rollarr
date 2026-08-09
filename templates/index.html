@@ -1061,12 +1061,16 @@ function triggerShutdownNow() {
         btn.textContent = 'Shutting down...';
     }
     fetch('/api/shutdown-now', { method: 'POST' })
-        .then(r => r.json())
-        .then(data => {
-            showToast(data.message || 'Shutdown command sent', 'warn');
+        .then(r => r.json().then(d => ({ ok: r.ok, data: d })))
+        .then(({ ok, data }) => {
+            if (ok && data.status === 'success') {
+                showToast(data.message || 'Shutdown command sent to host', 'warn');
+            } else {
+                showToast('Shutdown failed: ' + (data.message || 'Unknown error'), 'err');
+            }
             setTimeout(pollAll, 1000);
         })
-        .catch(() => showToast('Failed to send shutdown command', 'err'))
+        .catch(err => showToast('Shutdown request error: ' + err, 'err'))
         .finally(() => {
             if (btn) {
                 btn.disabled = false;

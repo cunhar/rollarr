@@ -84,11 +84,11 @@ def trigger_shutdown_now() -> dict:
     """Manually trigger host shutdown command immediately."""
     logger.info("[PlexWatcher] Manual host shutdown triggered by user.")
     _update_state(shutdown_fired=True)
-    dry_run = bool(get_config('PLEX_SHUTDOWN_DRY_RUN', True))
-    _ssh_shutdown()
-    if dry_run:
-        return {'status': 'success', 'message': '[DRY-RUN] Shutdown command simulated'}
-    return {'status': 'success', 'message': 'Shutdown command sent to host'}
+    success, msg = _ssh_shutdown(force=True)
+    if success:
+        return {'status': 'success', 'message': msg}
+    else:
+        return {'status': 'error', 'message': msg}
 
 
 # ── Plex polling ─────────────────────────────────────────────────────────────
@@ -197,27 +197,26 @@ def _get_active_sessions() -> tuple[int | None, list[dict]]:
 
 # ── SSH shutdown ─────────────────────────────────────────────────────────────
 
-def _ssh_shutdown():
+def _ssh_shutdown(force: bool = False) -> tuple[bool, str]:
     """SSH into SSH_HOST and issue a Linux shutdown command."""
-    cmd = 'sudo shutdown -h +1'
+    cmd = 'sudo shutdown -h now || sudo poweroff'
     dry_run = bool(get_config('PLEX_SHUTDOWN_DRY_RUN', True))
     ssh_host = get_config('SSH_HOST', '')
     ssh_port = int(get_config('SSH_PORT', 22))
     ssh_user = get_config('SSH_USER', '')
     ssh_key_path = get_config('SSH_KEY_PATH', '/root/.ssh/id_rsa')
 
-    if dry_run:
-        logger.warning(
-            f"[PlexWatcher] DRY-RUN: would SSH {ssh_user}@{ssh_host}:{ssh_port} "
-            f"and run: {cmd}"
-        )
-        _update_state(last_action=f"[DRY-RUN] Shutdown would have been triggered at {_now()}")
-        return
+    if dry_run and not force:
+        msg = f"[DRY-RUN] Would SSH {ssh_user}@{ssh_host}:{ssh_port} and run: {cmd}"
+        logger.warning(f"[PlexWatcher] {msg}")
+        _update_state(last_action=f"[DRY-RUN] Shutdown simulated at {_now()}")
+        return True, msg
 
     if not ssh_host or not ssh_user:
-        logger.error("[PlexWatcher] SSH_HOST or SSH_USER not configured — cannot shut down.")
-        _update_state(last_action="Shutdown skipped: SSH_HOST or SSH_USER missing")
-        return
+        msg = f"Shutdown failed: SSH_HOST ('{ssh_host}') or SSH_USER ('{ssh_user}') missing"
+        logger.error(f"[PlexWatcher] {msg}")
+        _update_state(last_action=msg)
+        return False, msg
 
     try:
         import paramiko
@@ -237,16 +236,22 @@ def _ssh_shutdown():
         err = stderr.read().decode().strip()
         client.close()
 
-        msg = (
-            f"SSH shutdown sent to {ssh_host}. "
-            f"Exit={exit_status}. stdout={out!r} stderr={err!r}"
-        )
+        if exit_status != 0:
+            err_msg = f"SSH command failed (code {exit_status}): {err or out or 'Unknown error'}"
+            logger.error(f"[PlexWatcher] {err_msg}")
+            _update_state(last_action=f"Shutdown FAILED at {_now()}: {err_msg}")
+            return False, err_msg
+
+        msg = f"SSH shutdown command sent to {ssh_host}."
         logger.info(f"[PlexWatcher] {msg}")
         _update_state(last_action=f"Shutdown triggered at {_now()} — {msg}")
+        return True, msg
 
     except Exception as exc:
-        logger.error(f"[PlexWatcher] SSH shutdown failed: {exc}")
-        _update_state(last_action=f"Shutdown FAILED at {_now()}: {exc}")
+        err_msg = f"SSH connection failed: {exc}"
+        logger.error(f"[PlexWatcher] {err_msg}")
+        _update_state(last_action=f"Shutdown FAILED at {_now()}: {err_msg}")
+        return False, err_msg
 
 
 # ── Main loop ────────────────────────────────────────────────────────────────
