@@ -210,24 +210,30 @@ def _enrich_metadata(item: dict) -> dict:
     return item
 
 
-def _plex_refresh_item(rating_key):
-    """Tell Plex to refresh/analyse the metadata for a single item by ratingKey."""
-    if not rating_key:
+def _plex_clean_section(section_id):
+    """Trigger a Plex section file scan and empty trash to remove missing files from Plex library."""
+    if not section_id:
         return
     try:
         plex_url = (get_config('PLEX_URL') or '').rstrip('/')
         plex_token = get_config('PLEX_TOKEN') or ''
         if not plex_url or not plex_token:
             return
-        requests.put(
-            f"{plex_url}/library/metadata/{rating_key}/refresh",
-            params={'X-Plex-Token': plex_token},
-            headers={'Accept': 'application/json'},
-            timeout=10,
+        headers = {'Accept': 'application/json'}
+        params  = {'X-Plex-Token': plex_token}
+        # 1. Scan section for file changes (picks up missing files)
+        requests.get(
+            f"{plex_url}/library/sections/{section_id}/refresh",
+            params=params, headers=headers, timeout=10,
         )
-        logger.info(f"[PlexPoller] Plex refresh triggered for ratingKey={rating_key}")
+        # 2. Empty trash so Plex removes items whose files are gone
+        requests.put(
+            f"{plex_url}/library/sections/{section_id}/emptyTrash",
+            params=params, headers=headers, timeout=10,
+        )
+        logger.info(f"[PlexPoller] Plex section {section_id} — refresh + emptyTrash triggered")
     except Exception as exc:
-        logger.warning(f"[PlexPoller] Failed to refresh Plex item {rating_key}: {exc}")
+        logger.warning(f"[PlexPoller] Failed Plex section cleanup for section {section_id}: {exc}")
 
 
 # ── Sonarr rolling-window logic (Episodes) ────────────────────────────────────
@@ -277,17 +283,23 @@ def _process_episode(item: dict) -> tuple[str, str]:
     except Exception as exc:
         logger.warning(f"[PlexPoller] Could not unmonitor episode {current_ep['id']}: {exc}")
 
-    file_action = "unmonitored"
     ep_file_id = current_ep.get('episodeFileId', 0)
-    if delete_enabled and ep_file_id and ep_file_id > 0:
+    section_id = item.get('librarySectionID')
+
+    if not ep_file_id or ep_file_id == 0:
+        # File already missing from disk — trigger Plex cleanup so it removes the stale entry
+        file_action = "unmonitored (file already absent from disk)"
+        _plex_clean_section(section_id)
+    elif delete_enabled:
         try:
             delete_episode_file(ep_file_id)
             file_action = "unmonitored & file deleted from disk"
-            # Refresh Plex so it picks up the missing file immediately
-            _plex_refresh_item(item.get('ratingKey') or item.get('grandparentRatingKey'))
+            _plex_clean_section(section_id)
         except Exception as exc:
             logger.warning(f"[PlexPoller] Failed deleting episode file ID {ep_file_id}: {exc}")
             file_action = f"unmonitored (file delete failed: {exc})"
+    else:
+        file_action = "unmonitored (delete disabled)"
 
     next_eps = regular[current_idx + 1 : current_idx + 1 + get_rolling_window()]
 
@@ -331,8 +343,8 @@ def _process_movie(item: dict) -> tuple[str, str]:
     movie_title = movie_title or title
     _, action_detail = unmonitor_and_delete_movie(movie_id)
 
-    # Refresh Plex so it picks up the missing file immediately
-    _plex_refresh_item(item.get('ratingKey'))
+    # Scan + empty trash so Plex removes the stale entry if the file is gone
+    _plex_clean_section(item.get('librarySectionID'))
 
     return 'success', f"Movie '{movie_title}' watched — {action_detail} in Radarr"
 
