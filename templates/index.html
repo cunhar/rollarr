@@ -557,19 +557,19 @@
         <div style="display:flex; gap:8px; flex-wrap:wrap;">
             <div class="conn-pill">
                 <span class="conn-pip {{ 'ok' if status_text == 'Connected' else ('warn' if 'Error' in status_text else 'err') }}"></span>
-                <span>Sonarr {{ status_text }}</span>
+                <span>Sonarr{{ '' if status_text == 'Connected' else ' (' + status_text + ')' }}</span>
             </div>
             <div class="conn-pill">
                 <span class="conn-pip {{ 'ok' if radarr_status_text == 'Connected' else ('warn' if 'Error' in radarr_status_text else 'err') }}"></span>
-                <span>Radarr {{ radarr_status_text }}</span>
+                <span>Radarr{{ '' if radarr_status_text == 'Connected' else ' (' + radarr_status_text + ')' }}</span>
             </div>
             <div class="conn-pill">
                 <span class="conn-pip {{ 'ok' if plex_conn_text == 'Connected' else ('warn' if 'Error' in plex_conn_text else 'err') }}"></span>
-                <span>Plex {{ plex_conn_text }}</span>
+                <span>Plex{{ '' if plex_conn_text == 'Connected' else ' (' + plex_conn_text + ')' }}</span>
             </div>
             <div class="conn-pill" id="pill-nzbget">
                 <span class="conn-pip {{ 'ok' if nzbget_status.connected else 'err' }}" id="pip-nzbget"></span>
-                <span id="label-nzbget">NZBGet {{ nzbget_status.status_text if not nzbget_status.connected else (nzbget_status.download_rate if nzbget_status.download_rate_bps > 0 else 'Connected') }}</span>
+                <span id="label-nzbget">NZBGet{{ '' if not nzbget_status.connected else (' ' + nzbget_status.download_rate if nzbget_status.download_rate_bps > 0 else '') }}</span>
             </div>
         </div>
 
@@ -924,8 +924,8 @@ function updateNZBGet(s) {
     const label = el('label-nzbget');
     if (pip && label) {
         pip.className = 'conn-pip ' + (s.connected ? 'ok' : 'err');
-        const text = !s.connected ? (s.status_text || 'Disconnected') : (s.download_rate_bps > 0 ? s.download_rate : 'Connected');
-        label.textContent = 'NZBGet ' + text;
+        const text = !s.connected ? (' (' + (s.status_text || 'Offline') + ')') : (s.download_rate_bps > 0 ? ' ' + s.download_rate : '');
+        label.textContent = 'NZBGet' + text;
     }
 
     const container = el('nzbget-container');
