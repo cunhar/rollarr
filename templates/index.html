@@ -404,7 +404,7 @@
             <span class="brand-name">Rolarr</span>
             <span class="brand-sub">Rolling Window Bridge</span>
         </div>
-        <div style="display:flex; gap:8px;">
+        <div style="display:flex; gap:8px; flex-wrap:wrap;">
             <div class="conn-pill">
                 <span class="conn-pip {{ 'ok' if status_text == 'Connected' else ('warn' if 'Error' in status_text else 'err') }}"></span>
                 <span>Sonarr {{ status_text }}</span>
@@ -413,7 +413,12 @@
                 <span class="conn-pip {{ 'ok' if radarr_status_text == 'Connected' else ('warn' if 'Error' in radarr_status_text else 'err') }}"></span>
                 <span>Radarr {{ radarr_status_text }}</span>
             </div>
+            <div class="conn-pill">
+                <span class="conn-pip {{ 'ok' if plex_conn_text == 'Connected' else ('warn' if 'Error' in plex_conn_text else 'err') }}"></span>
+                <span>Plex {{ plex_conn_text }}</span>
+            </div>
         </div>
+
 
     </div>
 

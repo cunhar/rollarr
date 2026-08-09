@@ -151,6 +151,24 @@ def index():
             radarr_status_text  = "Unreachable"
             radarr_status_color = "#e05252"
 
+    # Plex connection check
+    plex_url = os.environ.get('PLEX_URL')
+    plex_token = os.environ.get('PLEX_TOKEN')
+    plex_conn_text = "Disconnected"
+    if plex_url and plex_token:
+        try:
+            res = requests.get(
+                f"{plex_url.rstrip('/')}/identity",
+                headers={'X-Plex-Token': plex_token, 'Accept': 'application/json'},
+                timeout=2,
+            )
+            if res.status_code == 200:
+                plex_conn_text = "Connected"
+            else:
+                plex_conn_text = f"Error ({res.status_code})"
+        except Exception:
+            plex_conn_text = "Unreachable"
+
     with history_lock:
         history_list = list(webhook_history)
 
@@ -164,11 +182,13 @@ def index():
         radarr_masked_key=radarr_masked_key,
         radarr_status_text=radarr_status_text,
         radarr_status_color=radarr_status_color,
+        plex_conn_text=plex_conn_text,
         history=history_list,
         rolling_window=ROLLING_WINDOW,
         plex_status=plex_watcher.get_state(),
         poller_status=plex_poller.get_state(),
     )
+
 
 
 @app.route('/api/plex-status')
