@@ -557,19 +557,19 @@
         <div style="display:flex; gap:8px; flex-wrap:wrap;">
             <div class="conn-pill" id="pill-sonarr">
                 <span class="conn-pip {{ 'ok' if status_text == 'Connected' else ('warn' if 'Error' in status_text else 'err') }}" id="pip-sonarr"></span>
-                <span id="label-sonarr">Sonarr{{ '' if status_text == 'Connected' else ' (' + status_text + ')' }}</span>
+                <span id="label-sonarr">Sonarr</span>
             </div>
             <div class="conn-pill" id="pill-radarr">
                 <span class="conn-pip {{ 'ok' if radarr_status_text == 'Connected' else ('warn' if 'Error' in radarr_status_text else 'err') }}" id="pip-radarr"></span>
-                <span id="label-radarr">Radarr{{ '' if radarr_status_text == 'Connected' else ' (' + radarr_status_text + ')' }}</span>
+                <span id="label-radarr">Radarr</span>
             </div>
             <div class="conn-pill" id="pill-plex">
                 <span class="conn-pip {{ 'ok' if plex_conn_text == 'Connected' else ('warn' if 'Error' in plex_conn_text else 'err') }}" id="pip-plex"></span>
-                <span id="label-plex">Plex{{ '' if plex_conn_text == 'Connected' else ' (' + plex_conn_text + ')' }}</span>
+                <span id="label-plex">Plex</span>
             </div>
             <div class="conn-pill" id="pill-nzbget">
                 <span class="conn-pip {{ 'ok' if nzbget_status.connected else 'err' }}" id="pip-nzbget"></span>
-                <span id="label-nzbget">NZBGet{{ '' if not nzbget_status.connected else (' ' + nzbget_status.download_rate if nzbget_status.download_rate_bps > 0 else '') }}</span>
+                <span id="label-nzbget">NZBGet</span>
             </div>
         </div>
 
@@ -926,37 +926,22 @@ function pollAll() {
 function updateConnectionPills(d) {
     if (d.sonarr) {
         const p = el('pip-sonarr');
-        const l = el('label-sonarr');
-        if (p && l) {
-            p.className = 'conn-pip ' + (d.sonarr.ok ? 'ok' : (d.sonarr.status.includes('Error') ? 'warn' : 'err'));
-            l.textContent = 'Sonarr' + (d.sonarr.ok ? '' : (' (' + d.sonarr.status + ')'));
-        }
+        if (p) p.className = 'conn-pip ' + (d.sonarr.ok ? 'ok' : (d.sonarr.status.includes('Error') ? 'warn' : 'err'));
     }
     if (d.radarr) {
         const p = el('pip-radarr');
-        const l = el('label-radarr');
-        if (p && l) {
-            p.className = 'conn-pip ' + (d.radarr.ok ? 'ok' : (d.radarr.status.includes('Error') ? 'warn' : 'err'));
-            l.textContent = 'Radarr' + (d.radarr.ok ? '' : (' (' + d.radarr.status + ')'));
-        }
+        if (p) p.className = 'conn-pip ' + (d.radarr.ok ? 'ok' : (d.radarr.status.includes('Error') ? 'warn' : 'err'));
     }
     if (d.plex) {
         const p = el('pip-plex');
-        const l = el('label-plex');
-        if (p && l) {
-            p.className = 'conn-pip ' + (d.plex.ok ? 'ok' : (d.plex.status.includes('Error') ? 'warn' : 'err'));
-            l.textContent = 'Plex' + (d.plex.ok ? '' : (' (' + d.plex.status + ')'));
-        }
+        if (p) p.className = 'conn-pip ' + (d.plex.ok ? 'ok' : (d.plex.status.includes('Error') ? 'warn' : 'err'));
     }
 }
 
 function updateNZBGet(s) {
     const pip = el('pip-nzbget');
-    const label = el('label-nzbget');
-    if (pip && label) {
+    if (pip) {
         pip.className = 'conn-pip ' + (s.connected ? 'ok' : 'err');
-        const text = !s.connected ? (' (' + (s.status_text || 'Offline') + ')') : (s.download_rate_bps > 0 ? ' ' + s.download_rate : '');
-        label.textContent = 'NZBGet' + text;
     }
 
     const container = el('nzbget-container');
