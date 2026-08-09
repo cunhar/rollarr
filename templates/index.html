@@ -73,22 +73,25 @@
         .conn-pill {
             display: inline-flex;
             align-items: center;
-            gap: 7px;
+            gap: 8px;
             border: 1px solid var(--border-hi);
-            padding: 4px 12px 4px 9px;
+            padding: 5px 12px;
             font-size: 11px;
             font-weight: 500;
-            color: var(--text-sub);
+            color: var(--text);
             background: var(--surface);
         }
         .conn-pip {
-            width: 6px;
-            height: 6px;
+            width: 7px;
+            height: 7px;
             flex-shrink: 0;
+            border-radius: 50%;
+            display: inline-block;
         }
-        .conn-pip.ok   { background: var(--green); }
-        .conn-pip.err  { background: var(--red); }
-        .conn-pip.warn { background: var(--amber); }
+        .conn-pip.ok   { background: var(--green); box-shadow: 0 0 8px var(--green); }
+        .conn-pip.err  { background: var(--red); box-shadow: 0 0 8px var(--red); }
+        .conn-pip.warn { background: var(--amber); box-shadow: 0 0 8px var(--amber); }
+
 
         /* ── Tab bar ────────────────────────────────────────── */
         .tabbar {
@@ -403,14 +406,15 @@
         </div>
         <div style="display:flex; gap:8px;">
             <div class="conn-pill">
-                <svg class="conn-pip {{ 'ok' if status_text == 'Connected' else ('warn' if 'Error' in status_text else 'err') }}" viewBox="0 0 6 6"><rect width="6" height="6"/></svg>
-                Sonarr {{ status_text }}
+                <span class="conn-pip {{ 'ok' if status_text == 'Connected' else ('warn' if 'Error' in status_text else 'err') }}"></span>
+                <span>Sonarr {{ status_text }}</span>
             </div>
             <div class="conn-pill">
-                <svg class="conn-pip {{ 'ok' if radarr_status_text == 'Connected' else ('warn' if 'Error' in radarr_status_text else 'err') }}" viewBox="0 0 6 6"><rect width="6" height="6"/></svg>
-                Radarr {{ radarr_status_text }}
+                <span class="conn-pip {{ 'ok' if radarr_status_text == 'Connected' else ('warn' if 'Error' in radarr_status_text else 'err') }}"></span>
+                <span>Radarr {{ radarr_status_text }}</span>
             </div>
         </div>
+
     </div>
 
     <!-- Tab bar -->
