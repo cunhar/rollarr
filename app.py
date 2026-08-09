@@ -102,10 +102,9 @@ plex_poller.start()
 plex_watcher.start()
 
 
-# ── Routes ────────────────────────────────────────────────────────────────────
+# ── Live Service Connection Checks ───────────────────────────────────────────
 
-@app.route('/')
-def index():
+def get_service_connections() -> dict:
     cfg = config_store.get_all_config()
 
     sonarr_url = get_sonarr_url()
@@ -114,6 +113,71 @@ def index():
     radarr_api_key = get_radarr_api_key()
     plex_url = (cfg.get('PLEX_URL') or '').rstrip('/')
     plex_token = cfg.get('PLEX_TOKEN') or ''
+
+    # Sonarr check
+    sonarr_status = "Disconnected"
+    if sonarr_url and sonarr_api_key:
+        try:
+            res = requests.get(
+                f"{sonarr_url}/api/v3/system/status",
+                headers=get_sonarr_headers(),
+                timeout=2,
+            )
+            if res.status_code == 200:
+                sonarr_status = "Connected"
+            else:
+                sonarr_status = f"Error ({res.status_code})"
+        except Exception:
+            sonarr_status = "Unreachable"
+
+    # Radarr check
+    radarr_status = "Disconnected"
+    if radarr_url and radarr_api_key:
+        try:
+            res = requests.get(
+                f"{radarr_url}/api/v3/system/status",
+                headers=get_radarr_headers(),
+                timeout=2,
+            )
+            if res.status_code == 200:
+                radarr_status = "Connected"
+            else:
+                radarr_status = f"Error ({res.status_code})"
+        except Exception:
+            radarr_status = "Unreachable"
+
+    # Plex check
+    plex_status = "Disconnected"
+    if plex_url and plex_token:
+        try:
+            res = requests.get(
+                f"{plex_url}/identity",
+                headers={'X-Plex-Token': plex_token, 'Accept': 'application/json'},
+                timeout=2,
+            )
+            if res.status_code == 200:
+                plex_status = "Connected"
+            else:
+                plex_status = f"Error ({res.status_code})"
+        except Exception:
+            plex_status = "Unreachable"
+
+    return {
+        'sonarr': {'status': sonarr_status, 'ok': sonarr_status == 'Connected'},
+        'radarr': {'status': radarr_status, 'ok': radarr_status == 'Connected'},
+        'plex':   {'status': plex_status,   'ok': plex_status == 'Connected'},
+    }
+
+
+# ── Routes ────────────────────────────────────────────────────────────────────
+
+@app.route('/')
+def index():
+    cfg = config_store.get_all_config()
+    conns = get_service_connections()
+
+    sonarr_api_key = get_sonarr_api_key()
+    radarr_api_key = get_radarr_api_key()
 
     # Mask API key Sonarr
     if sonarr_api_key:
@@ -126,62 +190,6 @@ def index():
         radarr_masked_key = "*" * (len(radarr_api_key) - 4) + radarr_api_key[-4:] if len(radarr_api_key) >= 4 else radarr_api_key
     else:
         radarr_masked_key = "Not Configured"
-
-    # Sonarr connection check
-    status_text  = "Disconnected"
-    status_color = "#e05252"
-    if sonarr_url and sonarr_api_key:
-        try:
-            res = requests.get(
-                f"{sonarr_url}/api/v3/system/status",
-                headers=get_sonarr_headers(),
-                timeout=2,
-            )
-            if res.status_code == 200:
-                status_text  = "Connected"
-                status_color = "#3ecf8e"
-            else:
-                status_text  = f"Error ({res.status_code})"
-                status_color = "#e5a00d"
-        except Exception:
-            status_text  = "Unreachable"
-            status_color = "#e05252"
-
-    # Radarr connection check
-    radarr_status_text  = "Disconnected"
-    radarr_status_color = "#e05252"
-    if radarr_url and radarr_api_key:
-        try:
-            res = requests.get(
-                f"{radarr_url}/api/v3/system/status",
-                headers=get_radarr_headers(),
-                timeout=2,
-            )
-            if res.status_code == 200:
-                radarr_status_text  = "Connected"
-                radarr_status_color = "#3ecf8e"
-            else:
-                radarr_status_text  = f"Error ({res.status_code})"
-                radarr_status_color = "#e5a00d"
-        except Exception:
-            radarr_status_text  = "Unreachable"
-            radarr_status_color = "#e05252"
-
-    # Plex connection check
-    plex_conn_text = "Disconnected"
-    if plex_url and plex_token:
-        try:
-            res = requests.get(
-                f"{plex_url}/identity",
-                headers={'X-Plex-Token': plex_token, 'Accept': 'application/json'},
-                timeout=2,
-            )
-            if res.status_code == 200:
-                plex_conn_text = "Connected"
-            else:
-                plex_conn_text = f"Error ({res.status_code})"
-        except Exception:
-            plex_conn_text = "Unreachable"
 
     with history_lock:
         history_list = list(webhook_history)
@@ -196,15 +204,13 @@ def index():
     return render_template(
         "index.html",
         cfg=cfg,
-        sonarr_url=sonarr_url or "Not Configured",
+        sonarr_url=get_sonarr_url() or "Not Configured",
         masked_key=masked_key,
-        status_text=status_text,
-        status_color=status_color,
-        radarr_url=radarr_url or "Not Configured",
+        status_text=conns['sonarr']['status'],
+        radarr_url=get_radarr_url() or "Not Configured",
         radarr_masked_key=radarr_masked_key,
-        radarr_status_text=radarr_status_text,
-        radarr_status_color=radarr_status_color,
-        plex_conn_text=plex_conn_text,
+        radarr_status_text=conns['radarr']['status'],
+        plex_conn_text=conns['plex']['status'],
         nzbget_url=get_nzbget_url() or "Not Configured",
         nzbget_username=get_nzbget_username() or "Not Configured",
         nzbget_masked_pass=nzbget_masked_pass,
@@ -226,6 +232,11 @@ def api_config_save():
     except Exception as exc:
         logger.error(f"[App] Failed to save configuration: {exc}")
         return jsonify({'status': 'error', 'message': str(exc)}), 500
+
+
+@app.route('/api/connection-status')
+def api_connection_status():
+    return jsonify(get_service_connections())
 
 
 @app.route('/api/plex-status')
