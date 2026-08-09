@@ -503,6 +503,9 @@
     <!-- ══ DASHBOARD TAB ══════════════════════════════════════ -->
     <div class="tab-panel active" id="panel-dashboard">
 
+        <!-- Active Streams List Container (Top of Dashboard) -->
+        <div id="pw-streams-container" style="margin-bottom:16px;"></div>
+
         {% if poller_status.enabled %}
         <!-- Episode Poller stats -->
         <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
@@ -587,10 +590,8 @@
                 </div>
             </div>
         </div>
-
-        <!-- Active Streams List Container -->
-        <div id="pw-streams-container" style="margin-bottom:16px;"></div>
         {% endif %}
+
 
 
 
