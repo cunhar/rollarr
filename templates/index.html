@@ -252,6 +252,123 @@
             50% { transform: scale(1.2); opacity: 0.7; }
             100% { transform: scale(1); opacity: 1; }
         }
+
+        /* ── Plex Watcher Card ───────────────────────────── */
+        .plex-card {
+            margin-top: 24px;
+            background: rgba(255, 255, 255, 0.02);
+            border: 1px solid var(--card-border);
+            border-radius: 20px;
+            padding: 24px;
+            position: relative;
+            overflow: hidden;
+            transition: border-color 0.3s ease;
+        }
+        .plex-card::before {
+            content: '';
+            position: absolute;
+            top: 0; left: 0; right: 0;
+            height: 2px;
+            background: linear-gradient(90deg, #e5a00d, #cc7b19);
+        }
+        .plex-card:hover {
+            border-color: rgba(229, 160, 13, 0.3);
+        }
+        .plex-card-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 16px;
+        }
+        .plex-card-title {
+            font-size: 13px;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            color: #e5a00d;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .plex-card-title svg {
+            width: 16px; height: 16px; fill: #e5a00d;
+        }
+        .dry-run-badge {
+            font-size: 9px;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            padding: 3px 8px;
+            border-radius: 99px;
+            background: rgba(245, 158, 11, 0.15);
+            color: #f59e0b;
+            border: 1px solid rgba(245, 158, 11, 0.3);
+        }
+        .plex-rows {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+        .plex-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            font-size: 13px;
+        }
+        .plex-row-label {
+            color: var(--text-muted);
+            font-size: 12px;
+        }
+        .plex-row-val {
+            font-family: monospace;
+            font-size: 13px;
+            color: var(--text);
+        }
+        .stream-dot {
+            display: inline-block;
+            width: 8px; height: 8px;
+            border-radius: 50%;
+            margin-right: 6px;
+            background: #10b981;
+            box-shadow: 0 0 8px #10b981;
+        }
+        .stream-dot.idle {
+            background: #6b7280;
+            box-shadow: none;
+        }
+        .stream-dot.unknown {
+            background: #f59e0b;
+            box-shadow: 0 0 8px rgba(245,158,11,0.5);
+        }
+        /* Idle streak progress bar */
+        .idle-bar-wrap {
+            margin-top: 16px;
+        }
+        .idle-bar-header {
+            display: flex;
+            justify-content: space-between;
+            font-size: 11px;
+            color: var(--text-muted);
+            margin-bottom: 6px;
+        }
+        .idle-bar-track {
+            height: 6px;
+            border-radius: 99px;
+            background: rgba(255,255,255,0.06);
+            overflow: hidden;
+        }
+        .idle-bar-fill {
+            height: 100%;
+            border-radius: 99px;
+            transition: width 0.6s ease, background 0.4s ease;
+        }
+        .plex-disabled-notice {
+            font-size: 13px;
+            color: var(--text-muted);
+            text-align: center;
+            padding: 16px 0 4px;
+        }
+
     </style>
 </head>
 <body>
@@ -286,6 +403,87 @@
                     <div class="label">Rolling Window Size</div>
                     <div class="value">{{ rolling_window }} episodes</div>
                 </div>
+            </div>
+
+            <!-- Plex Watcher Card -->
+            <div class="plex-card">
+                <div class="plex-card-header">
+                    <div class="plex-card-title">
+                        <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                            <path d="M12 2C6.477 2 2 6.477 2 12s4.477 10 10 10 10-4.477 10-10S17.523 2 12 2zm-1.5 14.5v-9l7 4.5-7 4.5z"/>
+                        </svg>
+                        Plex Watcher
+                    </div>
+                    {% if plex_status.dry_run %}
+                        <span class="dry-run-badge">Dry Run</span>
+                    {% endif %}
+                </div>
+
+                {% if plex_status.enabled %}
+                <div class="plex-rows" id="plex-rows">
+                    <div class="plex-row">
+                        <span class="plex-row-label">Plex URL</span>
+                        <span class="plex-row-val" id="pw-url">{{ plex_status.plex_url }}</span>
+                    </div>
+                    <div class="plex-row">
+                        <span class="plex-row-label">Status</span>
+                        <span class="plex-row-val" id="pw-status">
+                            {% if plex_status.status == 'ok' %}
+                                <span class="stream-dot" id="pw-dot"></span>
+                            {% elif plex_status.status == 'unreachable' %}
+                                <span class="stream-dot unknown" id="pw-dot"></span>
+                            {% else %}
+                                <span class="stream-dot idle" id="pw-dot"></span>
+                            {% endif %}
+                            <span id="pw-status-text">{{ plex_status.status | capitalize }}</span>
+                        </span>
+                    </div>
+                    <div class="plex-row">
+                        <span class="plex-row-label">Active Streams</span>
+                        <span class="plex-row-val" id="pw-streams">
+                            {% if plex_status.stream_count is none %}
+                                &mdash;
+                            {% else %}
+                                {{ plex_status.stream_count }}
+                            {% endif %}
+                        </span>
+                    </div>
+                    <div class="plex-row">
+                        <span class="plex-row-label">Last Check</span>
+                        <span class="plex-row-val" id="pw-last">{{ plex_status.last_check or '&mdash;' }}</span>
+                    </div>
+                    <div class="plex-row">
+                        <span class="plex-row-label">Next Check</span>
+                        <span class="plex-row-val" id="pw-next">{{ plex_status.next_check or '&mdash;' }}</span>
+                    </div>
+                    {% if plex_status.last_action %}
+                    <div class="plex-row" style="flex-direction:column; align-items:flex-start; gap:4px;">
+                        <span class="plex-row-label">Last Action</span>
+                        <span class="plex-row-val" id="pw-action" style="font-size:12px; color: var(--text-muted); font-family:inherit;">{{ plex_status.last_action }}</span>
+                    </div>
+                    {% endif %}
+
+                    <!-- Idle streak progress bar -->
+                    <div class="idle-bar-wrap">
+                        <div class="idle-bar-header">
+                            <span>Idle Streak</span>
+                            <span id="pw-streak">{{ plex_status.idle_streak }} / {{ plex_status.idle_needed }} polls</span>
+                        </div>
+                        <div class="idle-bar-track">
+                            <div class="idle-bar-fill" id="pw-bar"
+                                style="
+                                    width: {{ [[plex_status.idle_streak / plex_status.idle_needed * 100, 100] | min, 0] | max }}%;
+                                    background: {{ '#ef4444' if plex_status.idle_streak >= plex_status.idle_needed else ('#f59e0b' if plex_status.idle_streak > 0 else '#10b981') }};
+                                "
+                            ></div>
+                        </div>
+                    </div>
+                </div>
+                {% else %}
+                <div class="plex-disabled-notice" id="plex-disabled">
+                    Set <code>PLEX_URL</code> and <code>PLEX_TOKEN</code> environment variables to enable Plex monitoring.
+                </div>
+                {% endif %}
             </div>
 
             <!-- Webhook History Section -->
@@ -327,5 +525,55 @@
             </div>
         </div>
     </div>
+
+    <script>
+    // ── Plex watcher live updater ─────────────────────────────────────────
+    const REFRESH_MS = 30000; // poll /api/plex-status every 30s
+
+    function setEl(id, val) {
+        const el = document.getElementById(id);
+        if (el) el.textContent = val;
+    }
+
+    function updatePlexCard(s) {
+        setEl('pw-url', s.plex_url || '—');
+        setEl('pw-status-text', s.status ? s.status.charAt(0).toUpperCase() + s.status.slice(1) : '—');
+        setEl('pw-streams', s.stream_count !== null && s.stream_count !== undefined ? s.stream_count : '—');
+        setEl('pw-last', s.last_check || '—');
+        setEl('pw-next', s.next_check || '—');
+        setEl('pw-action', s.last_action || '');
+        setEl('pw-streak', `${s.idle_streak} / ${s.idle_needed} polls`);
+
+        // Update dot colour
+        const dot = document.getElementById('pw-dot');
+        if (dot) {
+            dot.className = 'stream-dot';
+            if (s.status === 'unreachable') dot.classList.add('unknown');
+            else if (s.status !== 'ok') dot.classList.add('idle');
+        }
+
+        // Update idle bar
+        const bar = document.getElementById('pw-bar');
+        if (bar) {
+            const pct = Math.min((s.idle_streak / s.idle_needed) * 100, 100);
+            bar.style.width = pct + '%';
+            if (s.idle_streak >= s.idle_needed) bar.style.background = '#ef4444';
+            else if (s.idle_streak > 0) bar.style.background = '#f59e0b';
+            else bar.style.background = '#10b981';
+        }
+    }
+
+    function fetchPlexStatus() {
+        fetch('/api/plex-status')
+            .then(r => r.ok ? r.json() : null)
+            .then(data => { if (data) updatePlexCard(data); })
+            .catch(() => {});
+    }
+
+    // Only start polling if the Plex card is rendered (enabled)
+    if (document.getElementById('plex-rows')) {
+        setInterval(fetchPlexStatus, REFRESH_MS);
+    }
+    </script>
 </body>
 </html>

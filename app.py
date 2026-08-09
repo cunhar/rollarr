@@ -10,6 +10,7 @@ import threading
 
 # Import custom modular components
 from utils import try_parse_int, parse_episodes
+import plex_watcher
 from sonarr_api import (
     SONARR_URL,
     SONARR_API_KEY,
@@ -81,6 +82,9 @@ def save_history():
 # Load persistent history on startup
 load_history()
 
+# Start Plex watcher background thread
+plex_watcher.start()
+
 def log_call(status, message, payload=None):
     entry = {
         "timestamp": datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
@@ -131,8 +135,14 @@ def index():
         status_color=status_color,
         webhook_url=webhook_url,
         history=history_list,
-        rolling_window=ROLLING_WINDOW
+        rolling_window=ROLLING_WINDOW,
+        plex_status=plex_watcher.get_state(),
     )
+
+@app.route('/api/plex-status')
+def api_plex_status():
+    """Return the current Plex watcher state as JSON (polled by the dashboard)."""
+    return jsonify(plex_watcher.get_state())
 
 @app.route('/webhook', methods=['POST'])
 def handle_webhook():
