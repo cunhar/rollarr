@@ -8,7 +8,8 @@ logger = logging.getLogger(__name__)
 
 NZBGET_URL = os.environ.get('NZBGET_URL', '').rstrip('/')
 NZBGET_USERNAME = os.environ.get('NZBGET_USERNAME', '')
-NZBGET_PASSWORD = os.environ.get('NZBGET_PASSWORD', '')
+NZBGET_PASSWORD = os.environ.get('NZBGET_PASSWORD') or os.environ.get('NZBGET_API_KEY', '')
+
 
 def get_auth():
     if NZBGET_USERNAME or NZBGET_PASSWORD:

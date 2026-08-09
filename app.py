@@ -23,7 +23,9 @@ from integrations.nzbget import (
     get_nzbget_status,
     NZBGET_URL,
     NZBGET_USERNAME,
+    NZBGET_PASSWORD,
 )
+
 from services import plex_watcher, plex_poller
 
 # Persistent configuration directories
@@ -178,6 +180,10 @@ def index():
         history_list = list(webhook_history)
 
     nzbget_status = get_nzbget_status()
+    if NZBGET_PASSWORD:
+        nzbget_masked_pass = "*" * (len(NZBGET_PASSWORD) - 4) + NZBGET_PASSWORD[-4:] if len(NZBGET_PASSWORD) >= 4 else NZBGET_PASSWORD
+    else:
+        nzbget_masked_pass = "Not Configured"
 
     return render_template(
         "index.html",
@@ -192,12 +198,14 @@ def index():
         plex_conn_text=plex_conn_text,
         nzbget_url=NZBGET_URL or "Not Configured",
         nzbget_username=NZBGET_USERNAME or "Not Configured",
+        nzbget_masked_pass=nzbget_masked_pass,
         nzbget_status=nzbget_status,
         history=history_list,
         rolling_window=ROLLING_WINDOW,
         plex_status=plex_watcher.get_state(),
         poller_status=plex_poller.get_state(),
     )
+
 
 
 
