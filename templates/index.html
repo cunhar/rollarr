@@ -619,71 +619,124 @@
             .kv-key { min-width: 120px; }
         }
 
-        /* Large Monitors & 1440p QHD Displays (1400px+) */
-        @media (min-width: 1400px) {
+        /* 1080p TVs & Mid-size Displays (1200px+) */
+        @media (min-width: 1200px) {
             .shell {
                 max-width: 1440px;
-                padding: 80px 36px 80px;
+                padding: 60px 32px;
             }
             body { font-size: 16px; }
-            .brand-name { font-size: 22px; }
+            .brand-name { font-size: 24px; }
             .brand-sub { font-size: 13px; }
             .conn-pill { padding: 8px 18px; font-size: 13px; gap: 8px; }
             .conn-pip { width: 10px; height: 10px; }
-            .tab-btn { padding: 16px 28px; font-size: 15px; }
-            .stat-cell { padding: 22px; }
-            .stat-value { font-size: 30px; }
-            .form-input { font-size: 15px; padding: 11px 15px; }
-            .form-label { font-size: 13px; }
-            .stream-card { padding: 18px 22px; gap: 12px; }
-            .stream-user-name { font-size: 16px; }
-            .stream-title { font-size: 16px; }
-            .stream-device { font-size: 13px; }
-            .log-msg { font-size: 13px; }
+            .tab-btn { padding: 16px 28px; font-size: 16px; }
+            .section-title { font-size: 14px; }
+            .stat-cell { padding: 24px; }
+            .stat-value { font-size: 34px; }
+            .stat-label { font-size: 13px; }
+            .stat-meta { font-size: 13px; }
+            .idle-section { padding: 20px 24px; }
+            .idle-label { font-size: 14px; }
+            .idle-count { font-size: 16px; }
+            .idle-meta { font-size: 14px; }
+            .idle-track { height: 6px; }
+            .form-input { font-size: 16px; padding: 12px 18px; }
+            .form-label { font-size: 14px; }
+            .btn-clear { font-size: 15px; padding: 10px 20px; }
+            .stream-card { padding: 20px 24px; gap: 14px; }
+            .stream-user-name { font-size: 18px; }
+            .stream-title { font-size: 18px; }
+            .stream-device { font-size: 14px; }
+            .log-entry, .log-msg { font-size: 14px; }
         }
 
-        /* 4K Ultra-HD Displays & Big Screen TVs (2000px+) */
-        @media (min-width: 2000px) {
+        /* 4K Ultra-HD Displays & Big Screen TVs (1600px+) */
+        @media (min-width: 1600px) {
             .shell {
-                max-width: 2500px;
-                padding: 110px 60px 140px;
+                max-width: 1850px;
+                padding: 80px 48px 100px;
             }
             body { font-size: 22px; }
-            .brand-name { font-size: 36px; }
-            .brand-sub { font-size: 18px; }
-            .conn-pill { padding: 14px 28px; font-size: 18px; gap: 12px; border-width: 2px; }
-            .conn-pip { width: 15px; height: 15px; }
-            .tab-btn { padding: 22px 42px; font-size: 20px; border-bottom-width: 3px; }
-            .section-title { font-size: 16px; margin-bottom: 20px; letter-spacing: 1.5px; }
-            .stat-cell { padding: 32px; gap: 12px; }
-            .stat-value { font-size: 48px; }
-            .stat-label { font-size: 15px; }
-            .stat-meta { font-size: 15px; }
+            .brand-name { font-size: 34px; }
+            .brand-sub { font-size: 17px; }
+            .conn-pill { padding: 12px 24px; font-size: 17px; gap: 12px; border-width: 2px; }
+            .conn-pip { width: 14px; height: 14px; }
+            .tab-btn { padding: 20px 38px; font-size: 20px; border-bottom-width: 3px; }
+            .section-title { font-size: 18px; margin-bottom: 20px; letter-spacing: 1.5px; }
+            .stat-cell { padding: 30px; gap: 12px; }
+            .stat-value { font-size: 46px; }
+            .stat-label { font-size: 16px; }
+            .stat-meta { font-size: 16px; }
             .stream-card { padding: 24px 32px; gap: 16px; border-width: 2px; }
-            .stream-user-name { font-size: 22px; }
-            .stream-device { font-size: 16px; }
-            .stream-title { font-size: 22px; }
-            .stream-progress-meta { font-size: 15px; }
+            .stream-user-name { font-size: 24px; }
+            .stream-device { font-size: 17px; }
+            .stream-title { font-size: 24px; }
+            .stream-progress-meta { font-size: 16px; }
             .stream-progress-track { height: 8px; }
             .form-input { font-size: 20px; padding: 16px 22px; border-width: 2px; }
-            .form-label { font-size: 16px; margin-bottom: 4px; }
-            .last-action-bar { font-size: 17px; padding: 18px 24px; border-width: 2px; }
-            .last-action-bar strong { font-size: 14px; }
-            .log-entry { font-size: 16px; }
-            .log-msg { font-size: 16px; }
-            .log-ts { font-size: 14px; }
-            .kv-key { font-size: 16px; min-width: 260px; }
-            .kv-val { font-size: 18px; }
-            .kv-row { padding: 18px 24px; }
+            .form-label { font-size: 17px; margin-bottom: 6px; }
+            .last-action-bar { font-size: 18px; padding: 18px 24px; border-width: 2px; }
+            .last-action-bar strong { font-size: 15px; }
+            .log-entry { font-size: 17px; }
+            .log-msg { font-size: 17px; }
+            .log-ts { font-size: 15px; }
+            .kv-key { font-size: 18px; min-width: 260px; }
+            .kv-val { font-size: 20px; }
+            .kv-row { padding: 20px 28px; }
             .kv-block { border-width: 2px; }
-            .idle-section { padding: 24px 30px; border-width: 2px; }
-            .idle-label { font-size: 16px; }
-            .idle-count { font-size: 17px; }
-            .idle-track { height: 8px; }
-            .btn-clear { font-size: 15px; padding: 10px 20px; border-width: 2px; }
-            .badge { font-size: 14px; padding: 4px 12px; }
+            .idle-section { padding: 26px 32px; border-width: 2px; }
+            .idle-label { font-size: 18px; }
+            .idle-count { font-size: 20px; }
+            .idle-meta { font-size: 17px; }
+            .idle-track { height: 10px; }
+            .btn-clear { font-size: 17px; padding: 12px 24px; border-width: 2px; }
+            .badge { font-size: 15px; padding: 5px 14px; }
             ::-webkit-scrollbar { width: 14px; height: 14px; }
             ::-webkit-scrollbar-thumb { border-radius: 7px; border-width: 3px; }
+        }
+
+        /* Giant 4K TV & 10-Foot Distance Mode (2200px+) */
+        @media (min-width: 2200px) {
+            .shell {
+                max-width: 2500px;
+                padding: 110px 64px 140px;
+            }
+            body { font-size: 26px; }
+            .brand-name { font-size: 42px; }
+            .brand-sub { font-size: 20px; }
+            .conn-pill { padding: 16px 32px; font-size: 21px; gap: 14px; border-width: 2px; }
+            .conn-pip { width: 16px; height: 16px; }
+            .tab-btn { padding: 24px 44px; font-size: 24px; border-bottom-width: 4px; }
+            .section-title { font-size: 22px; margin-bottom: 24px; letter-spacing: 1.8px; }
+            .stat-cell { padding: 36px; gap: 14px; }
+            .stat-value { font-size: 58px; }
+            .stat-label { font-size: 19px; }
+            .stat-meta { font-size: 19px; }
+            .stream-card { padding: 28px 36px; gap: 18px; border-width: 2px; }
+            .stream-user-name { font-size: 28px; }
+            .stream-device { font-size: 20px; }
+            .stream-title { font-size: 28px; }
+            .stream-progress-meta { font-size: 19px; }
+            .stream-progress-track { height: 10px; }
+            .form-input { font-size: 24px; padding: 18px 26px; border-width: 2px; }
+            .form-label { font-size: 20px; margin-bottom: 8px; }
+            .last-action-bar { font-size: 21px; padding: 22px 30px; border-width: 2px; }
+            .last-action-bar strong { font-size: 17px; }
+            .log-entry { font-size: 20px; }
+            .log-msg { font-size: 20px; }
+            .log-ts { font-size: 17px; }
+            .kv-key { font-size: 21px; min-width: 300px; }
+            .kv-val { font-size: 23px; }
+            .kv-row { padding: 22px 32px; }
+            .kv-block { border-width: 2px; }
+            .idle-section { padding: 30px 38px; border-width: 2px; }
+            .idle-label { font-size: 21px; }
+            .idle-count { font-size: 24px; }
+            .idle-meta { font-size: 20px; }
+            .idle-track { height: 12px; }
+            .btn-clear { font-size: 20px; padding: 14px 30px; border-width: 2px; }
+            .badge { font-size: 17px; padding: 6px 16px; }
         }
     </style>
 </head>
