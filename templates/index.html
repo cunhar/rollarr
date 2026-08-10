@@ -1133,13 +1133,35 @@
 </div><!-- /shell -->
 
 <script>
-// ── Tab switching ────────────────────────────────────────────
-function switchTab(name) {
+// ── Tab switching with URL hash support ──────────────────────
+const VALID_TABS = ['dashboard', 'disks', 'activity', 'config'];
+
+function switchTab(name, updateHash = true) {
+    if (!VALID_TABS.includes(name)) name = 'dashboard';
+
     document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
     document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
-    document.getElementById('tab-' + name).classList.add('active');
-    document.getElementById('panel-' + name).classList.add('active');
+
+    const btn = document.getElementById('tab-' + name);
+    const panel = document.getElementById('panel-' + name);
+    if (btn) btn.classList.add('active');
+    if (panel) panel.classList.add('active');
+
+    if (updateHash && window.location.hash !== '#' + name) {
+        history.pushState(null, null, '#' + name);
+    }
 }
+
+function handleHashChange() {
+    const hash = (window.location.hash || '').replace('#', '').trim();
+    if (hash && VALID_TABS.includes(hash)) {
+        switchTab(hash, false);
+    }
+}
+
+window.addEventListener('hashchange', handleHashChange);
+window.addEventListener('DOMContentLoaded', handleHashChange);
+handleHashChange();
 
 // ── Live polling ─────────────────────────────────────────────
 const REFRESH_MS = 10000;
