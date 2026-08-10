@@ -288,8 +288,11 @@ def api_activity():
 @app.route('/sw.js')
 def service_worker():
     """Serve the Service Worker from the root so it controls the full site scope."""
-    return send_from_directory(app.static_folder, 'sw.js',
-                               mimetype='application/javascript')
+    response = send_from_directory(app.static_folder, 'sw.js',
+                                   mimetype='application/javascript')
+    response.headers['Service-Worker-Allowed'] = '/'
+    response.headers['Cache-Control'] = 'no-cache'
+    return response
 
 
 @app.route('/offline')

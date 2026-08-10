@@ -1,6 +1,6 @@
 // Rolarr Service Worker — Offline Fallback
 // Cache version: bump this string to force cache refresh on next visit
-const CACHE_NAME = 'rolarr-v1';
+const CACHE_NAME = 'rolarr-v2';
 const OFFLINE_URL = '/offline';
 
 // Resources to pre-cache on install
@@ -12,12 +12,10 @@ const PRECACHE_URLS = [
 // ── Install: pre-cache the offline page ─────────────────────────────────────
 self.addEventListener('install', (event) => {
   event.waitUntil(
-    caches.open(CACHE_NAME).then((cache) => {
-      return cache.addAll(PRECACHE_URLS);
-    })
+    caches.open(CACHE_NAME)
+      .then((cache) => cache.addAll(PRECACHE_URLS))
+      .then(() => self.skipWaiting())
   );
-  // Activate immediately, don't wait for old SW to be gone
-  self.skipWaiting();
 });
 
 // ── Activate: clean up old caches ───────────────────────────────────────────
