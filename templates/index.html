@@ -986,19 +986,26 @@ function formatShutdownWatcher(s) {
     const pollInterval = s.poll_interval || 1200;
     const pollMins = Math.max(1, Math.round(pollInterval / 60));
     
-    let label = '';
+    let label = `${idleStreak} of ${idleNeeded} idle polls`;
     let detail = '';
+
+    // Extract HH:MM time from ISO/timestamp string if available
+    let nextCheckTime = '';
+    if (s.next_check) {
+        const parts = s.next_check.split(' ');
+        nextCheckTime = parts.length > 1 ? parts[1].substring(0, 5) : s.next_check.substring(0, 5);
+    }
     
     if (s.stream_count > 0) {
         const streamStr = s.stream_count === 1 ? '1 active Plex stream' : `${s.stream_count} active Plex streams`;
-        label = `0 of ${idleNeeded} polls — Shutdown paused (${streamStr})`;
-        detail = `Active playback detected on Plex. Idle countdown is paused.`;
+        label = `0 of ${idleNeeded} idle polls (Paused)`;
+        detail = `Shutdown paused — ${streamStr}`;
     } else if (s.nzbget_active) {
-        label = `0 of ${idleNeeded} polls — Shutdown paused (${s.nzbget_detail || 'NZBGet active'})`;
-        detail = `Active downloads in progress on NZBGet. Idle countdown is paused.`;
+        label = `0 of ${idleNeeded} idle polls (Paused)`;
+        detail = `Shutdown paused — ${s.nzbget_detail || 'NZBGet active'}`;
     } else if (idleStreak >= idleNeeded) {
-        label = `${idleNeeded} of ${idleNeeded} idle polls — Shutdown threshold reached!`;
-        detail = `Host shutdown triggered via SSH.`;
+        label = `${idleNeeded} of ${idleNeeded} idle polls`;
+        detail = `Shutdown threshold reached — SSH command executed.`;
     } else {
         const pollsLeft = Math.max(0, idleNeeded - idleStreak);
         const minsLeft = pollsLeft * pollMins;
@@ -1011,15 +1018,9 @@ function formatShutdownWatcher(s) {
             timeStr = `${minsLeft} min`;
         }
         
-        if (idleStreak === 0) {
-            label = `0 of ${idleNeeded} idle polls (~${timeStr} until shutdown at ${pollMins} min/poll)`;
-        } else {
-            const pollWord = pollsLeft === 1 ? '1 poll' : `${pollsLeft} polls`;
-            label = `${idleStreak} of ${idleNeeded} idle polls (${pollWord} / ~${timeStr} remaining until shutdown)`;
-        }
-        
-        const nextCheckStr = s.next_check ? ` | Next poll: ${s.next_check}` : '';
-        detail = `Poll interval: ${pollMins} min | Est. shutdown in ~${timeStr}${nextCheckStr}`;
+        const pollWord = pollsLeft === 1 ? '1 poll left' : `${pollsLeft} polls left`;
+        const nextPart = nextCheckTime ? ` • Next check: ${nextCheckTime}` : '';
+        detail = `Est. shutdown in ~${timeStr} (${pollWord} @ ${pollMins}m)${nextPart}`;
     }
     
     return { label, detail };
