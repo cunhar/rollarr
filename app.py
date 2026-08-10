@@ -99,6 +99,7 @@ def log_call(status, message, payload=None):
 
 load_history()
 plex_poller.set_log_callback(log_call)
+plex_watcher.set_log_callback(log_call)
 plex_poller.start()
 plex_watcher.start()
 
@@ -229,6 +230,7 @@ def api_config_save():
         data = request.json or {}
         updated = config_store.save_config(data)
         logger.info("[App] Saved updated encrypted configuration via UI.")
+        log_call('ok', 'Configuration saved securely via web dashboard')
         return jsonify({'status': 'success', 'message': 'Configuration saved securely', 'config': updated}), 200
     except Exception as exc:
         logger.error(f"[App] Failed to save configuration: {exc}")

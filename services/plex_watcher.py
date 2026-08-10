@@ -43,6 +43,20 @@ watcher_state = {
 
 _state_lock = threading.Lock()
 _last_fetch_time = 0
+_log_callback = None
+
+
+def set_log_callback(fn):
+    global _log_callback
+    _log_callback = fn
+
+
+def _activity_log(status: str, message: str, payload: dict = None):
+    if _log_callback:
+        try:
+            _log_callback(status, message, payload)
+        except Exception as exc:
+            logger.warning(f"[PlexWatcher] Log callback exception: {exc}")
 
 
 def _update_state(**kwargs):
@@ -314,12 +328,14 @@ def _ssh_shutdown(force: bool = False) -> tuple[bool, str]:
         msg = f"[DRY-RUN] Would SSH {ssh_user}@{ssh_host}:{ssh_port} and run: {cmd}"
         logger.warning(f"[PlexWatcher] {msg}")
         _update_state(last_action=f"[DRY-RUN] Shutdown simulated at {_now()}")
+        _activity_log('warn', '[DRY-RUN] Idle shutdown threshold reached — simulated SSH shutdown')
         return True, msg
 
     if not ssh_host or not ssh_user:
         msg = f"Shutdown failed: SSH_HOST ('{ssh_host}') or SSH_USER ('{ssh_user}') missing"
         logger.error(f"[PlexWatcher] {msg}")
         _update_state(last_action=msg)
+        _activity_log('error', msg)
         return False, msg
 
     try:
@@ -345,17 +361,20 @@ def _ssh_shutdown(force: bool = False) -> tuple[bool, str]:
             err_msg = f"SSH command failed (code {exit_status}): {err or out or 'Unknown error'}"
             logger.error(f"[PlexWatcher] {err_msg}")
             _update_state(last_action=f"Shutdown FAILED at {_now()}: {err_msg}")
+            _activity_log('error', f"SSH shutdown command failed: {err_msg}")
             return False, err_msg
 
         msg = f"SSH shutdown command sent to {ssh_host}."
         logger.info(f"[PlexWatcher] {msg}")
         _update_state(last_action=f"Shutdown triggered at {_now()} — {msg}")
+        _activity_log('warn', f"Host shutdown executed via SSH ({ssh_host})")
         return True, msg
 
     except Exception as exc:
         err_msg = f"SSH connection failed: {exc}"
         logger.error(f"[PlexWatcher] {err_msg}")
         _update_state(last_action=f"Shutdown FAILED at {_now()}: {err_msg}")
+        _activity_log('error', f"Shutdown SSH connection error: {exc}")
         return False, err_msg
 
 

@@ -434,11 +434,7 @@
         }
         .log-list {
             border: 1px solid var(--border);
-            max-height: 420px;
-            overflow-y: auto;
         }
-        .log-list::-webkit-scrollbar { width: 4px; }
-        .log-list::-webkit-scrollbar-thumb { background: var(--border-hi); }
         .log-entry {
             display: flex;
             gap: 0;
@@ -901,7 +897,7 @@
     <div class="tab-panel" id="panel-activity">
 
         <div class="log-header-row">
-            <span class="section-title">Media Activity</span>
+            <span class="section-title">Activity Log</span>
             <div style="display:flex; align-items:center; gap:12px;">
                 <span style="font-size:10px; color:var(--text-sub); font-family:var(--mono);">last 20</span>
                 <button class="btn-clear" id="btn-clear-logs" onclick="clearLogs()">Clear</button>
@@ -932,7 +928,7 @@
             {% endfor %}
         </div>
         {% else %}
-        <div class="no-logs" id="activity-log-container">No media items processed yet.</div>
+        <div class="no-logs" id="activity-log-container">No activity recorded yet.</div>
         {% endif %}
 
     </div>
@@ -1237,7 +1233,7 @@ function updateActivityLog(logs) {
 
     if (!logs || logs.length === 0) {
         container.className = 'no-logs';
-        container.innerHTML = 'No media items processed yet.';
+        container.innerHTML = 'No activity recorded yet.';
         return;
     }
 
