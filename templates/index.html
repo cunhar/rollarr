@@ -1109,6 +1109,9 @@ function formatShutdownWatcher(s) {
     } else if (s.nzbget_active) {
         label = `0 of ${idleNeeded} idle polls (Paused)`;
         detail = `Shutdown paused — ${s.nzbget_detail || 'NZBGet active'}`;
+    } else if (s.plex_activity_active) {
+        label = `0 of ${idleNeeded} idle polls (Paused)`;
+        detail = `Shutdown paused — ${s.plex_activity_detail || 'Plex background task running'}`;
     } else if (idleStreak >= idleNeeded) {
         label = `${idleNeeded} of ${idleNeeded} idle polls`;
         detail = `Shutdown threshold reached — SSH command executed.`;

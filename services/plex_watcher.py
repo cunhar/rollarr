@@ -22,21 +22,23 @@ logger = logging.getLogger(__name__)
 # ── Shared state (read by the Flask UI) ──────────────────────────────────────
 
 watcher_state = {
-    'enabled':        False,
-    'dry_run':        True,
-    'plex_url':       'Not configured',
-    'status':         'starting',          # starting | ok | unreachable | not_configured
-    'stream_count':   None,                # int or None
-    'active_streams': [],                  # list of detailed stream dicts
-    'idle_streak':    0,                   # consecutive idle polls
-    'idle_needed':    3,
-    'poll_interval':  1200,
-    'nzbget_active':  False,
-    'nzbget_detail':  '',
-    'last_check':     None,                # ISO timestamp string
-    'next_check':     None,                # ISO timestamp string
-    'last_action':    None,                # description of last significant action
-    'shutdown_fired': False,
+    'enabled':               False,
+    'dry_run':               True,
+    'plex_url':              'Not configured',
+    'status':                'starting',          # starting | ok | unreachable | not_configured
+    'stream_count':          None,                # int or None
+    'active_streams':        [],                  # list of detailed stream dicts
+    'idle_streak':           0,                   # consecutive idle polls
+    'idle_needed':           3,
+    'poll_interval':         1200,
+    'nzbget_active':         False,
+    'nzbget_detail':         '',
+    'plex_activity_active':  False,
+    'plex_activity_detail':  '',
+    'last_check':            None,                # ISO timestamp string
+    'next_check':            None,                # ISO timestamp string
+    'last_action':           None,                # description of last significant action
+    'shutdown_fired':        False,
 }
 
 _state_lock = threading.Lock()
@@ -75,6 +77,7 @@ def get_state(refresh_live: bool = True):
             _last_fetch_time = now_time
             count, streams = _get_active_sessions()
             has_dl, dl_detail = _has_active_downloads()
+            has_act, act_detail = _has_active_plex_activities()
             if count is not None:
                 _update_state(
                     status='ok',
@@ -82,13 +85,17 @@ def get_state(refresh_live: bool = True):
                     active_streams=streams,
                     nzbget_active=has_dl,
                     nzbget_detail=dl_detail,
+                    plex_activity_active=has_act,
+                    plex_activity_detail=act_detail,
                     last_check=_now()
                 )
             else:
                 _update_state(
                     status='unreachable',
                     nzbget_active=has_dl,
-                    nzbget_detail=dl_detail
+                    nzbget_detail=dl_detail,
+                    plex_activity_active=has_act,
+                    plex_activity_detail=act_detail
                 )
     with _state_lock:
         return dict(watcher_state)
@@ -231,6 +238,40 @@ def _has_active_downloads() -> tuple[bool, str]:
     return False, ""
 
 
+def _has_active_plex_activities() -> tuple[bool, str]:
+    """
+    Query Plex /activities endpoint for running background jobs (library scans,
+    thumbnail generation, intro/credit detection, database optimization).
+    """
+    plex_url = (get_config('PLEX_URL') or '').rstrip('/')
+    plex_token = get_config('PLEX_TOKEN') or ''
+
+    if not plex_url or not plex_token:
+        return False, ""
+    try:
+        url = f"{plex_url}/activities"
+        resp = requests.get(
+            url,
+            headers={'X-Plex-Token': plex_token, 'Accept': 'application/json'},
+            params={'X-Plex-Token': plex_token},
+            timeout=5,
+        )
+        resp.raise_for_status()
+        data = resp.json()
+        container = data.get('MediaContainer', {})
+        activities = container.get('Activity', []) or []
+        
+        if len(activities) > 0:
+            act = activities[0]
+            title = act.get('title') or act.get('type') or 'Background Task'
+            subtitle = act.get('subtitle') or ''
+            detail = f"Plex {title}" + (f" ({subtitle})" if subtitle else "")
+            return True, detail
+    except Exception as exc:
+        logger.debug(f"[PlexWatcher] Failed checking Plex background activities: {exc}")
+    return False, ""
+
+
 # ── SSH shutdown ─────────────────────────────────────────────────────────────
 
 def _find_ssh_key(configured_path: str) -> str | None:
@@ -260,9 +301,9 @@ def _ssh_shutdown(force: bool = False) -> tuple[bool, str]:
     resolved_key_path = _find_ssh_key(ssh_key_path)
 
     if ssh_password:
-        cmd = f'echo "{ssh_password}" | sudo -S shutdown -h now || sudo poweroff'
+        cmd = f'echo "{ssh_password}" | sudo -S docker stop -t 30 plex || true; echo "{ssh_password}" | sudo -S shutdown -h now || sudo poweroff'
     else:
-        cmd = 'sudo shutdown -h now || sudo poweroff'
+        cmd = 'sudo docker stop -t 30 plex || true; sudo shutdown -h now || sudo poweroff'
 
     if dry_run and not force:
         msg = f"[DRY-RUN] Would SSH {ssh_user}@{ssh_host}:{ssh_port} and run: {cmd}"
@@ -340,6 +381,7 @@ def _watcher_loop():
 
         stream_count, active_streams = _get_active_sessions()
         has_dl, dl_detail = _has_active_downloads()
+        has_act, act_detail = _has_active_plex_activities()
 
         if stream_count is None:
             logger.warning(f"[PlexWatcher] {now_ts} — Plex unreachable.")
@@ -349,6 +391,8 @@ def _watcher_loop():
                 active_streams=[],
                 nzbget_active=has_dl,
                 nzbget_detail=dl_detail,
+                plex_activity_active=has_act,
+                plex_activity_detail=act_detail,
                 last_check=now_ts,
                 next_check=next_ts,
                 idle_streak=idle_streak,
@@ -365,6 +409,8 @@ def _watcher_loop():
                 active_streams=active_streams,
                 nzbget_active=has_dl,
                 nzbget_detail=dl_detail,
+                plex_activity_active=has_act,
+                plex_activity_detail=act_detail,
                 last_check=now_ts,
                 next_check=next_ts,
                 idle_streak=0,
@@ -382,15 +428,36 @@ def _watcher_loop():
                 active_streams=[],
                 nzbget_active=True,
                 nzbget_detail=dl_detail,
+                plex_activity_active=has_act,
+                plex_activity_detail=act_detail,
                 last_check=now_ts,
                 next_check=next_ts,
                 idle_streak=0,
                 last_action=f"{now_ts} — NZBGet active ({dl_detail}), idle streak reset",
             )
+        elif has_act:
+            logger.info(
+                f"[PlexWatcher] {now_ts} — No streams/downloads, but Plex task active ({act_detail}). "
+                f"Idle streak reset."
+            )
+            idle_streak = 0
+            _update_state(
+                status='ok',
+                stream_count=0,
+                active_streams=[],
+                nzbget_active=False,
+                nzbget_detail='',
+                plex_activity_active=True,
+                plex_activity_detail=act_detail,
+                last_check=now_ts,
+                next_check=next_ts,
+                idle_streak=0,
+                last_action=f"{now_ts} — {act_detail}, idle streak reset",
+            )
         else:
             idle_streak += 1
             logger.info(
-                f"[PlexWatcher] {now_ts} — System idle (no streams/downloads). "
+                f"[PlexWatcher] {now_ts} — System idle (no streams/downloads/tasks). "
                 f"Idle streak: {idle_streak}/{idle_needed}"
             )
             _update_state(
@@ -399,6 +466,8 @@ def _watcher_loop():
                 active_streams=[],
                 nzbget_active=False,
                 nzbget_detail='',
+                plex_activity_active=False,
+                plex_activity_detail='',
                 last_check=now_ts,
                 next_check=next_ts,
                 idle_streak=idle_streak,
