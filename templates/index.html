@@ -793,13 +793,13 @@
                 <span class="conn-pip {{ 'ok' if radarr_status_text == 'Connected' else ('warn' if 'Error' in radarr_status_text else 'err') }}" id="pip-radarr"></span>
                 <span id="label-radarr">Radarr</span>
             </a>
-            <a class="conn-pill" id="pill-plex" target="_blank" rel="noopener noreferrer" title="Open Plex">
-                <span class="conn-pip {{ 'ok' if plex_conn_text == 'Connected' else ('warn' if 'Error' in plex_conn_text else 'err') }}" id="pip-plex"></span>
-                <span id="label-plex">Plex</span>
-            </a>
             <a class="conn-pill" id="pill-nzbget" target="_blank" rel="noopener noreferrer" title="Open NZBGet">
                 <span class="conn-pip {{ 'ok' if nzbget_status.connected else 'err' }}" id="pip-nzbget"></span>
                 <span id="label-nzbget">NZBGet</span>
+            </a>
+            <a class="conn-pill" id="pill-plex" target="_blank" rel="noopener noreferrer" title="Open Plex">
+                <span class="conn-pip {{ 'ok' if plex_conn_text == 'Connected' else ('warn' if 'Error' in plex_conn_text else 'err') }}" id="pip-plex"></span>
+                <span id="label-plex">Plex</span>
             </a>
         </div>
     </div>
