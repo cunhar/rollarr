@@ -807,6 +807,7 @@
     <!-- Tab bar -->
     <div class="tabbar">
         <button class="tab-btn active" id="tab-dashboard" onclick="switchTab('dashboard')">Dashboard</button>
+        <button class="tab-btn" id="tab-disks" onclick="switchTab('disks')">Disk Space</button>
         <button class="tab-btn" id="tab-activity" onclick="switchTab('activity')">Activity</button>
         <button class="tab-btn" id="tab-config" onclick="switchTab('config')">Config</button>
     </div>
@@ -890,6 +891,57 @@
 
 
 
+
+    <!-- ══ DISK SPACE TAB ═════════════════════════════════════ -->
+    <div class="tab-panel" id="panel-disks">
+
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:16px;">
+            <span class="section-title" style="margin-bottom:0;">Storage & Disk Space</span>
+            <button class="btn-clear" onclick="pollDiskSpace()">Refresh Storage</button>
+        </div>
+
+        <div class="stat-grid" style="margin-bottom:24px;" id="disk-grid">
+            {% for key, d in disk_info.disks.items() %}
+            {% set status_class = 'green' if d.status == 'ok' else ('amber' if d.status == 'warning' else 'red') %}
+            <div class="stat-cell" style="flex:1;">
+                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
+                    <span class="stat-label" style="font-weight:600; text-transform:uppercase;">{{ d.label }}</span>
+                    <span class="badge badge-{{ 'green' if d.status == 'ok' else ('amber' if d.status == 'warning' else 'red') }}">{{ d.free_pct }}% Free</span>
+                </div>
+                <div class="stat-value {{ status_class }}" style="margin-bottom:8px;">{{ d.free_formatted }} <span style="font-size:13px; font-weight:normal; color:var(--text-sub);">free</span></div>
+                
+                <div class="idle-track" style="margin-bottom:8px;">
+                    <div class="idle-fill" style="width: {{ d.used_pct }}%; background: {{ '#e05252' if d.status == 'critical' else ('#e5a00d' if d.status == 'warning' else '#3ecf8e') }};"></div>
+                </div>
+                
+                <div style="display:flex; justify-content:space-between; font-size:11px; font-family:var(--mono); color:var(--text-sub);">
+                    <span>Used: {{ d.used_formatted }} ({{ d.used_pct }}%)</span>
+                    <span>Total: {{ d.total_formatted }}</span>
+                </div>
+                <div style="margin-top:6px; font-size:10px; font-family:var(--mono); color:var(--text-sub); opacity:0.8;">
+                    Path: <code>{{ d.configured_path }}</code>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+
+        {% if disk_info.sonarr_root_folders or disk_info.radarr_root_folders %}
+        <span class="section-title">Arr Library Storage</span>
+        <div class="kv-block" id="arr-root-folders-container">
+            {% for rf in disk_info.sonarr_root_folders %}
+            <div class="kv-row">
+                <span class="kv-key">Sonarr: <code>{{ rf.path }}</code></span>
+                <span class="kv-val green">{{ rf.free_formatted }} available</span>
+            </div>
+            {% endfor %}
+            {% for rf in disk_info.radarr_root_folders %}
+            <div class="kv-row">
+                <span class="kv-key">Radarr: <code>{{ rf.path }}</code></span>
+                <span class="kv-val green">{{ rf.free_formatted }} available</span>
+            </div>
+            {% endfor %}
+        </div>
+        {% endif %}
 
     </div>
 
@@ -1051,6 +1103,22 @@
                 <div class="form-group">
                     <label class="form-label">SSH Password</label>
                     <input type="password" class="form-input" id="cfg-SSH_PASSWORD" value="{{ '••••••••' if cfg.SSH_PASSWORD else '' }}" placeholder="SSH Password">
+                </div>
+            </div>
+
+            <p class="section-title">Storage & Directory Paths</p>
+            <div class="form-grid">
+                <div class="form-group">
+                    <label class="form-label">Downloads Directory Path</label>
+                    <input type="text" class="form-input" id="cfg-PATH_DOWNLOADS" value="{{ cfg.PATH_DOWNLOADS or '/downloads' }}" placeholder="/downloads">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">TV Shows Directory Path</label>
+                    <input type="text" class="form-input" id="cfg-PATH_TV" value="{{ cfg.PATH_TV or '/tv' }}" placeholder="/tv">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Movies Directory Path</label>
+                    <input type="text" class="form-input" id="cfg-PATH_MOVIES" value="{{ cfg.PATH_MOVIES or '/movies' }}" placeholder="/movies">
                 </div>
             </div>
 
@@ -1225,6 +1293,66 @@ function pollAll() {
         .then(r => r.ok ? r.json() : null)
         .then(d => { if (d) updateActivityLog(d); })
         .catch(() => {});
+    pollDiskSpace();
+}
+
+function pollDiskSpace() {
+    fetch('/api/disk-space')
+        .then(r => r.json())
+        .then(d => { if (d) renderDiskSpace(d); })
+        .catch(() => {});
+}
+
+function renderDiskSpace(data) {
+    const grid = el('disk-grid');
+    if (!grid || !data || !data.disks) return;
+
+    grid.innerHTML = Object.entries(data.disks).map(([key, d]) => {
+        const badgeColor = d.status === 'ok' ? 'green' : (d.status === 'warning' ? 'amber' : 'red');
+        const fillColor = d.status === 'critical' ? '#e05252' : (d.status === 'warning' ? '#e5a00d' : '#3ecf8e');
+        return `
+        <div class="stat-cell" style="flex:1;">
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
+                <span class="stat-label" style="font-weight:600; text-transform:uppercase;">${escapeHtml(d.label)}</span>
+                <span class="badge badge-${badgeColor}">${d.free_pct}% Free</span>
+            </div>
+            <div class="stat-value ${badgeColor}" style="margin-bottom:8px;">${escapeHtml(d.free_formatted)} <span style="font-size:13px; font-weight:normal; color:var(--text-sub);">free</span></div>
+            
+            <div class="idle-track" style="margin-bottom:8px;">
+                <div class="idle-fill" style="width: ${d.used_pct}%; background: ${fillColor};"></div>
+            </div>
+            
+            <div style="display:flex; justify-content:space-between; font-size:11px; font-family:var(--mono); color:var(--text-sub);">
+                <span>Used: ${escapeHtml(d.used_formatted)} (${d.used_pct}%)</span>
+                <span>Total: ${escapeHtml(d.total_formatted)}</span>
+            </div>
+            <div style="margin-top:6px; font-size:10px; font-family:var(--mono); color:var(--text-sub); opacity:0.8;">
+                Path: <code>${escapeHtml(d.configured_path)}</code>
+            </div>
+        </div>`;
+    }).join('');
+
+    const arrContainer = el('arr-root-folders-container');
+    if (arrContainer) {
+        let arrHtml = '';
+        if (data.sonarr_root_folders && data.sonarr_root_folders.length > 0) {
+            data.sonarr_root_folders.forEach(rf => {
+                arrHtml += `<div class="kv-row">
+                    <span class="kv-key">Sonarr: <code>${escapeHtml(rf.path)}</code></span>
+                    <span class="kv-val green">${escapeHtml(rf.free_formatted)} available</span>
+                </div>`;
+            });
+        }
+        if (data.radarr_root_folders && data.radarr_root_folders.length > 0) {
+            data.radarr_root_folders.forEach(rf => {
+                arrHtml += `<div class="kv-row">
+                    <span class="kv-key">Radarr: <code>${escapeHtml(rf.path)}</code></span>
+                    <span class="kv-val green">${escapeHtml(rf.free_formatted)} available</span>
+                </div>`;
+            });
+        }
+        arrContainer.innerHTML = arrHtml;
+    }
 }
 
 function updateActivityLog(logs) {
@@ -1463,6 +1591,9 @@ function saveConfiguration() {
         SSH_PORT: parseInt(el('cfg-SSH_PORT').value) || 22,
         SSH_USER: el('cfg-SSH_USER').value,
         SSH_PASSWORD: el('cfg-SSH_PASSWORD').value,
+        PATH_DOWNLOADS: el('cfg-PATH_DOWNLOADS').value || '/downloads',
+        PATH_TV: el('cfg-PATH_TV').value || '/tv',
+        PATH_MOVIES: el('cfg-PATH_MOVIES').value || '/movies',
     };
 
     fetch('/api/config/save', {

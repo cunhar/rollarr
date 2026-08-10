@@ -28,6 +28,7 @@ from integrations.nzbget import (
     get_nzbget_password,
 )
 from services import plex_watcher, plex_poller
+from services.disk_service import get_disk_space_summary
 
 # Persistent configuration directories
 CONFIG_DIR = '/config'
@@ -221,6 +222,7 @@ def index():
         rolling_window=get_rolling_window(),
         plex_status=plex_watcher.get_state(),
         poller_status=plex_poller.get_state(),
+        disk_info=get_disk_space_summary(),
     )
 
 
@@ -284,6 +286,12 @@ def api_activity():
     """Return the current activity log as JSON for live polling."""
     with history_lock:
         return jsonify(list(webhook_history)), 200
+
+
+@app.route('/api/disk-space')
+def api_disk_space():
+    """Return current disk space for downloads, tv, movies, and arr root folders."""
+    return jsonify(get_disk_space_summary()), 200
 
 
 if __name__ == '__main__':

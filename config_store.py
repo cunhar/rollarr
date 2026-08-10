@@ -70,6 +70,9 @@ DEFAULT_CONFIG = {
     'SSH_USER': 'ricardo',
     'SSH_PASSWORD': '',
     'SSH_KEY_PATH': '/root/.ssh/id_rsa',
+    'PATH_DOWNLOADS': '/downloads',
+    'PATH_TV': '/tv',
+    'PATH_MOVIES': '/movies',
 }
 
 _current_config: dict[str, Any] = {}
