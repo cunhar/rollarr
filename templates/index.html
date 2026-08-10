@@ -571,6 +571,30 @@
         .form-input:focus {
             border-color: var(--accent);
         }
+
+        /* ── TV Remote High-Visibility Focus Ring ──────────── */
+        :focus-visible {
+            outline: 3px solid var(--accent) !important;
+            outline-offset: 2px !important;
+            box-shadow: 0 0 16px rgba(91,106,240,0.85), 0 0 4px var(--accent) !important;
+            border-color: var(--accent) !important;
+            z-index: 10 !important;
+        }
+
+        .conn-pill:focus-visible {
+            background: var(--surface-2) !important;
+            transform: scale(1.05);
+        }
+
+        .tab-btn:focus-visible {
+            background: var(--surface-2) !important;
+            color: var(--text) !important;
+        }
+
+        .btn-clear:focus-visible {
+            background: var(--accent-dim) !important;
+            transform: scale(1.03);
+        }
         .form-grid {
             display: grid;
             grid-template-columns: 1fr 1fr;
@@ -1512,6 +1536,112 @@ updatePillLinks({
 
 pollAll();
 setInterval(pollAll, REFRESH_MS);
+
+// ── Spatial D-Pad Navigation for TV Remotes ───────────────────
+(function initTVNavigation() {
+    const FOCUSABLE_SELECTOR = 'a[href], button:not(:disabled), input:not(:disabled), select:not(:disabled), details summary, [tabindex="0"]';
+
+    function getFocusableElements() {
+        return Array.from(document.querySelectorAll(FOCUSABLE_SELECTOR)).filter(el => {
+            const rect = el.getBoundingClientRect();
+            const style = window.getComputedStyle(el);
+            return rect.width > 0 && rect.height > 0 && style.visibility !== 'hidden' && style.display !== 'none';
+        });
+    }
+
+    function getCenter(rect) {
+        return {
+            x: rect.left + rect.width / 2,
+            y: rect.top + rect.height / 2
+        };
+    }
+
+    function findNearestElement(currentEl, direction) {
+        const candidates = getFocusableElements().filter(el => el !== currentEl);
+        if (candidates.length === 0) return null;
+
+        const currentRect = currentEl.getBoundingClientRect();
+        const currentCenter = getCenter(currentRect);
+
+        let bestCandidate = null;
+        let minDistance = Infinity;
+
+        candidates.forEach(cand => {
+            const candRect = cand.getBoundingClientRect();
+            const candCenter = getCenter(candRect);
+
+            let dx = candCenter.x - currentCenter.x;
+            let dy = candCenter.y - currentCenter.y;
+
+            let isDirectionValid = false;
+
+            switch (direction) {
+                case 'ArrowUp':
+                    isDirectionValid = dy < -2;
+                    break;
+                case 'ArrowDown':
+                    isDirectionValid = dy > 2;
+                    break;
+                case 'ArrowLeft':
+                    isDirectionValid = dx < -2;
+                    break;
+                case 'ArrowRight':
+                    isDirectionValid = dx > 2;
+                    break;
+            }
+
+            if (!isDirectionValid) return;
+
+            // Spatial weighting: penalize off-axis distance so aligned elements win
+            let primaryDist = (direction === 'ArrowUp' || direction === 'ArrowDown') ? Math.abs(dy) : Math.abs(dx);
+            let secondaryDist = (direction === 'ArrowUp' || direction === 'ArrowDown') ? Math.abs(dx) : Math.abs(dy);
+            
+            let score = primaryDist + (secondaryDist * 2.5);
+
+            if (score < minDistance) {
+                minDistance = score;
+                bestCandidate = cand;
+            }
+        });
+
+        return bestCandidate;
+    }
+
+    document.addEventListener('keydown', (e) => {
+        const navKeys = ['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'];
+        if (!navKeys.includes(e.key)) return;
+
+        const active = document.activeElement;
+        const focusables = getFocusableElements();
+
+        if (focusables.length === 0) return;
+
+        // If typing inside an input/select and pressing Left/Right, allow native cursor movement unless at boundary
+        if (active && (active.tagName === 'INPUT' || active.tagName === 'SELECT')) {
+            if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') {
+                return;
+            }
+        }
+
+        // If no element is currently focused or body is focused, pick active tab or first visible element
+        if (!active || active === document.body || !focusables.includes(active)) {
+            e.preventDefault();
+            const firstTarget = document.querySelector('.tab-btn.active') || focusables[0];
+            if (firstTarget) {
+                firstTarget.focus();
+                firstTarget.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+            }
+            return;
+        }
+
+        const nextEl = findNearestElement(active, e.key);
+        if (nextEl) {
+            e.preventDefault();
+            nextEl.focus();
+            nextEl.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+        }
+    });
+})();
 </script>
 </body>
 </html>
