@@ -398,17 +398,17 @@
             pointer-events: auto;
             background: var(--surface-2);
             border: 1px solid var(--border-hi);
-            border-left: 3px solid var(--accent);
-            padding: 10px 16px;
-            font-size: 11px;
+            border-left: 4px solid var(--accent);
+            padding: 12px 18px;
+            font-size: 13px;
             font-family: var(--mono);
             color: var(--text);
-            box-shadow: 0 4px 16px rgba(0,0,0,0.6);
+            box-shadow: 0 6px 20px rgba(0,0,0,0.7);
             display: flex;
             align-items: center;
-            gap: 10px;
+            gap: 12px;
             animation: toastSlideIn .25s ease-out;
-            max-width: 340px;
+            max-width: 400px;
         }
         .toast.ok   { border-left-color: var(--green); }
         .toast.err  { border-left-color: var(--red); }
@@ -680,6 +680,8 @@
             .stream-title { font-size: 18px; }
             .stream-device { font-size: 14px; }
             .log-entry, .log-msg { font-size: 14px; }
+            .toast-container { top: 30px; right: 30px; gap: 12px; }
+            .toast { font-size: 16px; padding: 16px 24px; max-width: 480px; border-left-width: 5px; }
         }
 
         /* 4K Ultra-HD Displays & Big Screen TVs (1600px+) */
@@ -724,6 +726,8 @@
             .idle-track { height: 10px; }
             .btn-clear { font-size: 17px; padding: 12px 24px; border-width: 2px; }
             .badge { font-size: 15px; padding: 5px 14px; }
+            .toast-container { top: 40px; right: 40px; gap: 16px; }
+            .toast { font-size: 20px; padding: 20px 32px; max-width: 620px; border-left-width: 6px; }
             ::-webkit-scrollbar { width: 14px; height: 14px; }
             ::-webkit-scrollbar-thumb { border-radius: 7px; border-width: 3px; }
         }
@@ -770,6 +774,8 @@
             .idle-track { height: 12px; }
             .btn-clear { font-size: 20px; padding: 14px 30px; border-width: 2px; }
             .badge { font-size: 17px; padding: 6px 16px; }
+            .toast-container { top: 50px; right: 50px; gap: 20px; }
+            .toast { font-size: 24px; padding: 24px 38px; max-width: 750px; border-left-width: 8px; }
         }
     </style>
 </head>
