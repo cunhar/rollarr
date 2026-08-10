@@ -269,6 +269,12 @@
             height: 100%;
             transition: width .6s ease, background .4s;
         }
+        .idle-meta {
+            margin-top: 8px;
+            font-size: 11px;
+            font-family: var(--mono);
+            color: var(--text-sub);
+        }
         .badge {
             display: inline-block;
             font-size: 9px;
@@ -744,7 +750,7 @@
         <div class="idle-section">
             <div class="idle-header">
                 <span class="idle-label">Idle shutdown threshold</span>
-                <span class="idle-count" id="pw-streak-label">{{ plex_status.idle_streak }} of {{ plex_status.idle_needed }} polls with no streams</span>
+                <span class="idle-count" id="pw-streak-label">{{ plex_status.idle_streak }} of {{ plex_status.idle_needed }} polls</span>
             </div>
             <div class="idle-track">
                 <div class="idle-fill" id="pw-bar"
@@ -752,6 +758,7 @@
                            background: {{ '#e05252' if plex_status.idle_streak >= plex_status.idle_needed else ('#e5a00d' if plex_status.idle_streak > 0 else '#3ecf8e') }};">
                 </div>
             </div>
+            <div class="idle-meta" id="pw-shutdown-detail"></div>
         </div>
         {% endif %}
 
@@ -954,11 +961,60 @@ function escapeHtml(str) {
     return String(str).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 }
 
+function formatShutdownWatcher(s) {
+    const idleNeeded = s.idle_needed || 3;
+    const idleStreak = s.idle_streak || 0;
+    const pollInterval = s.poll_interval || 1200;
+    const pollMins = Math.max(1, Math.round(pollInterval / 60));
+    
+    let label = '';
+    let detail = '';
+    
+    if (s.stream_count > 0) {
+        const streamStr = s.stream_count === 1 ? '1 active Plex stream' : `${s.stream_count} active Plex streams`;
+        label = `0 of ${idleNeeded} polls — Shutdown paused (${streamStr})`;
+        detail = `Active playback detected on Plex. Idle countdown is paused.`;
+    } else if (s.nzbget_active) {
+        label = `0 of ${idleNeeded} polls — Shutdown paused (${s.nzbget_detail || 'NZBGet active'})`;
+        detail = `Active downloads in progress on NZBGet. Idle countdown is paused.`;
+    } else if (idleStreak >= idleNeeded) {
+        label = `${idleNeeded} of ${idleNeeded} idle polls — Shutdown threshold reached!`;
+        detail = `Host shutdown triggered via SSH.`;
+    } else {
+        const pollsLeft = Math.max(0, idleNeeded - idleStreak);
+        const minsLeft = pollsLeft * pollMins;
+        let timeStr = '';
+        if (minsLeft >= 60) {
+            const h = Math.floor(minsLeft / 60);
+            const m = minsLeft % 60;
+            timeStr = `${h}h${m > 0 ? ' ' + m + 'm' : ''}`;
+        } else {
+            timeStr = `${minsLeft} min`;
+        }
+        
+        if (idleStreak === 0) {
+            label = `0 of ${idleNeeded} idle polls (~${timeStr} until shutdown at ${pollMins} min/poll)`;
+        } else {
+            const pollWord = pollsLeft === 1 ? '1 poll' : `${pollsLeft} polls`;
+            label = `${idleStreak} of ${idleNeeded} idle polls (${pollWord} / ~${timeStr} remaining until shutdown)`;
+        }
+        
+        const nextCheckStr = s.next_check ? ` | Next poll: ${s.next_check}` : '';
+        detail = `Poll interval: ${pollMins} min | Est. shutdown in ~${timeStr}${nextCheckStr}`;
+    }
+    
+    return { label, detail };
+}
+
 function updateShutdownWatcher(s) {
-    setText('pw-streak-label', `${s.idle_streak} of ${s.idle_needed} polls with no streams`);
+    const formatted = formatShutdownWatcher(s);
+    setText('pw-streak-label', formatted.label);
+    setText('pw-shutdown-detail', formatted.detail);
+
     const bar = el('pw-bar');
     if (bar) {
-        const pct = Math.min((s.idle_streak / s.idle_needed) * 100, 100);
+        const isPaused = (s.stream_count > 0 || s.nzbget_active);
+        const pct = isPaused ? 0 : Math.min((s.idle_streak / s.idle_needed) * 100, 100);
         bar.style.width = pct + '%';
         bar.style.background = s.idle_streak >= s.idle_needed ? '#e05252'
                              : s.idle_streak > 0              ? '#e5a00d'

@@ -31,6 +31,8 @@ watcher_state = {
     'idle_streak':    0,                   # consecutive idle polls
     'idle_needed':    3,
     'poll_interval':  1200,
+    'nzbget_active':  False,
+    'nzbget_detail':  '',
     'last_check':     None,                # ISO timestamp string
     'next_check':     None,                # ISO timestamp string
     'last_action':    None,                # description of last significant action
@@ -72,10 +74,22 @@ def get_state(refresh_live: bool = True):
         if now_time - _last_fetch_time > 5:
             _last_fetch_time = now_time
             count, streams = _get_active_sessions()
+            has_dl, dl_detail = _has_active_downloads()
             if count is not None:
-                _update_state(status='ok', stream_count=count, active_streams=streams, last_check=_now())
+                _update_state(
+                    status='ok',
+                    stream_count=count,
+                    active_streams=streams,
+                    nzbget_active=has_dl,
+                    nzbget_detail=dl_detail,
+                    last_check=_now()
+                )
             else:
-                _update_state(status='unreachable')
+                _update_state(
+                    status='unreachable',
+                    nzbget_active=has_dl,
+                    nzbget_detail=dl_detail
+                )
     with _state_lock:
         return dict(watcher_state)
 
@@ -195,6 +209,28 @@ def _get_active_sessions() -> tuple[int | None, list[dict]]:
         return None, []
 
 
+def _has_active_downloads() -> tuple[bool, str]:
+    """Check if NZBGet is active (downloading or queued items)."""
+    try:
+        from integrations.nzbget import get_nzbget_status
+        nzb_st = get_nzbget_status()
+        if nzb_st.get('connected') and not nzb_st.get('download_paused', False):
+            dls = nzb_st.get('downloads', [])
+            rate_bps = nzb_st.get('download_rate_bps', 0)
+            active_dls = [
+                d for d in dls 
+                if d.get('status') in ('DOWNLOADING', 'QUEUED', 'FETCHING', 'EXTRACTING', 'POST-PROCESSING')
+            ]
+            if rate_bps > 0 or len(active_dls) > 0:
+                rate_str = nzb_st.get('download_rate', '')
+                count = len(active_dls) or len(dls)
+                detail = f"{count} NZBGet download(s) active" + (f" ({rate_str})" if rate_str else "")
+                return True, detail
+    except Exception as exc:
+        logger.warning(f"[PlexWatcher] Failed checking NZBGet status: {exc}")
+    return False, ""
+
+
 # ── SSH shutdown ─────────────────────────────────────────────────────────────
 
 def _find_ssh_key(configured_path: str) -> str | None:
@@ -303,6 +339,7 @@ def _watcher_loop():
         ).strftime('%Y-%m-%d %H:%M:%S')
 
         stream_count, active_streams = _get_active_sessions()
+        has_dl, dl_detail = _has_active_downloads()
 
         if stream_count is None:
             logger.warning(f"[PlexWatcher] {now_ts} — Plex unreachable.")
@@ -310,6 +347,8 @@ def _watcher_loop():
                 status='unreachable',
                 stream_count=None,
                 active_streams=[],
+                nzbget_active=has_dl,
+                nzbget_detail=dl_detail,
                 last_check=now_ts,
                 next_check=next_ts,
                 idle_streak=idle_streak,
@@ -324,26 +363,47 @@ def _watcher_loop():
                 status='ok',
                 stream_count=stream_count,
                 active_streams=active_streams,
+                nzbget_active=has_dl,
+                nzbget_detail=dl_detail,
                 last_check=now_ts,
                 next_check=next_ts,
                 idle_streak=0,
                 last_action=f"{now_ts} — {stream_count} stream(s) active, idle streak reset",
             )
+        elif has_dl:
+            logger.info(
+                f"[PlexWatcher] {now_ts} — No Plex streams, but NZBGet downloads active ({dl_detail}). "
+                f"Idle streak reset."
+            )
+            idle_streak = 0
+            _update_state(
+                status='ok',
+                stream_count=0,
+                active_streams=[],
+                nzbget_active=True,
+                nzbget_detail=dl_detail,
+                last_check=now_ts,
+                next_check=next_ts,
+                idle_streak=0,
+                last_action=f"{now_ts} — NZBGet active ({dl_detail}), idle streak reset",
+            )
         else:
             idle_streak += 1
             logger.info(
-                f"[PlexWatcher] {now_ts} — No active streams. "
+                f"[PlexWatcher] {now_ts} — System idle (no streams/downloads). "
                 f"Idle streak: {idle_streak}/{idle_needed}"
             )
             _update_state(
                 status='ok',
                 stream_count=0,
                 active_streams=[],
+                nzbget_active=False,
+                nzbget_detail='',
                 last_check=now_ts,
                 next_check=next_ts,
                 idle_streak=idle_streak,
                 last_action=(
-                    f"{now_ts} — No streams (idle streak {idle_streak}/{idle_needed})"
+                    f"{now_ts} — System idle (idle streak {idle_streak}/{idle_needed})"
                 ),
             )
 
