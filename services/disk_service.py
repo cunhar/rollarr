@@ -2,9 +2,10 @@
 services/disk_service.py
 ------------------------
 Monitors available disk space for Downloads, TV Shows, and Movies directories.
-Queries Sonarr & Radarr root folder APIs directly for TV and Movies host disk space,
-falling back to local shutil.disk_usage() if services are unconfigured/unreachable.
+Queries Sonarr & Radarr /api/v3/diskspace & /api/v3/rootfolder endpoints for exact
+host total, free, and used disk statistics.
 """
+from __future__ import annotations
 
 import shutil
 import os
@@ -76,8 +77,37 @@ def _check_local_disk(path_key: str, default_path: str, label: str) -> dict:
         }
 
 
+def _fetch_arr_diskspace(url: str, headers: dict, target_root_path: str) -> tuple[int, int]:
+    """
+    Query Sonarr/Radarr /api/v3/diskspace endpoint for matching mount freeSpace & totalSpace.
+    """
+    try:
+        res = requests.get(f"{url.rstrip('/')}/api/v3/diskspace", headers=headers, timeout=3)
+        if res.status_code == 200:
+            data = res.json()
+            if isinstance(data, list) and len(data) > 0:
+                best_match = None
+                best_len = -1
+                for disk in data:
+                    disk_path = disk.get('path', '')
+                    if disk_path and (target_root_path.startswith(disk_path) or disk_path.startswith(target_root_path)):
+                        if len(disk_path) > best_len:
+                            best_len = len(disk_path)
+                            best_match = disk
+                if not best_match:
+                    best_match = data[0]
+                
+                if best_match:
+                    free_b = best_match.get('freeSpace', 0)
+                    total_b = best_match.get('totalSpace', 0)
+                    return free_b, total_b
+    except Exception as exc:
+        logger.debug(f"[DiskService] Failed fetching diskspace API: {exc}")
+    return 0, 0
+
+
 def _check_arr_root_folder(service_name: str, url_fn, key_fn, headers_fn, label: str, fallback_key: str, fallback_path: str) -> dict:
-    """Fetch root folder disk space statistics directly from Sonarr or Radarr API."""
+    """Fetch root folder path and disk space statistics directly from Sonarr or Radarr API."""
     try:
         url = url_fn()
         key = key_fn()
@@ -89,10 +119,25 @@ def _check_arr_root_folder(service_name: str, url_fn, key_fn, headers_fn, label:
                 if isinstance(data, list) and len(data) > 0:
                     rf = data[0]
                     path = rf.get('path', '')
-                    free_b = rf.get('freeSpace', 0)
-                    total_b = rf.get('totalSpace', 0)
+                    rf_free = rf.get('freeSpace', 0)
+                    rf_total = rf.get('totalSpace', 0)
                     
-                    if total_b and total_b > 0:
+                    # Fetch detailed diskspace metrics from /api/v3/diskspace
+                    ds_free, ds_total = _fetch_arr_diskspace(url, headers, path)
+                    
+                    free_b = ds_free or rf_free
+                    total_b = ds_total or rf_total
+                    
+                    # Fallback to local container disk total if available
+                    if not total_b or total_b <= 0:
+                        if os.path.exists(path):
+                            try:
+                                local_usage = shutil.disk_usage(path)
+                                total_b = local_usage.total
+                            except Exception:
+                                pass
+                    
+                    if total_b and total_b > 0 and total_b >= free_b:
                         used_b = max(0, total_b - free_b)
                         used_pct = round((used_b / total_b) * 100, 1)
                         free_pct = round((free_b / total_b) * 100, 1)
