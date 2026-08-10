@@ -889,11 +889,15 @@
                     <label class="form-label">Shutdown Idle Polls Threshold</label>
                     <input type="number" class="form-input" id="cfg-PLEX_IDLE_POLLS" value="{{ cfg.PLEX_IDLE_POLLS }}">
                 </div>
-                <div class="form-group" style="justify-content:center;">
-                    <label class="form-label" style="cursor:pointer; display:flex; align-items:center; gap:8px; margin-top:20px; text-transform:none;">
-                        <input type="checkbox" id="cfg-PLEX_SHUTDOWN_DRY_RUN" {{ 'checked' if cfg.PLEX_SHUTDOWN_DRY_RUN else '' }}>
-                        <span>Enable Shutdown Dry Run (Log only)</span>
-                    </label>
+                <div class="form-group" style="grid-column: 1 / -1;">
+                    <label class="form-label">Shutdown Mode (Dry Run vs Real Host Shutdown)</label>
+                    <select class="form-input" id="cfg-PLEX_SHUTDOWN_DRY_RUN">
+                        <option value="true" {{ 'selected' if cfg.PLEX_SHUTDOWN_DRY_RUN else '' }}>Dry Run — log shutdown triggers without turning off host (Safe Mode)</option>
+                        <option value="false" {{ 'selected' if not cfg.PLEX_SHUTDOWN_DRY_RUN else '' }}>Enabled — perform real host shutdown via SSH when idle threshold reached</option>
+                    </select>
+                    <span style="font-size:11px; color:var(--text-muted); font-family:var(--mono); margin-top:4px; display:block;">
+                        Controls whether idle triggers execute actual host shutdown commands via SSH or only simulate and log them.
+                    </span>
                 </div>
             </div>
 
@@ -1234,7 +1238,7 @@ function saveConfiguration() {
         PLEX_WATCH_INTERVAL: parseInt(el('cfg-PLEX_WATCH_INTERVAL').value) || 3600,
         PLEX_POLL_INTERVAL: parseInt(el('cfg-PLEX_POLL_INTERVAL').value) || 1200,
         PLEX_IDLE_POLLS: parseInt(el('cfg-PLEX_IDLE_POLLS').value) || 3,
-        PLEX_SHUTDOWN_DRY_RUN: el('cfg-PLEX_SHUTDOWN_DRY_RUN').checked,
+        PLEX_SHUTDOWN_DRY_RUN: el('cfg-PLEX_SHUTDOWN_DRY_RUN').value === 'true',
         SSH_HOST: el('cfg-SSH_HOST').value,
         SSH_PORT: parseInt(el('cfg-SSH_PORT').value) || 22,
         SSH_USER: el('cfg-SSH_USER').value,
