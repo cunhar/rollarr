@@ -872,15 +872,19 @@
             <button class="btn-clear" id="btn-shutdown-now" onclick="triggerShutdownNow()">Shutdown Now</button>
         </div>
 
+        {% set streak = plex_status.idle_streak or 0 %}
+        {% set needed = plex_status.idle_needed if (plex_status.idle_needed and plex_status.idle_needed > 0) else 3 %}
+        {% set pct_raw = (streak / needed * 100) | round | int %}
+        {% set pct = 100 if pct_raw > 100 else (0 if pct_raw < 0 else pct_raw) %}
         <div class="idle-section">
             <div class="idle-header">
                 <span class="idle-label">Idle shutdown threshold</span>
-                <span class="idle-count" id="pw-streak-label">{{ plex_status.idle_streak }} of {{ plex_status.idle_needed }} polls</span>
+                <span class="idle-count" id="pw-streak-label">{{ streak }} of {{ needed }} polls</span>
             </div>
             <div class="idle-track">
                 <div class="idle-fill" id="pw-bar"
-                    style="width: {{ [[plex_status.idle_streak / plex_status.idle_needed * 100, 100] | min, 0] | max }}%;
-                           background: {{ '#e05252' if plex_status.idle_streak >= plex_status.idle_needed else ('#e5a00d' if plex_status.idle_streak > 0 else '#3ecf8e') }};">
+                    style="width: {{ pct }}%;
+                           background: {{ '#e05252' if streak >= needed else ('#e5a00d' if streak > 0 else '#3ecf8e') }};">
                 </div>
             </div>
             <div class="idle-meta" id="pw-shutdown-detail"></div>

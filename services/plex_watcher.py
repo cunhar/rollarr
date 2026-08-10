@@ -256,17 +256,22 @@ def _has_active_plex_activities() -> tuple[bool, str]:
             params={'X-Plex-Token': plex_token},
             timeout=5,
         )
-        resp.raise_for_status()
+        if resp.status_code != 200:
+            return False, ""
         data = resp.json()
-        container = data.get('MediaContainer', {})
+        container = data.get('MediaContainer', {}) if isinstance(data, dict) else {}
         activities = container.get('Activity', []) or []
         
-        if len(activities) > 0:
+        if isinstance(activities, dict):
+            activities = [activities]
+            
+        if isinstance(activities, list) and len(activities) > 0:
             act = activities[0]
-            title = act.get('title') or act.get('type') or 'Background Task'
-            subtitle = act.get('subtitle') or ''
-            detail = f"Plex {title}" + (f" ({subtitle})" if subtitle else "")
-            return True, detail
+            if isinstance(act, dict):
+                title = act.get('title') or act.get('type') or 'Background Task'
+                subtitle = act.get('subtitle') or ''
+                detail = f"Plex {title}" + (f" ({subtitle})" if subtitle else "")
+                return True, detail
     except Exception as exc:
         logger.debug(f"[PlexWatcher] Failed checking Plex background activities: {exc}")
     return False, ""
