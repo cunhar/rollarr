@@ -276,6 +276,13 @@ def api_clear_logs():
     return jsonify({"status": "success"}), 200
 
 
+@app.route('/api/activity')
+def api_activity():
+    """Return the current activity log as JSON for live polling."""
+    with history_lock:
+        return jsonify(list(webhook_history)), 200
+
+
 # ── Service Worker & Offline Fallback ───────────────────────────────────────
 
 @app.route('/sw.js')

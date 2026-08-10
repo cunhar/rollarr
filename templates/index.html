@@ -750,7 +750,7 @@
         </div>
 
         {% if history %}
-        <div class="log-list">
+        <div class="log-list" id="activity-log-container">
             {% for log in history %}
             {% set gutter = 'ok' if log.status == 'success' else ('warn' if log.status == 'warning' else 'err') %}
             <div class="log-entry">
@@ -772,7 +772,7 @@
             {% endfor %}
         </div>
         {% else %}
-        <div class="no-logs">No media items processed yet.</div>
+        <div class="no-logs" id="activity-log-container">No media items processed yet.</div>
         {% endif %}
 
     </div>
@@ -1017,6 +1017,45 @@ function pollAll() {
         .then(r => r.ok ? r.json() : null)
         .then(d => { if (d) updateNZBGet(d); })
         .catch(() => {});
+    fetch('/api/activity')
+        .then(r => r.ok ? r.json() : null)
+        .then(d => { if (d) updateActivityLog(d); })
+        .catch(() => {});
+}
+
+function updateActivityLog(logs) {
+    const container = el('activity-log-container');
+    if (!container) return;
+
+    if (!logs || logs.length === 0) {
+        container.className = 'no-logs';
+        container.innerHTML = 'No media items processed yet.';
+        return;
+    }
+
+    container.className = 'log-list';
+    container.innerHTML = logs.map(log => {
+        const gutter = log.status === 'success' ? 'ok'
+                     : log.status === 'warning'  ? 'warn'
+                     :                             'err';
+        const payloadHtml = log.payload
+            ? `<details>
+                <summary class="log-payload-toggle">View payload</summary>
+                <pre class="log-payload-pre"><code>${escapeHtml(JSON.stringify(log.payload, null, 2))}</code></pre>
+               </details>`
+            : '';
+        return `<div class="log-entry">
+            <div class="log-gutter ${gutter}"></div>
+            <div class="log-body">
+                <div class="log-meta">
+                    <span class="log-ts">${escapeHtml(log.timestamp)}</span>
+                    <span class="log-tag ${gutter}">${escapeHtml(log.status)}</span>
+                </div>
+                <div class="log-msg">${escapeHtml(log.message)}</div>
+                ${payloadHtml}
+            </div>
+        </div>`;
+    }).join('');
 }
 
 function updateConnectionPills(d) {
@@ -1105,8 +1144,7 @@ function clearLogs() {
     fetch('/api/clear-logs', { method: 'POST' })
         .then(r => r.json())
         .then(() => {
-            const list = document.querySelector('.log-list');
-            if (list) list.outerHTML = '<div class="no-logs">No episodes processed yet.</div>';
+            updateActivityLog([]);
             showToast('Activity logs cleared', 'ok');
         })
         .catch(() => showToast('Failed to clear logs', 'err'))
