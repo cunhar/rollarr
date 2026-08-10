@@ -1,0 +1,18 @@
+{
+  "name": "Rolarr — Media Recycler & Power Saver",
+  "short_name": "Rolarr",
+  "description": "Automated media recycler and power saver for Sonarr, Radarr, Plex, and NZBGet",
+  "start_url": "/",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#0c0c0e",
+  "theme_color": "#0c0c0e",
+  "icons": [
+    {
+      "src": "/static/favicon.png",
+      "sizes": "192x192 512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}
