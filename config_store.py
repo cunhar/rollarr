@@ -70,8 +70,6 @@ DEFAULT_CONFIG = {
     'SSH_USER': 'ricardo',
     'SSH_PASSWORD': '',
     'SSH_KEY_PATH': '/root/.ssh/id_rsa',
-    # Wake-on-LAN / wake endpoint — leave blank to hide the button on the offline page
-    'WAKE_URL': '',
 }
 
 _current_config: dict[str, Any] = {}

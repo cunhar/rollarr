@@ -1,4 +1,5 @@
-from flask import Flask, request, jsonify, render_template, send_from_directory
+from flask import Flask, request, jsonify, render_template
+
 import requests
 import os
 import logging
@@ -281,40 +282,6 @@ def api_activity():
     """Return the current activity log as JSON for live polling."""
     with history_lock:
         return jsonify(list(webhook_history)), 200
-
-
-# ── Service Worker & Offline Fallback ───────────────────────────────────────
-
-@app.route('/sw.js')
-def service_worker():
-    """Serve the Service Worker from the root so it controls the full site scope."""
-    response = send_from_directory(app.static_folder, 'sw.js',
-                                   mimetype='application/javascript')
-    response.headers['Service-Worker-Allowed'] = '/'
-    response.headers['Cache-Control'] = 'no-cache'
-    return response
-
-
-@app.route('/offline')
-def offline():
-    """Offline fallback page served by the Service Worker when the server is unreachable."""
-    cfg = config_store.get_all_config()
-    wake_url = (cfg.get('WAKE_URL') or '').strip()
-    return render_template('offline.html', wake_url=wake_url)
-
-
-@app.route('/cert.pem')
-def serve_cert():
-    """Serve the public TLS certificate so clients can add it to their trust store.
-    Only the public cert is exposed — the private key never leaves the server.
-    """
-    cert_path = os.path.join(CONFIG_DIR, 'cert.pem')
-    if not os.path.exists(cert_path):
-        return 'Certificate not found — is HTTPS enabled?', 404
-    return send_from_directory(CONFIG_DIR, 'cert.pem',
-                               mimetype='application/x-pem-file',
-                               as_attachment=True,
-                               download_name='rolarr.pem')
 
 
 if __name__ == '__main__':
