@@ -451,7 +451,7 @@
             width: 4px;
             flex-shrink: 0;
         }
-        .log-gutter.ok   { background: var(--green); }
+        .log-gutter.ok   { background: var(--border-hi); }
         .log-gutter.warn { background: var(--amber); }
         .log-gutter.err  { background: var(--red); }
         .log-body {
@@ -477,9 +477,9 @@
             padding: 1px 5px;
             border: 1px solid;
         }
-        .log-tag.ok   { color: var(--green); border-color: var(--green); }
-        .log-tag.warn { color: var(--amber); border-color: var(--amber); }
-        .log-tag.err  { color: var(--red);   border-color: var(--red); }
+        .log-tag.ok   { color: var(--text-sub); border-color: var(--border-hi); background: rgba(255,255,255,0.03); }
+        .log-tag.warn { color: var(--amber); border-color: var(--amber); background: rgba(229,160,13,0.08); }
+        .log-tag.err  { color: var(--red);   border-color: var(--red);   background: rgba(224,82,82,0.08); }
         .log-msg {
             color: var(--text);
             font-size: 11px;
@@ -906,8 +906,8 @@
 
         {% if history %}
         <div class="log-list" id="activity-log-container">
-            {% for log in history %}
-            {% set gutter = 'ok' if log.status == 'success' else ('warn' if log.status == 'warning' else 'err') %}
+            {% set st = (log.status or '') | lower %}
+            {% set gutter = 'ok' if st in ['ok', 'success', 'info'] else ('warn' if st in ['warn', 'warning'] else 'err') %}
             <div class="log-entry">
                 <div class="log-gutter {{ gutter }}"></div>
                 <div class="log-body">
@@ -1235,9 +1235,10 @@ function updateActivityLog(logs) {
 
     container.className = 'log-list';
     container.innerHTML = logs.map(log => {
-        const gutter = log.status === 'success' ? 'ok'
-                     : log.status === 'warning'  ? 'warn'
-                     :                             'err';
+        const st = (log.status || '').toLowerCase();
+        const gutter = (st === 'ok' || st === 'success' || st === 'info') ? 'ok'
+                     : (st === 'warn' || st === 'warning') ? 'warn'
+                     : 'err';
         const payloadHtml = log.payload
             ? `<details>
                 <summary class="log-payload-toggle">View payload</summary>
