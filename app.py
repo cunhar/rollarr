@@ -1,4 +1,4 @@
-from flask import Flask, request, jsonify, render_template
+from flask import Flask, request, jsonify, render_template, send_from_directory
 import requests
 import os
 import logging
@@ -274,6 +274,23 @@ def api_clear_logs():
     save_history()
     logger.info("Activity history cleared via UI.")
     return jsonify({"status": "success"}), 200
+
+
+# ── Service Worker & Offline Fallback ───────────────────────────────────────
+
+@app.route('/sw.js')
+def service_worker():
+    """Serve the Service Worker from the root so it controls the full site scope."""
+    return send_from_directory(app.static_folder, 'sw.js',
+                               mimetype='application/javascript')
+
+
+@app.route('/offline')
+def offline():
+    """Offline fallback page served by the Service Worker when the server is unreachable."""
+    cfg = config_store.get_all_config()
+    wake_url = (cfg.get('WAKE_URL') or '').strip()
+    return render_template('offline.html', wake_url=wake_url)
 
 
 if __name__ == '__main__':

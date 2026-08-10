@@ -1,34 +1,10 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Rolarr — Media Recycler & Power Saver</title>
-    <meta name="description" content="Rolarr automated media recycler and power saver for Sonarr, Radarr, Plex, and NZBGet">
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
-    <link rel="icon" type="image/png" href="{{ url_for('static', filename='favicon.png') }}">
+{% extends "base.html" %}
+
+{% block title %}Rolarr — Media Recycler & Power Saver{% endblock %}
+{% block meta_description %}Rolarr automated media recycler and power saver for Sonarr, Radarr, Plex, and NZBGet{% endblock %}
+
+{% block head_extra %}
     <style>
-        *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-
-        :root {
-            color-scheme: dark;
-            --bg:          #0c0c0e;
-            --surface:     #111114;
-            --surface-2:   #18181c;
-            --border:      #242428;
-            --border-hi:   #38383f;
-            --text:        #e8e8ec;
-            --text-sub:    #666672;
-            --text-muted:  #3a3a42;
-            --accent:      #5b6af0;
-            --accent-dim:  rgba(91,106,240,.12);
-            --green:       #3ecf8e;
-            --amber:       #e5a00d;
-            --red:         #e05252;
-            --font:        'Inter', system-ui, sans-serif;
-            --mono:        'JetBrains Mono', 'Fira Code', monospace;
-        }
-
         html {
             scrollbar-gutter: stable;
             overflow-y: scroll;
@@ -645,8 +621,9 @@
             ::-webkit-scrollbar-thumb { border-radius: 7px; border-width: 3px; }
         }
     </style>
-</head>
-<body>
+{% endblock %}
+
+{% block body %}
 <div class="shell">
 
     <!-- Topbar -->
@@ -907,6 +884,17 @@
                 <div class="form-group">
                     <label class="form-label">SSH Password</label>
                     <input type="password" class="form-input" id="cfg-SSH_PASSWORD" value="{{ '••••••••' if cfg.SSH_PASSWORD else '' }}" placeholder="SSH Password">
+                </div>
+            </div>
+
+            <p class="section-title">Offline Page Settings</p>
+            <div class="form-grid">
+                <div class="form-group" style="grid-column: 1 / -1;">
+                    <label class="form-label">Wake Server URL</label>
+                    <input type="url" class="form-input" id="cfg-WAKE_URL" value="{{ cfg.WAKE_URL }}" placeholder="http://pihole:5000/turnon">
+                    <span style="font-size:11px; color:var(--text-muted); font-family:var(--mono); margin-top:4px; display:block;">
+                        GET request sent from the browser when offline. Leave blank to hide the button.
+                    </span>
                 </div>
             </div>
 
@@ -1192,6 +1180,7 @@ function saveConfiguration() {
         SSH_PORT: parseInt(el('cfg-SSH_PORT').value) || 22,
         SSH_USER: el('cfg-SSH_USER').value,
         SSH_PASSWORD: el('cfg-SSH_PASSWORD').value,
+        WAKE_URL: el('cfg-WAKE_URL').value.trim(),
     };
 
     fetch('/api/config/save', {
@@ -1277,5 +1266,4 @@ updatePillLinks({
 pollAll();
 setInterval(pollAll, REFRESH_MS);
 </script>
-</body>
-</html>
+{% endblock %}

@@ -1,0 +1,445 @@
+{% extends "base.html" %}
+
+{% block title %}Rolarr — Server Offline{% endblock %}
+{% block meta_description %}Rolarr server is currently unreachable{% endblock %}
+
+{% block head_extra %}
+<style>
+    html, body {
+        height: 100%;
+        background: var(--bg);
+        color: var(--text);
+        font-family: var(--font);
+        font-size: 15px;
+        -webkit-font-smoothing: antialiased;
+    }
+
+    body {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        min-height: 100vh;
+        padding: 24px;
+    }
+
+    /* Subtle animated background grid */
+    body::before {
+        content: '';
+        position: fixed;
+        inset: 0;
+        background-image:
+            linear-gradient(var(--border) 1px, transparent 1px),
+            linear-gradient(90deg, var(--border) 1px, transparent 1px);
+        background-size: 48px 48px;
+        opacity: 0.35;
+        pointer-events: none;
+        z-index: 0;
+    }
+
+    /* Radial glow behind card */
+    body::after {
+        content: '';
+        position: fixed;
+        inset: 0;
+        background: radial-gradient(ellipse 60% 50% at 50% 50%, rgba(224,82,82,0.06) 0%, transparent 70%);
+        pointer-events: none;
+        z-index: 0;
+    }
+
+    .card {
+        position: relative;
+        z-index: 1;
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: 16px;
+        padding: 48px 40px;
+        max-width: 480px;
+        width: 100%;
+        text-align: center;
+        box-shadow: 0 0 0 1px rgba(255,255,255,0.03), 0 24px 64px rgba(0,0,0,0.6);
+        animation: card-in 0.4s cubic-bezier(0.22,1,0.36,1) both;
+    }
+
+    @keyframes card-in {
+        from { opacity: 0; transform: translateY(12px) scale(0.98); }
+        to   { opacity: 1; transform: translateY(0) scale(1); }
+    }
+
+    /* Pulsing red indicator dot */
+    .status-dot {
+        width: 52px;
+        height: 52px;
+        border-radius: 50%;
+        background: var(--red-dim);
+        border: 1px solid rgba(224,82,82,0.25);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        margin: 0 auto 24px;
+        position: relative;
+    }
+
+    .status-dot::before {
+        content: '';
+        position: absolute;
+        inset: -6px;
+        border-radius: 50%;
+        border: 1px solid rgba(224,82,82,0.15);
+        animation: pulse-ring 2s ease-out infinite;
+    }
+
+    .status-dot::after {
+        content: '';
+        position: absolute;
+        inset: -12px;
+        border-radius: 50%;
+        border: 1px solid rgba(224,82,82,0.07);
+        animation: pulse-ring 2s ease-out 0.3s infinite;
+    }
+
+    @keyframes pulse-ring {
+        0%   { transform: scale(1);   opacity: 1; }
+        100% { transform: scale(1.4); opacity: 0; }
+    }
+
+    .dot-inner {
+        width: 12px;
+        height: 12px;
+        border-radius: 50%;
+        background: var(--red);
+        box-shadow: 0 0 10px rgba(224,82,82,0.6);
+        animation: blink 2s ease-in-out infinite;
+    }
+
+    @keyframes blink {
+        0%, 100% { opacity: 1; }
+        50%       { opacity: 0.4; }
+    }
+
+    h1 {
+        font-size: 1.35rem;
+        font-weight: 600;
+        letter-spacing: -0.02em;
+        margin-bottom: 8px;
+        color: var(--text);
+    }
+
+    .subtitle {
+        color: var(--text-sub);
+        font-size: 0.875rem;
+        line-height: 1.6;
+        margin-bottom: 32px;
+    }
+
+    /* Chip / badge */
+    .badge {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        background: var(--red-dim);
+        border: 1px solid rgba(224,82,82,0.2);
+        border-radius: 6px;
+        padding: 6px 12px;
+        font-family: var(--mono);
+        font-size: 0.75rem;
+        color: var(--red);
+        margin-bottom: 32px;
+    }
+
+    .badge-dot {
+        width: 6px;
+        height: 6px;
+        border-radius: 50%;
+        background: var(--red);
+    }
+
+    /* Divider */
+    .divider {
+        height: 1px;
+        background: var(--border);
+        margin: 0 0 24px;
+    }
+
+    /* Info rows */
+    .info-row {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 10px 0;
+        border-bottom: 1px solid var(--border);
+        font-size: 0.8rem;
+    }
+
+    .info-row:last-child {
+        border-bottom: none;
+    }
+
+    .info-label {
+        color: var(--text-sub);
+    }
+
+    .info-value {
+        font-family: var(--mono);
+        font-size: 0.75rem;
+        color: var(--text-muted);
+        background: var(--surface-2);
+        border: 1px solid var(--border);
+        border-radius: 4px;
+        padding: 2px 8px;
+    }
+
+    /* Retry button */
+    .btn-retry {
+        margin-top: 28px;
+        width: 100%;
+        padding: 12px 24px;
+        background: var(--accent-dim);
+        border: 1px solid rgba(91,106,240,0.3);
+        border-radius: 8px;
+        color: var(--accent);
+        font-family: var(--font);
+        font-size: 0.875rem;
+        font-weight: 500;
+        cursor: pointer;
+        transition: background 0.2s, border-color 0.2s, transform 0.1s;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 8px;
+        text-decoration: none;
+    }
+
+    .btn-retry:hover {
+        background: rgba(91,106,240,0.18);
+        border-color: rgba(91,106,240,0.5);
+    }
+
+    .btn-retry:active {
+        transform: scale(0.98);
+    }
+
+    /* Wordmark */
+    .wordmark {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 8px;
+        margin-bottom: 28px;
+    }
+
+    .wordmark img {
+        width: 28px;
+        height: 28px;
+        border-radius: 6px;
+    }
+
+    .wordmark-text {
+        font-size: 1.05rem;
+        font-weight: 600;
+        letter-spacing: -0.02em;
+        color: var(--text-sub);
+    }
+
+    /* Footer note */
+    .footer-note {
+        margin-top: 20px;
+        font-size: 0.75rem;
+        color: var(--text-muted);
+    }
+
+    /* Wake button */
+    .btn-wake {
+        margin-top: 10px;
+        width: 100%;
+        padding: 12px 24px;
+        background: rgba(62,207,142,0.1);
+        border: 1px solid rgba(62,207,142,0.25);
+        border-radius: 8px;
+        color: var(--green);
+        font-family: var(--font);
+        font-size: 0.875rem;
+        font-weight: 500;
+        cursor: pointer;
+        transition: background 0.2s, border-color 0.2s, transform 0.1s;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 8px;
+        text-decoration: none;
+    }
+    .btn-wake:hover {
+        background: rgba(62,207,142,0.18);
+        border-color: rgba(62,207,142,0.5);
+    }
+    .btn-wake:active { transform: scale(0.98); }
+    .btn-wake:disabled {
+        opacity: 0.6;
+        cursor: not-allowed;
+        transform: none;
+    }
+    .btn-wake.state-calling {
+        background: rgba(229,160,13,0.1);
+        border-color: rgba(229,160,13,0.3);
+        color: var(--amber);
+    }
+    .btn-wake.state-ok {
+        background: rgba(62,207,142,0.15);
+        border-color: rgba(62,207,142,0.5);
+        color: var(--green);
+    }
+    .btn-wake.state-err {
+        background: rgba(224,82,82,0.1);
+        border-color: rgba(224,82,82,0.3);
+        color: var(--red);
+    }
+</style>
+{% endblock %}
+
+{% block body %}
+<div class="card">
+
+    <div class="wordmark">
+        <img src="{{ url_for('static', filename='favicon.png') }}" alt="Rolarr">
+        <span class="wordmark-text">Rolarr</span>
+    </div>
+
+    <div class="status-dot">
+        <div class="dot-inner"></div>
+    </div>
+
+    <h1>Server Unreachable</h1>
+    <p class="subtitle">
+        The Rolarr server is offline or cannot be reached from this device.<br>
+        This is a cached offline page — your settings are safe.
+    </p>
+
+    <div class="badge">
+        <div class="badge-dot"></div>
+        SERVER OFFLINE
+    </div>
+
+    <div class="divider"></div>
+
+    <div class="info-row">
+        <span class="info-label">Status</span>
+        <span class="info-value" id="status-val">Offline</span>
+    </div>
+    <div class="info-row">
+        <span class="info-label">Last checked</span>
+        <span class="info-value" id="last-check">—</span>
+    </div>
+    <div class="info-row">
+        <span class="info-label">Page source</span>
+        <span class="info-value">Service Worker Cache</span>
+    </div>
+
+    <a id="btn-retry" class="btn-retry" href="/">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <polyline points="1 4 1 10 7 10"></polyline>
+            <path d="M3.51 15a9 9 0 1 0 .49-3.75"></path>
+        </svg>
+        Try Again
+    </a>
+
+    {% if wake_url %}
+    <button id="btn-wake" class="btn-wake" data-wake-url="{{ wake_url | e }}"
+            onclick="wakeServer()">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M18.36 6.64A9 9 0 1 1 5.64 6.64"></path>
+            <line x1="12" y1="2" x2="12" y2="12"></line>
+        </svg>
+        <span id="wake-label">Wake Server</span>
+    </button>
+    {% endif %}
+
+    <p class="footer-note" id="footer-note">Auto-retrying every 15 seconds…</p>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    // Show the time this offline page was loaded
+    const lastCheck = document.getElementById('last-check');
+    lastCheck.textContent = new Date().toLocaleTimeString();
+
+    // Auto-retry: check if server is back every 15 seconds
+    async function tryReconnect() {
+        lastCheck.textContent = new Date().toLocaleTimeString();
+        try {
+            const res = await fetch('/', { method: 'HEAD', cache: 'no-store' });
+            if (res.ok) {
+                // Server is back — reload the real page
+                window.location.reload();
+            }
+        } catch (_) {
+            // Still offline, keep waiting
+        }
+    }
+
+    setInterval(tryReconnect, 15000);
+
+    // Retry button
+    document.getElementById('btn-retry').addEventListener('click', (e) => {
+        e.preventDefault();
+        tryReconnect().then(() => {
+            // If fetch didn't redirect us (still offline), do a full navigate anyway
+            setTimeout(() => { window.location.href = '/'; }, 300);
+        });
+    });
+
+    // ── Wake Server button ────────────────────────────────────────────────────
+    const wakeBtn   = document.getElementById('btn-wake');
+    const wakeLabel = document.getElementById('wake-label');
+    const footerNote = document.getElementById('footer-note');
+
+    async function wakeServer() {
+        if (!wakeBtn) return;
+        const url = wakeBtn.dataset.wakeUrl;
+        if (!url) return;
+
+        // Calling state
+        wakeBtn.disabled = true;
+        wakeBtn.className = 'btn-wake state-calling';
+        wakeLabel.textContent = 'Sending wake signal…';
+        footerNote.textContent = 'Wake signal sent — waiting for server to come online…';
+
+        try {
+            // Use no-cors because the wake endpoint may not send CORS headers.
+            // We won't be able to read the response body, but the request will fire.
+            await fetch(url, { method: 'GET', mode: 'no-cors', cache: 'no-store' });
+
+            // Optimistically assume it worked
+            wakeBtn.className = 'btn-wake state-ok';
+            wakeLabel.textContent = 'Signal sent — waiting…';
+
+            // Start checking every 3 seconds for up to 30 seconds
+            let attempts = 0;
+            const checkInterval = setInterval(async () => {
+                attempts++;
+                try {
+                    const res = await fetch('/', { method: 'HEAD', cache: 'no-store' });
+                    if (res.ok) {
+                        clearInterval(checkInterval);
+                        window.location.reload();
+                        return;
+                    }
+                } catch (_) { /* still offline */ }
+
+                if (attempts >= 10) {
+                    clearInterval(checkInterval);
+                    wakeBtn.disabled = false;
+                    wakeBtn.className = 'btn-wake state-err';
+                    wakeLabel.textContent = 'Server not responding — try again';
+                    footerNote.textContent = 'Auto-retrying every 15 seconds…';
+                }
+            }, 3000);
+
+        } catch (_) {
+            wakeBtn.disabled = false;
+            wakeBtn.className = 'btn-wake state-err';
+            wakeLabel.textContent = 'Wake request failed — try again';
+            footerNote.textContent = 'Auto-retrying every 15 seconds…';
+        }
+    }
+</script>
+{% endblock %}
