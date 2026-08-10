@@ -34,6 +34,7 @@ from integrations.radarr import (
     get_radarr_api_key,
     find_movie_by_title_and_year,
     unmonitor_and_delete_movie,
+    unmonitor_movie,
 )
 
 from config_store import get_config
@@ -346,7 +347,13 @@ def _process_movie(item: dict) -> tuple[str, str]:
         return 'warning', f"Movie '{title} ({year or ''})' — not found in Radarr library, skipping"
 
     movie_title = movie_title or title
-    _, action_detail = unmonitor_and_delete_movie(movie_id)
+
+    # Respect the global delete flag — same setting that governs Sonarr episode cleanup
+    delete_enabled = bool(get_config('DELETE_WATCHED_EPISODES', True))
+    if delete_enabled:
+        _, action_detail = unmonitor_and_delete_movie(movie_id)
+    else:
+        _, action_detail = unmonitor_movie(movie_id)
 
     # Remove item directly from Plex library so it won't show up on next scan
     deleted_from_plex = _plex_delete_item(item.get('ratingKey'))

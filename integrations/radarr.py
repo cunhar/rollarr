@@ -93,20 +93,20 @@ def unmonitor_and_delete_movie(movie_id):
     radarr_url = get_radarr_url()
     if not radarr_url:
         raise ValueError("RADARR_URL is not configured")
-        
+
     url = f"{radarr_url}/api/v3/movie/{movie_id}"
     try:
         res = requests.get(url, headers=get_radarr_headers(), timeout=10)
         res.raise_for_status()
         movie = res.json()
-        
+
         # Unmonitor if currently monitored
         if movie.get('monitored', True):
             movie['monitored'] = False
             put_res = requests.put(url, headers=get_radarr_headers(), json=movie, timeout=10)
             put_res.raise_for_status()
             logger.info(f"Unmonitored movie ID {movie_id} in Radarr")
-            
+
         # Delete movie file if present
         movie_file_id = movie.get('movieFileId', 0)
         if movie_file_id and movie_file_id > 0:
@@ -119,4 +119,28 @@ def unmonitor_and_delete_movie(movie_id):
             return True, "Unmonitored movie (no movie file found on disk)"
     except Exception as e:
         logger.error(f"Error unmonitoring/deleting movie ID {movie_id} in Radarr: {e}")
+        raise
+
+
+def unmonitor_movie(movie_id):
+    """Unmonitor a movie in Radarr without deleting its file from disk."""
+    radarr_url = get_radarr_url()
+    if not radarr_url:
+        raise ValueError("RADARR_URL is not configured")
+
+    url = f"{radarr_url}/api/v3/movie/{movie_id}"
+    try:
+        res = requests.get(url, headers=get_radarr_headers(), timeout=10)
+        res.raise_for_status()
+        movie = res.json()
+
+        if movie.get('monitored', True):
+            movie['monitored'] = False
+            put_res = requests.put(url, headers=get_radarr_headers(), json=movie, timeout=10)
+            put_res.raise_for_status()
+            logger.info(f"Unmonitored movie ID {movie_id} in Radarr (file kept on disk)")
+
+        return True, "Unmonitored movie (file kept on disk, delete disabled)"
+    except Exception as e:
+        logger.error(f"Error unmonitoring movie ID {movie_id} in Radarr: {e}")
         raise

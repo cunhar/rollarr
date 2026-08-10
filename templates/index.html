@@ -786,6 +786,20 @@
 
         <form id="config-form" onsubmit="event.preventDefault(); saveConfiguration();">
 
+            <p class="section-title">Media Cleanup</p>
+            <div class="form-grid">
+                <div class="form-group" style="grid-column: 1 / -1;">
+                    <label class="form-label">Delete Watched Media Files (Sonarr &amp; Radarr)</label>
+                    <select class="form-input" id="cfg-DELETE_WATCHED_EPISODES">
+                        <option value="true" {{ 'selected' if cfg.DELETE_WATCHED_EPISODES else '' }}>Enabled — delete file from disk after watching</option>
+                        <option value="false" {{ 'selected' if not cfg.DELETE_WATCHED_EPISODES else '' }}>Disabled — unmonitor only, keep file on disk</option>
+                    </select>
+                    <span style="font-size:11px; color:var(--text-muted); font-family:var(--mono); margin-top:4px; display:block;">
+                        Applies to both TV episodes (Sonarr) and movies (Radarr) when triggered by Plex watch history.
+                    </span>
+                </div>
+            </div>
+
             <p class="section-title">Sonarr Settings</p>
             <div class="form-grid">
                 <div class="form-group">
@@ -799,13 +813,6 @@
                 <div class="form-group">
                     <label class="form-label">Rolling Window (Episodes)</label>
                     <input type="number" class="form-input" id="cfg-ROLLING_WINDOW" value="{{ cfg.ROLLING_WINDOW }}" min="1" max="50">
-                </div>
-                <div class="form-group">
-                    <label class="form-label">Delete Watched Episodes (Disk Cleanup)</label>
-                    <select class="form-input" id="cfg-DELETE_WATCHED_EPISODES">
-                        <option value="true" {{ 'selected' if cfg.DELETE_WATCHED_EPISODES else '' }}>True</option>
-                        <option value="false" {{ 'selected' if not cfg.DELETE_WATCHED_EPISODES else '' }}>False</option>
-                    </select>
                 </div>
             </div>
 
