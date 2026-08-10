@@ -916,30 +916,13 @@
                     <span>Used: {{ d.used_formatted }} ({{ d.used_pct }}%)</span>
                     <span>Total: {{ d.total_formatted }}</span>
                 </div>
-                <div style="margin-top:6px; font-size:10px; font-family:var(--mono); color:var(--text-sub); opacity:0.8;">
-                    Path: <code>{{ d.configured_path }}</code>
+                <div style="margin-top:8px; font-size:11px; font-family:var(--mono); color:var(--text-sub); display:flex; justify-content:space-between; align-items:center;">
+                    <span>Path: <code>{{ d.configured_path }}</code></span>
+                    <span style="opacity:0.7;">{{ d.source }}</span>
                 </div>
             </div>
             {% endfor %}
         </div>
-
-        {% if disk_info.sonarr_root_folders or disk_info.radarr_root_folders %}
-        <span class="section-title">Arr Library Storage</span>
-        <div class="kv-block" id="arr-root-folders-container">
-            {% for rf in disk_info.sonarr_root_folders %}
-            <div class="kv-row">
-                <span class="kv-key">Sonarr: <code>{{ rf.path }}</code></span>
-                <span class="kv-val green">{{ rf.free_formatted }} available</span>
-            </div>
-            {% endfor %}
-            {% for rf in disk_info.radarr_root_folders %}
-            <div class="kv-row">
-                <span class="kv-key">Radarr: <code>{{ rf.path }}</code></span>
-                <span class="kv-val green">{{ rf.free_formatted }} available</span>
-            </div>
-            {% endfor %}
-        </div>
-        {% endif %}
 
     </div>
 
@@ -1346,33 +1329,12 @@ function renderDiskSpace(data) {
                 <span>Used: ${escapeHtml(d.used_formatted)} (${d.used_pct}%)</span>
                 <span>Total: ${escapeHtml(d.total_formatted)}</span>
             </div>
-            <div style="margin-top:6px; font-size:10px; font-family:var(--mono); color:var(--text-sub); opacity:0.8;">
-                Path: <code>${escapeHtml(d.configured_path)}</code>
+            <div style="margin-top:8px; font-size:11px; font-family:var(--mono); color:var(--text-sub); display:flex; justify-content:space-between; align-items:center;">
+                <span>Path: <code>${escapeHtml(d.configured_path)}</code></span>
+                <span style="opacity:0.7;">${escapeHtml(d.source)}</span>
             </div>
         </div>`;
     }).join('');
-
-    const arrContainer = el('arr-root-folders-container');
-    if (arrContainer) {
-        let arrHtml = '';
-        if (data.sonarr_root_folders && data.sonarr_root_folders.length > 0) {
-            data.sonarr_root_folders.forEach(rf => {
-                arrHtml += `<div class="kv-row">
-                    <span class="kv-key">Sonarr: <code>${escapeHtml(rf.path)}</code></span>
-                    <span class="kv-val green">${escapeHtml(rf.free_formatted)} available</span>
-                </div>`;
-            });
-        }
-        if (data.radarr_root_folders && data.radarr_root_folders.length > 0) {
-            data.radarr_root_folders.forEach(rf => {
-                arrHtml += `<div class="kv-row">
-                    <span class="kv-key">Radarr: <code>${escapeHtml(rf.path)}</code></span>
-                    <span class="kv-val green">${escapeHtml(rf.free_formatted)} available</span>
-                </div>`;
-            });
-        }
-        arrContainer.innerHTML = arrHtml;
-    }
 }
 
 function updateActivityLog(logs) {
