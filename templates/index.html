@@ -95,6 +95,11 @@
             letter-spacing: .5px;
             text-transform: uppercase;
         }
+        .conn-pills {
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+        }
         .conn-pill {
             display: inline-flex;
             align-items: center;
@@ -579,6 +584,22 @@
 
         /* ── Responsive & Large Display / 4K TV Scaling ──────── */
         @media (max-width: 600px) {
+            .topbar {
+                flex-direction: column;
+                align-items: flex-start;
+                gap: 12px;
+            }
+            .conn-pills {
+                width: 100%;
+                display: flex;
+                gap: 6px;
+            }
+            .conn-pill {
+                flex: 1;
+                justify-content: center;
+                padding: 6px 8px;
+                font-size: 10px;
+            }
             .brand-sub { display: none; }
             .stat-grid { grid-template-columns: 1fr 1fr; }
             .kv-key { min-width: 120px; }
@@ -661,7 +682,7 @@
             <span class="brand-name">Rolarr</span>
             <span class="brand-sub">Media Recycler & Power Saver</span>
         </div>
-        <div style="display:flex; gap:8px; flex-wrap:wrap;">
+        <div class="conn-pills">
             <a class="conn-pill" id="pill-sonarr" target="_blank" rel="noopener noreferrer" title="Open Sonarr">
                 <span class="conn-pip {{ 'ok' if status_text == 'Connected' else ('warn' if 'Error' in status_text else 'err') }}" id="pip-sonarr"></span>
                 <span id="label-sonarr">Sonarr</span>
@@ -679,8 +700,6 @@
                 <span id="label-nzbget">NZBGet</span>
             </a>
         </div>
-
-
     </div>
 
     <!-- Tab bar -->
