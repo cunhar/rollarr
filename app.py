@@ -303,6 +303,20 @@ def offline():
     return render_template('offline.html', wake_url=wake_url)
 
 
+@app.route('/cert.pem')
+def serve_cert():
+    """Serve the public TLS certificate so clients can add it to their trust store.
+    Only the public cert is exposed — the private key never leaves the server.
+    """
+    cert_path = os.path.join(CONFIG_DIR, 'cert.pem')
+    if not os.path.exists(cert_path):
+        return 'Certificate not found — is HTTPS enabled?', 404
+    return send_from_directory(CONFIG_DIR, 'cert.pem',
+                               mimetype='application/x-pem-file',
+                               as_attachment=True,
+                               download_name='rolarr.pem')
+
+
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 5000))
     app.run(host='0.0.0.0', port=port)
