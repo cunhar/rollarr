@@ -1266,13 +1266,46 @@ function runPoller() {
         });
 }
 
-function triggerShutdownNow() {
-    if (!confirm("Are you sure you want to send the shutdown command to the host PC now?")) return;
+let shutdownConfirmTimer = null;
+let isConfirmingShutdown = false;
+
+function resetShutdownBtn() {
     const btn = el('btn-shutdown-now');
-    if (btn) {
-        btn.disabled = true;
-        btn.textContent = 'Shutting down...';
+    if (!btn) return;
+    btn.textContent = 'Shutdown Now';
+    btn.style.background = '';
+    btn.style.borderColor = '';
+    btn.style.color = '';
+    btn.style.fontWeight = '';
+    isConfirmingShutdown = false;
+    if (shutdownConfirmTimer) {
+        clearTimeout(shutdownConfirmTimer);
+        shutdownConfirmTimer = null;
     }
+}
+
+function triggerShutdownNow() {
+    const btn = el('btn-shutdown-now');
+    if (!btn) return;
+
+    if (!isConfirmingShutdown) {
+        isConfirmingShutdown = true;
+        btn.textContent = '⚠️ Confirm Shutdown?';
+        btn.style.background = 'var(--red-dim)';
+        btn.style.borderColor = 'var(--red)';
+        btn.style.color = 'var(--red)';
+        btn.style.fontWeight = '600';
+        
+        shutdownConfirmTimer = setTimeout(() => {
+            resetShutdownBtn();
+        }, 5000);
+        return;
+    }
+
+    resetShutdownBtn();
+    btn.disabled = true;
+    btn.textContent = 'Shutting down...';
+
     fetch('/api/shutdown-now', { method: 'POST' })
         .then(r => r.json().then(d => ({ ok: r.ok, data: d })))
         .then(({ ok, data }) => {
