@@ -1,0 +1,39 @@
+<!-- ══ ACTIVITY TAB ═══════════════════════════════════════ -->
+<div class="tab-panel" id="panel-activity">
+
+    <div class="log-header-row">
+        <span class="section-title">Activity Log</span>
+        <div style="display:flex; align-items:center; gap:12px;">
+            <span style="font-size:10px; color:var(--text-sub); font-family:var(--mono);">last 20</span>
+            <button class="btn-clear" id="btn-clear-logs" onclick="clearLogs()">Clear</button>
+        </div>
+    </div>
+
+    {% if history %}
+    <div class="log-list" id="activity-log-container">
+        {% for log in history %}
+        {% set st = (log.status or '') | lower %}
+        {% set gutter = 'ok' if st in ['ok', 'success', 'info'] else ('warn' if st in ['warn', 'warning'] else 'err') %}
+        <div class="log-entry">
+            <div class="log-gutter {{ gutter }}"></div>
+            <div class="log-body">
+                <div class="log-meta">
+                    <span class="log-ts">{{ log.timestamp }}</span>
+                    <span class="log-tag {{ gutter }}">{{ log.status }}</span>
+                </div>
+                <div class="log-msg">{{ log.message }}</div>
+                {% if log.payload %}
+                <details>
+                    <summary class="log-payload-toggle">View payload</summary>
+                    <pre class="log-payload-pre"><code>{{ log.payload | tojson(indent=2) }}</code></pre>
+                </details>
+                {% endif %}
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+    {% else %}
+    <div class="no-logs" id="activity-log-container">No activity recorded yet.</div>
+    {% endif %}
+
+</div>

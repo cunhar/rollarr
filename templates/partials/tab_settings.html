@@ -1,0 +1,144 @@
+<!-- ══ CONFIG TAB ═════════════════════════════════════════ -->
+<div class="tab-panel" id="panel-config">
+
+    <div class="config-note">
+        Configuration is stored securely in <strong>/config/settings.enc</strong> (AES-128 Fernet encrypted).
+    </div>
+
+    <form id="config-form" onsubmit="event.preventDefault(); saveConfiguration();">
+
+        <p class="section-title">Media Cleanup</p>
+        <div class="form-grid">
+            <div class="form-group" style="grid-column: 1 / -1;">
+                <label class="form-label">Delete Watched Media Files (Sonarr &amp; Radarr)</label>
+                <select class="form-input" id="cfg-DELETE_WATCHED_EPISODES">
+                    <option value="true" {{ 'selected' if cfg.DELETE_WATCHED_EPISODES else '' }}>Enabled — delete file from disk after watching</option>
+                    <option value="false" {{ 'selected' if not cfg.DELETE_WATCHED_EPISODES else '' }}>Disabled — unmonitor only, keep file on disk</option>
+                </select>
+                <span style="font-size:11px; color:var(--text-muted); font-family:var(--mono); margin-top:4px; display:block;">
+                    Applies to both TV episodes (Sonarr) and movies (Radarr) when triggered by Plex watch history.
+                </span>
+            </div>
+        </div>
+
+        <p class="section-title">Sonarr Settings</p>
+        <div class="form-grid">
+            <div class="form-group">
+                <label class="form-label">Sonarr URL</label>
+                <input type="text" class="form-input" id="cfg-SONARR_URL" value="{{ cfg.SONARR_URL }}" placeholder="http://localhost:8989">
+            </div>
+            <div class="form-group">
+                <label class="form-label">API Key</label>
+                <input type="password" class="form-input" id="cfg-SONARR_API_KEY" value="{{ '••••••••' if cfg.SONARR_API_KEY else '' }}" placeholder="Sonarr API Key">
+            </div>
+            <div class="form-group">
+                <label class="form-label">Rolling Window (Episodes)</label>
+                <input type="number" class="form-input" id="cfg-ROLLING_WINDOW" value="{{ cfg.ROLLING_WINDOW }}" min="1" max="50">
+            </div>
+        </div>
+
+        <p class="section-title">Radarr Settings</p>
+        <div class="form-grid">
+            <div class="form-group">
+                <label class="form-label">Radarr URL</label>
+                <input type="text" class="form-input" id="cfg-RADARR_URL" value="{{ cfg.RADARR_URL }}" placeholder="http://localhost:7878">
+            </div>
+            <div class="form-group">
+                <label class="form-label">API Key</label>
+                <input type="password" class="form-input" id="cfg-RADARR_API_KEY" value="{{ '••••••••' if cfg.RADARR_API_KEY else '' }}" placeholder="Radarr API Key">
+            </div>
+        </div>
+
+        <p class="section-title">NZBGet Settings</p>
+        <div class="form-grid">
+            <div class="form-group">
+                <label class="form-label">NZBGet URL</label>
+                <input type="text" class="form-input" id="cfg-NZBGET_URL" value="{{ cfg.NZBGET_URL }}" placeholder="http://localhost:6789">
+            </div>
+            <div class="form-group">
+                <label class="form-label">Username</label>
+                <input type="text" class="form-input" id="cfg-NZBGET_USERNAME" value="{{ cfg.NZBGET_USERNAME }}" placeholder="nzbget">
+            </div>
+            <div class="form-group">
+                <label class="form-label">Password / API Key</label>
+                <input type="password" class="form-input" id="cfg-NZBGET_PASSWORD" value="{{ '••••••••' if cfg.NZBGET_PASSWORD else '' }}" placeholder="NZBGet Password">
+            </div>
+        </div>
+
+        <p class="section-title">Plex & Polling Settings</p>
+        <div class="form-grid">
+            <div class="form-group">
+                <label class="form-label">Plex URL</label>
+                <input type="text" class="form-input" id="cfg-PLEX_URL" value="{{ cfg.PLEX_URL }}" placeholder="http://plex:32400">
+            </div>
+            <div class="form-group">
+                <label class="form-label">Plex Token</label>
+                <input type="password" class="form-input" id="cfg-PLEX_TOKEN" value="{{ '••••••••' if cfg.PLEX_TOKEN else '' }}" placeholder="X-Plex-Token">
+            </div>
+            <div class="form-group">
+                <label class="form-label">Media Poll Interval (Seconds)</label>
+                <input type="number" class="form-input" id="cfg-PLEX_WATCH_INTERVAL" value="{{ cfg.PLEX_WATCH_INTERVAL }}">
+            </div>
+            <div class="form-group">
+                <label class="form-label">Shutdown Poll Interval (Seconds)</label>
+                <input type="number" class="form-input" id="cfg-PLEX_POLL_INTERVAL" value="{{ cfg.PLEX_POLL_INTERVAL }}">
+            </div>
+            <div class="form-group">
+                <label class="form-label">Shutdown Idle Polls Threshold</label>
+                <input type="number" class="form-input" id="cfg-PLEX_IDLE_POLLS" value="{{ cfg.PLEX_IDLE_POLLS }}">
+            </div>
+            <div class="form-group" style="grid-column: 1 / -1;">
+                <label class="form-label">Shutdown Mode (Dry Run vs Real Host Shutdown)</label>
+                <select class="form-input" id="cfg-PLEX_SHUTDOWN_DRY_RUN">
+                    <option value="true" {{ 'selected' if cfg.PLEX_SHUTDOWN_DRY_RUN else '' }}>Dry Run — log shutdown triggers without turning off host (Safe Mode)</option>
+                    <option value="false" {{ 'selected' if not cfg.PLEX_SHUTDOWN_DRY_RUN else '' }}>Enabled — perform real host shutdown via SSH when idle threshold reached</option>
+                </select>
+                <span style="font-size:11px; color:var(--text-muted); font-family:var(--mono); margin-top:4px; display:block;">
+                    Controls whether idle triggers execute actual host shutdown commands via SSH or only simulate and log them.
+                </span>
+            </div>
+        </div>
+
+        <p class="section-title">SSH Host Shutdown Settings</p>
+        <div class="form-grid">
+            <div class="form-group">
+                <label class="form-label">SSH Host</label>
+                <input type="text" class="form-input" id="cfg-SSH_HOST" value="{{ cfg.SSH_HOST }}" placeholder="172.17.0.1">
+            </div>
+            <div class="form-group">
+                <label class="form-label">SSH Port</label>
+                <input type="number" class="form-input" id="cfg-SSH_PORT" value="{{ cfg.SSH_PORT }}">
+            </div>
+            <div class="form-group">
+                <label class="form-label">SSH User</label>
+                <input type="text" class="form-input" id="cfg-SSH_USER" value="{{ cfg.SSH_USER }}" placeholder="ricardo">
+            </div>
+            <div class="form-group">
+                <label class="form-label">SSH Password</label>
+                <input type="password" class="form-input" id="cfg-SSH_PASSWORD" value="{{ '••••••••' if cfg.SSH_PASSWORD else '' }}" placeholder="SSH Password">
+            </div>
+        </div>
+
+        <p class="section-title">Storage & Directory Paths</p>
+        <div class="form-grid">
+            <div class="form-group">
+                <label class="form-label">Downloads Directory Path</label>
+                <input type="text" class="form-input" id="cfg-PATH_DOWNLOADS" value="{{ cfg.PATH_DOWNLOADS or '/downloads' }}" placeholder="/downloads">
+            </div>
+            <div class="form-group">
+                <label class="form-label">TV Shows Directory Path</label>
+                <input type="text" class="form-input" id="cfg-PATH_TV" value="{{ cfg.PATH_TV or '/tv' }}" placeholder="/tv">
+            </div>
+            <div class="form-group">
+                <label class="form-label">Movies Directory Path</label>
+                <input type="text" class="form-input" id="cfg-PATH_MOVIES" value="{{ cfg.PATH_MOVIES or '/movies' }}" placeholder="/movies">
+            </div>
+        </div>
+
+        <div style="margin-top:24px; margin-bottom:24px; display:flex; gap:12px;">
+            <button type="button" class="btn-clear" id="btn-save-cfg" style="padding:10px 24px; font-weight:600; background:var(--accent); color:#000; border-color:var(--accent);" onclick="saveConfiguration()">Save Configuration</button>
+        </div>
+
+    </form>
+
+</div>

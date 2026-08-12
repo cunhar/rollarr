@@ -1,0 +1,33 @@
+<!-- Topbar -->
+<div class="topbar">
+    <div class="brand">
+        <span class="brand-name">Rolarr</span>
+        <span class="brand-sub">Media Recycler & Power Saver</span>
+    </div>
+    <div class="conn-pills">
+        <a class="conn-pill" id="pill-sonarr" target="_blank" rel="noopener noreferrer" title="Open Sonarr">
+            <span class="conn-pip {{ 'ok' if status_text == 'Connected' else ('warn' if 'Error' in status_text else 'err') }}" id="pip-sonarr"></span>
+            <span id="label-sonarr">Sonarr</span>
+        </a>
+        <a class="conn-pill" id="pill-radarr" target="_blank" rel="noopener noreferrer" title="Open Radarr">
+            <span class="conn-pip {{ 'ok' if radarr_status_text == 'Connected' else ('warn' if 'Error' in radarr_status_text else 'err') }}" id="pip-radarr"></span>
+            <span id="label-radarr">Radarr</span>
+        </a>
+        <a class="conn-pill" id="pill-nzbget" target="_blank" rel="noopener noreferrer" title="Open NZBGet">
+            <span class="conn-pip {{ 'ok' if nzbget_status.connected else 'err' }}" id="pip-nzbget"></span>
+            <span id="label-nzbget">NZBGet</span>
+        </a>
+        <a class="conn-pill" id="pill-plex" target="_blank" rel="noopener noreferrer" title="Open Plex">
+            <span class="conn-pip {{ 'ok' if plex_conn_text == 'Connected' else ('warn' if 'Error' in plex_conn_text else 'err') }}" id="pip-plex"></span>
+            <span id="label-plex">Plex</span>
+        </a>
+    </div>
+</div>
+
+<!-- Tab bar -->
+<div class="tabbar">
+    <button class="tab-btn active" id="tab-dashboard" onclick="switchTab('dashboard')">Dashboard</button>
+    <button class="tab-btn" id="tab-disks" onclick="switchTab('disks')">Disk Space</button>
+    <button class="tab-btn" id="tab-activity" onclick="switchTab('activity')">Activity</button>
+    <button class="tab-btn" id="tab-config" onclick="switchTab('config')">Config</button>
+</div>

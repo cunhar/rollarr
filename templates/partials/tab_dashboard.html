@@ -1,0 +1,74 @@
+<!-- ══ DASHBOARD TAB ══════════════════════════════════════ -->
+<div class="tab-panel active" id="panel-dashboard">
+
+    <!-- NZBGet Active Downloads Container -->
+    <div id="nzbget-container" style="margin-bottom:16px;"></div>
+
+    <!-- Active Streams List Container (Top of Dashboard) -->
+    <div id="pw-streams-container" style="margin-bottom:16px;"></div>
+
+    {% if poller_status.enabled %}
+    <!-- Episode Poller stats -->
+    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
+        <p class="section-title" style="margin-bottom:0;">Media Poller</p>
+        <button class="btn-clear" id="btn-run-poller" onclick="runPoller()">Re-check Now</button>
+    </div>
+    <div class="stat-grid" style="margin-bottom:16px;">
+        <div class="stat-cell">
+            <span class="stat-label">Items processed</span>
+            <span class="stat-value {{ 'green' if poller_status.episodes_session > 0 else '' }}" id="ep-count">
+                {{ poller_status.episodes_session }}
+            </span>
+            <span class="stat-meta">processed in session</span>
+        </div>
+        <div class="stat-cell">
+            <span class="stat-label">Last check</span>
+            <span class="stat-value timestamp" id="ep-last">
+                {{ poller_status.last_check or '—' }}
+            </span>
+        </div>
+        <div class="stat-cell">
+            <span class="stat-label">Next check</span>
+            <span class="stat-value timestamp" id="ep-next">
+                {{ poller_status.next_check or '—' }}
+            </span>
+        </div>
+    </div>
+    {% else %}
+    <div class="config-note" style="margin-top:0; margin-bottom:24px;">
+        Episode poller disabled — set <strong>PLEX_URL</strong> and <strong>PLEX_TOKEN</strong> environment variables to enable.
+    </div>
+    {% endif %}
+
+    {% if plex_status.enabled %}
+    <!-- Shutdown Watcher -->
+    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
+        <div style="display:flex; align-items:center; gap:10px;">
+            <p class="section-title" style="margin-bottom:0;">Shutdown Watcher</p>
+            {% if plex_status.dry_run %}
+            <span class="badge badge-amber">Dry Run</span>
+            {% endif %}
+        </div>
+        <button class="btn-clear" id="btn-shutdown-now" onclick="triggerShutdownNow()">Shutdown Now</button>
+    </div>
+
+    {% set streak = plex_status.idle_streak or 0 %}
+    {% set needed = plex_status.idle_needed if (plex_status.idle_needed and plex_status.idle_needed > 0) else 3 %}
+    {% set pct_raw = (streak / needed * 100) | round | int %}
+    {% set pct = 100 if pct_raw > 100 else (0 if pct_raw < 0 else pct_raw) %}
+    <div class="idle-section">
+        <div class="idle-header">
+            <span class="idle-label">Idle shutdown threshold</span>
+            <span class="idle-count" id="pw-streak-label">{{ streak }} of {{ needed }} polls</span>
+        </div>
+        <div class="idle-track">
+            <div class="idle-fill" id="pw-bar"
+                style="width: {{ pct }}%;
+                       background: {{ '#e05252' if streak >= needed else ('#e5a00d' if streak > 0 else '#3ecf8e') }};">
+            </div>
+        </div>
+        <div class="idle-meta" id="pw-shutdown-detail"></div>
+    </div>
+    {% endif %}
+
+</div><!-- /panel-dashboard -->
