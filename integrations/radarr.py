@@ -3,7 +3,7 @@ from __future__ import annotations
 import logging
 import requests
 from config_store import get_config
-from integrations.common import clean_title as _clean_title, get_arr_headers, arr_request, match_media_by_title
+from integrations.common import clean_title as _clean_title, get_arr_headers, arr_request, match_media_by_title, make_arr_client
 
 logger = logging.getLogger(__name__)
 
@@ -20,12 +20,7 @@ def get_radarr_headers() -> dict[str, str]:
     return get_arr_headers(get_radarr_api_key())
 
 
-def _radarr_request(method: str, path: str, params: dict = None, json_data: dict = None) -> requests.Response:
-    url = get_radarr_url()
-    if not url:
-        raise ValueError("RADARR_URL is not configured")
-    full_url = f"{url}{path}"
-    return arr_request(method, full_url, get_radarr_headers(), params=params, json_data=json_data)
+_radarr_request = make_arr_client('Radarr', get_radarr_url, get_radarr_headers)
 
 
 def find_movie_by_title_and_year(title: str, year: int | str | None = None) -> tuple[int | None, str | None]:

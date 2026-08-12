@@ -3,7 +3,7 @@ from __future__ import annotations
 import logging
 import requests
 from config_store import get_config
-from integrations.common import clean_title as _clean_title, get_arr_headers, arr_request, match_media_by_title
+from integrations.common import clean_title as _clean_title, get_arr_headers, arr_request, match_media_by_title, make_arr_client
 
 logger = logging.getLogger(__name__)
 
@@ -24,12 +24,7 @@ def get_sonarr_headers() -> dict[str, str]:
     return get_arr_headers(get_sonarr_api_key())
 
 
-def _sonarr_request(method: str, path: str, params: dict = None, json_data: dict = None) -> requests.Response:
-    url = get_sonarr_url()
-    if not url:
-        raise ValueError("SONARR_URL is not configured")
-    full_url = f"{url}{path}"
-    return arr_request(method, full_url, get_sonarr_headers(), params=params, json_data=json_data)
+_sonarr_request = make_arr_client('Sonarr', get_sonarr_url, get_sonarr_headers)
 
 
 def find_series_id_by_title(title: str) -> tuple[int | None, str | None]:

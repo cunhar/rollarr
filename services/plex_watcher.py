@@ -16,7 +16,7 @@ import datetime
 
 import requests
 from config_store import get_config
-from integrations.common import now_str as _now
+from integrations.common import now_str as _now, get_plex_credentials
 
 logger = logging.getLogger(__name__)
 
@@ -82,8 +82,7 @@ def get_state(refresh_live: bool = True):
     """
     global _last_fetch_time
 
-    plex_url = (get_config('PLEX_URL') or '').rstrip('/')
-    plex_token = get_config('PLEX_TOKEN') or ''
+    plex_url, plex_token = get_plex_credentials()
     shutdown_mode = _get_shutdown_mode()
     dry_run = (shutdown_mode == 'dry_run')
     enabled = bool(plex_url and plex_token and shutdown_mode != 'disabled')
@@ -147,8 +146,7 @@ def _get_active_sessions() -> tuple[int | None, list[dict]]:
     Query the Plex /status/sessions endpoint for active stream count & metadata.
     Returns (count, streams_list).
     """
-    plex_url = (get_config('PLEX_URL') or '').rstrip('/')
-    plex_token = get_config('PLEX_TOKEN') or ''
+    plex_url, plex_token = get_plex_credentials()
 
     if not plex_url or not plex_token:
         return None, []
@@ -271,8 +269,7 @@ def _has_active_plex_activities() -> tuple[bool, str]:
     Query Plex /activities endpoint for running background jobs (library scans,
     thumbnail generation, intro/credit detection, database optimization).
     """
-    plex_url = (get_config('PLEX_URL') or '').rstrip('/')
-    plex_token = get_config('PLEX_TOKEN') or ''
+    plex_url, plex_token = get_plex_credentials()
 
     if not plex_url or not plex_token:
         return False, ""
@@ -422,8 +419,7 @@ def _watcher_loop():
             time.sleep(10)
             continue
 
-        plex_url = (get_config('PLEX_URL') or '').rstrip('/')
-        plex_token = get_config('PLEX_TOKEN') or ''
+        plex_url, plex_token = get_plex_credentials()
         poll_interval = int(get_config('PLEX_POLL_INTERVAL', 1200))
         idle_needed = int(get_config('PLEX_IDLE_POLLS', 3))
 
@@ -441,104 +437,46 @@ def _watcher_loop():
         has_dl, dl_detail = _has_active_downloads()
         has_act, act_detail = _has_active_plex_activities()
 
+        # Build base state shared by all branches
+        base = dict(
+            nzbget_active=has_dl,
+            nzbget_detail=dl_detail,
+            plex_activity_active=has_act,
+            plex_activity_detail=act_detail,
+            last_check=now_ts,
+            next_check=next_ts,
+        )
+
         if stream_count is None:
             logger.warning(f"[PlexWatcher] {now_ts} — Plex unreachable.")
-            _update_state(
-                status='unreachable',
-                stream_count=None,
-                active_streams=[],
-                nzbget_active=has_dl,
-                nzbget_detail=dl_detail,
-                plex_activity_active=has_act,
-                plex_activity_detail=act_detail,
-                last_check=now_ts,
-                next_check=next_ts,
-                idle_streak=idle_streak,
-            )
+            _update_state(**base, status='unreachable', stream_count=None, active_streams=[], idle_streak=idle_streak)
         elif stream_count > 0:
-            logger.info(
-                f"[PlexWatcher] {now_ts} — {stream_count} active stream(s). "
-                f"Idle streak reset."
-            )
+            logger.info(f"[PlexWatcher] {now_ts} — {stream_count} active stream(s). Idle streak reset.")
             idle_streak = 0
-            _update_state(
-                status='ok',
-                stream_count=stream_count,
-                active_streams=active_streams,
-                nzbget_active=has_dl,
-                nzbget_detail=dl_detail,
-                plex_activity_active=has_act,
-                plex_activity_detail=act_detail,
-                last_check=now_ts,
-                next_check=next_ts,
-                idle_streak=0,
-                last_action=f"{now_ts} — {stream_count} stream(s) active, idle streak reset",
-            )
+            _update_state(**base, status='ok', stream_count=stream_count, active_streams=active_streams,
+                          idle_streak=0, last_action=f"{now_ts} — {stream_count} stream(s) active, idle streak reset")
         elif has_dl:
-            logger.info(
-                f"[PlexWatcher] {now_ts} — No Plex streams, but NZBGet downloads active ({dl_detail}). "
-                f"Idle streak reset."
-            )
+            logger.info(f"[PlexWatcher] {now_ts} — No Plex streams, but NZBGet downloads active ({dl_detail}). Idle streak reset.")
             idle_streak = 0
-            _update_state(
-                status='ok',
-                stream_count=0,
-                active_streams=[],
-                nzbget_active=True,
-                nzbget_detail=dl_detail,
-                plex_activity_active=has_act,
-                plex_activity_detail=act_detail,
-                last_check=now_ts,
-                next_check=next_ts,
-                idle_streak=0,
-                last_action=f"{now_ts} — NZBGet active ({dl_detail}), idle streak reset",
-            )
+            _update_state(**base, status='ok', stream_count=0, active_streams=[],
+                          idle_streak=0, last_action=f"{now_ts} — NZBGet active ({dl_detail}), idle streak reset")
         elif has_act:
-            logger.info(
-                f"[PlexWatcher] {now_ts} — No streams/downloads, but Plex task active ({act_detail}). "
-                f"Idle streak reset."
-            )
+            logger.info(f"[PlexWatcher] {now_ts} — No streams/downloads, but Plex task active ({act_detail}). Idle streak reset.")
             idle_streak = 0
-            _update_state(
-                status='ok',
-                stream_count=0,
-                active_streams=[],
-                nzbget_active=False,
-                nzbget_detail='',
-                plex_activity_active=True,
-                plex_activity_detail=act_detail,
-                last_check=now_ts,
-                next_check=next_ts,
-                idle_streak=0,
-                last_action=f"{now_ts} — {act_detail}, idle streak reset",
-            )
+            _update_state(**base, status='ok', stream_count=0, active_streams=[],
+                          nzbget_active=False, nzbget_detail='',
+                          idle_streak=0, last_action=f"{now_ts} — {act_detail}, idle streak reset")
         else:
             idle_streak += 1
-            logger.info(
-                f"[PlexWatcher] {now_ts} — System idle (no streams/downloads/tasks). "
-                f"Idle streak: {idle_streak}/{idle_needed}"
-            )
-            _update_state(
-                status='ok',
-                stream_count=0,
-                active_streams=[],
-                nzbget_active=False,
-                nzbget_detail='',
-                plex_activity_active=False,
-                plex_activity_detail='',
-                last_check=now_ts,
-                next_check=next_ts,
-                idle_streak=idle_streak,
-                last_action=(
-                    f"{now_ts} — System idle (idle streak {idle_streak}/{idle_needed})"
-                ),
-            )
+            logger.info(f"[PlexWatcher] {now_ts} — System idle (no streams/downloads/tasks). Idle streak: {idle_streak}/{idle_needed}")
+            _update_state(**base, status='ok', stream_count=0, active_streams=[],
+                          nzbget_active=False, nzbget_detail='',
+                          plex_activity_active=False, plex_activity_detail='',
+                          idle_streak=idle_streak,
+                          last_action=f"{now_ts} — System idle (idle streak {idle_streak}/{idle_needed})")
 
             if idle_streak >= idle_needed:
-                logger.warning(
-                    f"[PlexWatcher] Idle threshold reached ({idle_streak} polls). "
-                    f"Triggering shutdown."
-                )
+                logger.warning(f"[PlexWatcher] Idle threshold reached ({idle_streak} polls). Triggering shutdown.")
                 _update_state(shutdown_fired=True)
                 _ssh_shutdown()
                 idle_streak = 0

@@ -59,6 +59,30 @@ def arr_request(
     return resp
 
 
+def get_plex_credentials() -> tuple[str, str]:
+    """Return (plex_url, plex_token) from config, with URL trailing-slash stripped."""
+    from config_store import get_config
+    plex_url = (get_config('PLEX_URL') or '').rstrip('/')
+    plex_token = get_config('PLEX_TOKEN') or ''
+    return plex_url, plex_token
+
+
+def make_arr_client(service_name: str, url_fn, headers_fn):
+    """
+    Factory that returns a request function for an Arr service (Sonarr / Radarr).
+
+    Usage:
+        _sonarr_request = make_arr_client('Sonarr', get_sonarr_url, get_sonarr_headers)
+        response = _sonarr_request('GET', '/api/v3/series')
+    """
+    def _request(method: str, path: str, params: dict = None, json_data: dict = None) -> requests.Response:
+        url = url_fn()
+        if not url:
+            raise ValueError(f"{service_name}_URL is not configured")
+        return arr_request(method, f"{url}{path}", headers_fn(), params=params, json_data=json_data)
+    return _request
+
+
 def match_media_by_title(
     items: list[dict[str, Any]],
     target_title: str,

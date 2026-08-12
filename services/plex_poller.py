@@ -20,7 +20,7 @@ import datetime
 
 import requests
 
-from integrations.common import now_str as _now
+from integrations.common import now_str as _now, get_plex_credentials
 from integrations.sonarr import (
     get_rolling_window,
     find_series_id_by_title,
@@ -82,8 +82,7 @@ def _update_state(**kwargs):
 
 def get_state() -> dict:
     """Return a thread-safe snapshot of the poller state."""
-    plex_url = (get_config('PLEX_URL') or '').rstrip('/')
-    plex_token = get_config('PLEX_TOKEN') or ''
+    plex_url, plex_token = get_plex_credentials()
     poll_interval = int(get_config('PLEX_WATCH_INTERVAL', 3600))
 
     _update_state(
@@ -97,8 +96,7 @@ def get_state() -> dict:
 
 def trigger_now() -> dict:
     """Trigger an immediate stateless re-check cycle."""
-    plex_url = (get_config('PLEX_URL') or '').rstrip('/')
-    plex_token = get_config('PLEX_TOKEN') or ''
+    plex_url, plex_token = get_plex_credentials()
 
     if not plex_url or not plex_token:
         return {'status': 'error', 'message': 'Plex is not configured'}
@@ -112,8 +110,7 @@ def trigger_now() -> dict:
 # ── Plex API helpers ──────────────────────────────────────────────────────────
 
 def _plex_get(path: str, params: dict = None) -> dict | None:
-    plex_url = (get_config('PLEX_URL') or '').rstrip('/')
-    plex_token = get_config('PLEX_TOKEN') or ''
+    plex_url, plex_token = get_plex_credentials()
 
     if not plex_url or not plex_token:
         return None
@@ -220,8 +217,7 @@ def _plex_delete_item(rating_key):
     if not rating_key:
         return False
     try:
-        plex_url = (get_config('PLEX_URL') or '').rstrip('/')
-        plex_token = get_config('PLEX_TOKEN') or ''
+        plex_url, plex_token = get_plex_credentials()
         if not plex_url or not plex_token:
             return False
         r = requests.delete(
@@ -414,8 +410,7 @@ def _poller_loop():
     logger.info(f"[PlexPoller] Starting stateless media poller loop.")
 
     while True:
-        plex_url = (get_config('PLEX_URL') or '').rstrip('/')
-        plex_token = get_config('PLEX_TOKEN') or ''
+        plex_url, plex_token = get_plex_credentials()
         poll_interval = int(get_config('PLEX_WATCH_INTERVAL', 3600))
 
         if not plex_url or not plex_token:

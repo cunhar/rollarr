@@ -34,6 +34,119 @@ function switchTab(name, updateHash = true) {
     }
 }
 
+
+// ── Template Renderers ───────────────────────────────────────────────────────
+
+function renderStreamCard(st) {
+    const decBadge = st.decision === 'DIRECT PLAY' ? 'badge-green' : (st.decision === 'DIRECT STREAM' ? 'badge-blue' : 'badge-amber');
+    const remText = st.remaining_mins > 0 ? st.remaining_mins + ' min left' : '0 min left';
+    return `
+    <div class="stream-card">
+        <div class="stream-header">
+            <div class="stream-user">
+                <span class="stream-user-name">${escapeHtml(st.user)}</span>
+                <span class="stream-device">${escapeHtml(st.device)}</span>
+            </div>
+            <div class="stream-badges">
+                <span class="badge ${decBadge}">${escapeHtml(st.decision)}</span>
+                <span class="badge badge-dim">${escapeHtml(st.location)}</span>
+                <span style="font-family:var(--mono); font-size:10px; color:var(--text-sub);">${escapeHtml(st.bandwidth)}</span>
+            </div>
+        </div>
+        <div class="stream-title">${escapeHtml(st.title)}</div>
+        <div class="stream-progress-wrap">
+            <div class="stream-progress-meta">
+                <span>${escapeHtml((st.state || 'PLAYING').toUpperCase())}</span>
+                <span>${remText} (${st.progress_pct}%)</span>
+            </div>
+            <div class="stream-progress-track">
+                <div class="stream-progress-fill" style="width: ${Math.min(100, Math.max(0, st.progress_pct))}%;"></div>
+            </div>
+        </div>
+    </div>`;
+}
+
+function renderNZBGetCard(d) {
+    const statusBadge = d.status === 'DOWNLOADING' ? 'badge-green' : (d.status === 'PAUSED' ? 'badge-amber' : 'badge-dim');
+    const meta = d.remaining_mb > 0 ? (d.size_mb - d.remaining_mb).toFixed(1) + ' / ' + d.size_mb + ' MB' : d.size_mb + ' MB';
+    return `
+    <div class="stream-card">
+        <div class="stream-header">
+            <div class="stream-user">
+                <span class="stream-user-name" style="word-break:break-all;">${escapeHtml(d.name)}</span>
+            </div>
+            <div class="stream-badges">
+                <span class="badge ${statusBadge}">${escapeHtml(d.status)}</span>
+                ${d.category ? `<span class="badge badge-dim">${escapeHtml(d.category)}</span>` : ''}
+            </div>
+        </div>
+        <div class="stream-progress-wrap">
+            <div class="stream-progress-meta">
+                <span>${meta}</span>
+                <span>${escapeHtml(d.eta)} (${d.progress_pct}%)</span>
+            </div>
+            <div class="stream-progress-track">
+                <div class="stream-progress-fill" style="width: ${Math.min(100, Math.max(0, d.progress_pct))}%;"></div>
+            </div>
+        </div>
+    </div>`;
+}
+
+function renderDiskSpaceCell(d) {
+    const badgeColor = d.status === 'ok' ? 'green' : (d.status === 'warning' ? 'amber' : 'red');
+    const fillColor = d.status === 'critical' ? '#e05252' : (d.status === 'warning' ? '#e5a00d' : '#3ecf8e');
+    return `
+    <div class="stat-cell" style="flex:1;">
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
+            <span class="stat-label" style="font-weight:600; text-transform:uppercase;">${escapeHtml(d.label)}</span>
+            <span class="badge badge-${badgeColor}">${d.free_pct}% Free</span>
+        </div>
+        <div class="stat-value ${badgeColor}" style="margin-bottom:8px;">${escapeHtml(d.free_formatted)} <span style="font-size:13px; font-weight:normal; color:var(--text-sub);">free</span></div>
+        
+        <div class="idle-track" style="margin-bottom:8px;">
+            <div class="idle-fill" style="width: ${d.used_pct}%; background: ${fillColor};"></div>
+        </div>
+        
+        <div style="display:flex; justify-content:space-between; font-size:11px; font-family:var(--mono); color:var(--text-sub);">
+            <span>Used: ${escapeHtml(d.used_formatted)} (${d.used_pct}%)</span>
+            <span>Total: ${escapeHtml(d.total_formatted)}</span>
+        </div>
+        <div style="margin-top:8px; font-size:11px; font-family:var(--mono); color:var(--text-sub); display:flex; justify-content:space-between; align-items:center;">
+            <span>Path: <code>${escapeHtml(d.configured_path)}</code></span>
+            <span style="opacity:0.7;">${escapeHtml(d.source)}</span>
+        </div>
+    </div>`;
+}
+
+function renderLogEntry(log, isOpen, logKey) {
+    const rawStatus = (log.status || 'INFO').toUpperCase();
+    const displayStatus = (rawStatus === 'OK') ? 'INFO' : rawStatus;
+    const st = displayStatus.toLowerCase();
+    const gutter = (st === 'success') ? 'success'
+                 : (st === 'info') ? 'info'
+                 : (st === 'warn' || st === 'warning') ? 'warn'
+                 : 'err';
+    const payloadHtml = log.payload
+        ? `<details ${isOpen ? 'open' : ''}>
+            <summary class="log-payload-toggle">View payload</summary>
+            <pre class="log-payload-pre"><code>${escapeHtml(JSON.stringify(log.payload, null, 2))}</code></pre>
+           </details>`
+        : '';
+    return `<div class="log-entry" data-log-key="${escapeHtml(logKey)}">
+        <div class="log-gutter ${gutter}"></div>
+        <div class="log-body">
+            <div class="log-meta">
+                <span class="log-ts">${escapeHtml(log.timestamp)}</span>
+                <span class="log-tag ${gutter}">${escapeHtml(displayStatus)}</span>
+            </div>
+            <div class="log-msg">${escapeHtml(log.message)}</div>
+            ${payloadHtml}
+        </div>
+    </div>`;
+}
+
+// ── Event Handlers & Core Updates ────────────────────────────────────────────
+
 function handleHashChange() {
     const hash = (window.location.hash || '').replace('#', '').trim();
     if (hash && VALID_TABS.includes(hash)) {
@@ -117,36 +230,9 @@ function updateShutdownWatcher(s) {
         if (!s.active_streams || s.active_streams.length === 0) {
             container.innerHTML = '';
         } else {
-            let html = '<p class="section-title" style="margin-bottom:12px;">Active Streams</p>';
-            s.active_streams.forEach(st => {
-                const decBadge = st.decision === 'DIRECT PLAY' ? 'badge-green' : (st.decision === 'DIRECT STREAM' ? 'badge-blue' : 'badge-amber');
-                const remText = st.remaining_mins > 0 ? st.remaining_mins + ' min left' : '0 min left';
-                html += `
-                <div class="stream-card">
-                    <div class="stream-header">
-                        <div class="stream-user">
-                            <span class="stream-user-name">${escapeHtml(st.user)}</span>
-                            <span class="stream-device">${escapeHtml(st.device)}</span>
-                        </div>
-                        <div class="stream-badges">
-                            <span class="badge ${decBadge}">${escapeHtml(st.decision)}</span>
-                            <span class="badge badge-dim">${escapeHtml(st.location)}</span>
-                            <span style="font-family:var(--mono); font-size:10px; color:var(--text-sub);">${escapeHtml(st.bandwidth)}</span>
-                        </div>
-                    </div>
-                    <div class="stream-title">${escapeHtml(st.title)}</div>
-                    <div class="stream-progress-wrap">
-                        <div class="stream-progress-meta">
-                            <span>${escapeHtml((st.state || 'PLAYING').toUpperCase())}</span>
-                            <span>${remText} (${st.progress_pct}%)</span>
-                        </div>
-                        <div class="stream-progress-track">
-                            <div class="stream-progress-fill" style="width: ${Math.min(100, Math.max(0, st.progress_pct))}%;"></div>
-                        </div>
-                    </div>
-                </div>`;
-            });
-            container.innerHTML = html;
+            const html = ['<p class="section-title" style="margin-bottom:12px;">Active Streams</p>'];
+            s.active_streams.forEach(st => html.push(renderStreamCard(st)));
+            container.innerHTML = html.join('');
         }
     }
 }
@@ -192,37 +278,14 @@ function updateNZBGet(s) {
         if (!s.enabled || !s.connected || !s.downloads || s.downloads.length === 0) {
             container.innerHTML = '';
         } else {
-            let html = `
-            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
-                <p class="section-title" style="margin-bottom:0;">Active Downloads (NZBGet)</p>
-                <span style="font-family:var(--mono); font-size:11px; color:var(--green); font-weight:600;">${escapeHtml(s.download_rate)}</span>
-            </div>`;
-
-            s.downloads.forEach(d => {
-                const statusBadge = d.status === 'DOWNLOADING' ? 'badge-green' : (d.status === 'PAUSED' ? 'badge-amber' : 'badge-dim');
-                html += `
-                <div class="stream-card">
-                    <div class="stream-header">
-                        <div class="stream-user">
-                            <span class="stream-user-name" style="word-break:break-all;">${escapeHtml(d.name)}</span>
-                        </div>
-                        <div class="stream-badges">
-                            <span class="badge ${statusBadge}">${escapeHtml(d.status)}</span>
-                            ${d.category ? `<span class="badge badge-dim">${escapeHtml(d.category)}</span>` : ''}
-                        </div>
-                    </div>
-                    <div class="stream-progress-wrap">
-                        <div class="stream-progress-meta">
-                            <span>${d.remaining_mb > 0 ? (d.size_mb - d.remaining_mb).toFixed(1) + ' / ' + d.size_mb + ' MB' : d.size_mb + ' MB'}</span>
-                            <span>${escapeHtml(d.eta)} (${d.progress_pct}%)</span>
-                        </div>
-                        <div class="stream-progress-track">
-                            <div class="stream-progress-fill" style="width: ${Math.min(100, Math.max(0, d.progress_pct))}%;"></div>
-                        </div>
-                    </div>
-                </div>`;
-            });
-            container.innerHTML = html;
+            const html = [
+                `<div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
+                    <p class="section-title" style="margin-bottom:0;">Active Downloads (NZBGet)</p>
+                    <span style="font-family:var(--mono); font-size:11px; color:var(--green); font-weight:600;">${escapeHtml(s.download_rate)}</span>
+                </div>`
+            ];
+            s.downloads.forEach(d => html.push(renderNZBGetCard(d)));
+            container.innerHTML = html.join('');
         }
     }
 }
@@ -231,31 +294,7 @@ function renderDiskSpace(data) {
     const grid = el('disk-grid');
     if (!grid || !data || !data.disks) return;
 
-    grid.innerHTML = Object.entries(data.disks).map(([key, d]) => {
-        const badgeColor = d.status === 'ok' ? 'green' : (d.status === 'warning' ? 'amber' : 'red');
-        const fillColor = d.status === 'critical' ? '#e05252' : (d.status === 'warning' ? '#e5a00d' : '#3ecf8e');
-        return `
-        <div class="stat-cell" style="flex:1;">
-            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
-                <span class="stat-label" style="font-weight:600; text-transform:uppercase;">${escapeHtml(d.label)}</span>
-                <span class="badge badge-${badgeColor}">${d.free_pct}% Free</span>
-            </div>
-            <div class="stat-value ${badgeColor}" style="margin-bottom:8px;">${escapeHtml(d.free_formatted)} <span style="font-size:13px; font-weight:normal; color:var(--text-sub);">free</span></div>
-            
-            <div class="idle-track" style="margin-bottom:8px;">
-                <div class="idle-fill" style="width: ${d.used_pct}%; background: ${fillColor};"></div>
-            </div>
-            
-            <div style="display:flex; justify-content:space-between; font-size:11px; font-family:var(--mono); color:var(--text-sub);">
-                <span>Used: ${escapeHtml(d.used_formatted)} (${d.used_pct}%)</span>
-                <span>Total: ${escapeHtml(d.total_formatted)}</span>
-            </div>
-            <div style="margin-top:8px; font-size:11px; font-family:var(--mono); color:var(--text-sub); display:flex; justify-content:space-between; align-items:center;">
-                <span>Path: <code>${escapeHtml(d.configured_path)}</code></span>
-                <span style="opacity:0.7;">${escapeHtml(d.source)}</span>
-            </div>
-        </div>`;
-    }).join('');
+    grid.innerHTML = Object.entries(data.disks).map(([key, d]) => renderDiskSpaceCell(d)).join('');
 }
 
 function updateActivityLog(logs) {
@@ -282,30 +321,7 @@ function updateActivityLog(logs) {
     container.innerHTML = logs.map(log => {
         const logKey = (log.timestamp || '') + '::' + (log.message || '');
         const isOpen = openDetailsKeys.has(logKey);
-        const rawStatus = (log.status || 'INFO').toUpperCase();
-        const displayStatus = (rawStatus === 'OK') ? 'INFO' : rawStatus;
-        const st = displayStatus.toLowerCase();
-        const gutter = (st === 'success') ? 'success'
-                     : (st === 'info') ? 'info'
-                     : (st === 'warn' || st === 'warning') ? 'warn'
-                     : 'err';
-        const payloadHtml = log.payload
-            ? `<details ${isOpen ? 'open' : ''}>
-                <summary class="log-payload-toggle">View payload</summary>
-                <pre class="log-payload-pre"><code>${escapeHtml(JSON.stringify(log.payload, null, 2))}</code></pre>
-               </details>`
-            : '';
-        return `<div class="log-entry" data-log-key="${escapeHtml(logKey)}">
-            <div class="log-gutter ${gutter}"></div>
-            <div class="log-body">
-                <div class="log-meta">
-                    <span class="log-ts">${escapeHtml(log.timestamp)}</span>
-                    <span class="log-tag ${gutter}">${escapeHtml(displayStatus)}</span>
-                </div>
-                <div class="log-msg">${escapeHtml(log.message)}</div>
-                ${payloadHtml}
-            </div>
-        </div>`;
+        return renderLogEntry(log, isOpen, logKey);
     }).join('');
 }
 

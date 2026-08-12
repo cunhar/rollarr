@@ -1,27 +1,16 @@
 from flask import Flask, request, jsonify, render_template
 
-import requests
 import os
 import logging
 from logging.handlers import RotatingFileHandler
-import json
-from collections import deque
-import threading
 import concurrent.futures
 
 import config_store
 from config_store import mask_secret
-from integrations.common import now_str
 from integrations.sonarr import (
     get_sonarr_url,
     get_sonarr_api_key,
     get_rolling_window,
-    get_sonarr_headers,
-)
-from integrations.radarr import (
-    get_radarr_url,
-    get_radarr_api_key,
-    get_radarr_headers,
 )
 from integrations.nzbget import (
     get_nzbget_status,
@@ -29,16 +18,21 @@ from integrations.nzbget import (
     get_nzbget_username,
     get_nzbget_password,
 )
-from services import plex_watcher, plex_poller
+from services import plex_watcher, plex_poller, activity_log
 from services.disk_service import get_disk_space_summary
+from services.connection_tester import (
+    test_connection,
+    check_sonarr_status,
+    check_radarr_status,
+    check_plex_status,
+)
 
 # Persistent configuration directories
 CONFIG_DIR = '/config'
 if not os.path.exists(CONFIG_DIR):
     CONFIG_DIR = os.path.dirname(os.path.abspath(__file__))
 
-HISTORY_FILE = os.path.join(CONFIG_DIR, 'history.json')
-LOG_FILE     = os.path.join(CONFIG_DIR, 'rolarr.log')
+LOG_FILE = os.path.join(CONFIG_DIR, 'rolarr.log')
 
 # Configure logging
 logger = logging.getLogger(__name__)
@@ -58,104 +52,22 @@ except Exception as e:
 
 app = Flask(__name__)
 
-# In-memory activity log (last 20 entries) with thread lock
-webhook_history = deque(maxlen=20)
-history_lock = threading.Lock()
-
-
-def load_history():
-    if os.path.exists(HISTORY_FILE):
-        try:
-            with open(HISTORY_FILE, 'r') as f:
-                data = json.load(f)
-                with history_lock:
-                    webhook_history.clear()
-                    for item in data:
-                        webhook_history.append(item)
-            logger.info(f"Loaded {len(data)} activity log entries from {HISTORY_FILE}")
-        except Exception as e:
-            logger.warning(f"Could not load activity log file: {e}")
-
-
-def save_history():
-    try:
-        with history_lock:
-            data = list(webhook_history)
-        with open(HISTORY_FILE, 'w') as f:
-            json.dump(data, f, indent=2)
-    except Exception as e:
-        logger.warning(f"Could not save activity log file: {e}")
-
-
-def log_call(status, message, payload=None):
-    entry = {
-        "timestamp": now_str(),
-        "status": status,
-        "message": message,
-        "payload": payload,
-    }
-    with history_lock:
-        webhook_history.appendleft(entry)
-    save_history()
-
-
-load_history()
-plex_poller.set_log_callback(log_call)
-plex_watcher.set_log_callback(log_call)
+# Initialize activity log and wire into services
+activity_log.load()
+plex_poller.set_log_callback(activity_log.log_call)
+plex_watcher.set_log_callback(activity_log.log_call)
 plex_poller.start()
 plex_watcher.start()
 
 
 # ── Live Service Connection Checks ───────────────────────────────────────────
 
-def _check_sonarr_status() -> dict:
-    url, key = get_sonarr_url(), get_sonarr_api_key()
-    if not url or not key:
-        return {'status': 'Disconnected', 'ok': False}
-    try:
-        res = requests.get(f"{url}/api/v3/system/status", headers=get_sonarr_headers(), timeout=2)
-        status = "Connected" if res.status_code == 200 else f"Error ({res.status_code})"
-    except Exception:
-        status = "Unreachable"
-    return {'status': status, 'ok': status == 'Connected'}
-
-
-def _check_radarr_status() -> dict:
-    url, key = get_radarr_url(), get_radarr_api_key()
-    if not url or not key:
-        return {'status': 'Disconnected', 'ok': False}
-    try:
-        res = requests.get(f"{url}/api/v3/system/status", headers=get_radarr_headers(), timeout=2)
-        status = "Connected" if res.status_code == 200 else f"Error ({res.status_code})"
-    except Exception:
-        status = "Unreachable"
-    return {'status': status, 'ok': status == 'Connected'}
-
-
-def _check_plex_status() -> dict:
-    cfg = config_store.get_all_config()
-    plex_url = (cfg.get('PLEX_URL') or '').rstrip('/')
-    plex_token = cfg.get('PLEX_TOKEN') or ''
-    if not plex_url or not plex_token:
-        return {'status': 'Disconnected', 'ok': False}
-    try:
-        res = requests.get(
-            f"{plex_url}/identity",
-            headers={'X-Plex-Token': plex_token, 'Accept': 'application/json'},
-            timeout=2,
-        )
-        status = "Connected" if res.status_code == 200 else f"Error ({res.status_code})"
-    except Exception:
-        status = "Unreachable"
-    return {'status': status, 'ok': status == 'Connected'}
-
-
 def get_service_connections() -> dict:
     """Run connection checks concurrently to reduce dashboard latency."""
     with concurrent.futures.ThreadPoolExecutor(max_workers=3) as executor:
-        f_sonarr = executor.submit(_check_sonarr_status)
-        f_radarr = executor.submit(_check_radarr_status)
-        f_plex = executor.submit(_check_plex_status)
+        f_sonarr = executor.submit(check_sonarr_status)
+        f_radarr = executor.submit(check_radarr_status)
+        f_plex = executor.submit(check_plex_status)
         return {
             'sonarr': f_sonarr.result(),
             'radarr': f_radarr.result(),
@@ -170,24 +82,21 @@ def index():
     cfg = config_store.get_all_config()
     conns = get_service_connections()
 
-    with history_lock:
-        history_list = list(webhook_history)
-
     return render_template(
         "index.html",
         cfg=cfg,
         sonarr_url=get_sonarr_url() or "Not Configured",
         masked_key=mask_secret(get_sonarr_api_key()),
         status_text=conns['sonarr']['status'],
-        radarr_url=get_radarr_url() or "Not Configured",
-        radarr_masked_key=mask_secret(get_radarr_api_key()),
+        radarr_url=config_store.get_config('RADARR_URL') or "Not Configured",
+        radarr_masked_key=mask_secret(config_store.get_config('RADARR_API_KEY')),
         radarr_status_text=conns['radarr']['status'],
         plex_conn_text=conns['plex']['status'],
         nzbget_url=get_nzbget_url() or "Not Configured",
         nzbget_username=get_nzbget_username() or "Not Configured",
         nzbget_masked_pass=mask_secret(get_nzbget_password()),
         nzbget_status=get_nzbget_status(),
-        history=history_list,
+        history=activity_log.get_entries(),
         rolling_window=get_rolling_window(),
         plex_status=plex_watcher.get_state(),
         poller_status=plex_poller.get_state(),
@@ -201,7 +110,7 @@ def api_config_save():
         data = request.json or {}
         updated = config_store.save_config(data)
         logger.info("[App] Saved updated encrypted configuration via UI.")
-        log_call('success', 'Configuration saved securely via web dashboard')
+        activity_log.log_call('success', 'Configuration saved securely via web dashboard')
         return jsonify({'status': 'success', 'message': 'Configuration saved securely', 'config': updated}), 200
     except Exception as exc:
         logger.error(f"[App] Failed to save configuration: {exc}")
@@ -212,99 +121,10 @@ def api_config_save():
 def api_test_connection():
     data = request.json or {}
     service = (data.get('service') or '').lower()
-
-    if service == 'sonarr':
-        url = (data.get('url') or get_sonarr_url() or '').rstrip('/')
-        key = data.get('api_key') or ''
-        if not key or key == '••••••••':
-            key = get_sonarr_api_key()
-        if not url or not key:
-            return jsonify({'status': 'error', 'message': 'Sonarr URL and API Key are required'}), 400
-        try:
-            res = requests.get(f"{url}/api/v3/system/status", headers={'X-Api-Key': key}, timeout=4)
-            if res.status_code == 200:
-                ver = res.json().get('version', '')
-                return jsonify({'status': 'success', 'message': f'Sonarr connected successfully! (v{ver})'}), 200
-            return jsonify({'status': 'error', 'message': f'Sonarr test failed (HTTP {res.status_code})'}), 400
-        except Exception as exc:
-            return jsonify({'status': 'error', 'message': f'Sonarr connection error: {exc}'}), 400
-
-    elif service == 'radarr':
-        url = (data.get('url') or get_radarr_url() or '').rstrip('/')
-        key = data.get('api_key') or ''
-        if not key or key == '••••••••':
-            key = get_radarr_api_key()
-        if not url or not key:
-            return jsonify({'status': 'error', 'message': 'Radarr URL and API Key are required'}), 400
-        try:
-            res = requests.get(f"{url}/api/v3/system/status", headers={'X-Api-Key': key}, timeout=4)
-            if res.status_code == 200:
-                ver = res.json().get('version', '')
-                return jsonify({'status': 'success', 'message': f'Radarr connected successfully! (v{ver})'}), 200
-            return jsonify({'status': 'error', 'message': f'Radarr test failed (HTTP {res.status_code})'}), 400
-        except Exception as exc:
-            return jsonify({'status': 'error', 'message': f'Radarr connection error: {exc}'}), 400
-
-    elif service == 'plex':
-        url = (data.get('url') or config_store.get_config('PLEX_URL') or '').rstrip('/')
-        token = data.get('token') or ''
-        if not token or token == '••••••••':
-            token = config_store.get_config('PLEX_TOKEN') or ''
-        if not url or not token:
-            return jsonify({'status': 'error', 'message': 'Plex URL and Token are required'}), 400
-        try:
-            res = requests.get(f"{url}/identity", headers={'X-Plex-Token': token, 'Accept': 'application/json'}, timeout=4)
-            if res.status_code == 200:
-                return jsonify({'status': 'success', 'message': 'Plex connected successfully!'}), 200
-            return jsonify({'status': 'error', 'message': f'Plex test failed (HTTP {res.status_code})'}), 400
-        except Exception as exc:
-            return jsonify({'status': 'error', 'message': f'Plex connection error: {exc}'}), 400
-
-    elif service == 'nzbget':
-        url = (data.get('url') or get_nzbget_url() or '').rstrip('/')
-        user = data.get('username') or get_nzbget_username() or 'nzbget'
-        password = data.get('password') or ''
-        if not password or password == '••••••••':
-            password = get_nzbget_password()
-        if not url:
-            return jsonify({'status': 'error', 'message': 'NZBGet URL is required'}), 400
-        try:
-            auth = (user, password) if (user or password) else None
-            res = requests.get(f"{url}/jsonrpc/version", auth=auth, timeout=4)
-            if res.status_code == 200:
-                ver = res.json().get('result', '')
-                return jsonify({'status': 'success', 'message': f'NZBGet connected successfully! (v{ver})'}), 200
-            return jsonify({'status': 'error', 'message': f'NZBGet test failed (HTTP {res.status_code})'}), 400
-        except Exception as exc:
-            return jsonify({'status': 'error', 'message': f'NZBGet connection error: {exc}'}), 400
-
-    elif service == 'ssh':
-        ssh_host = data.get('ssh_host') or config_store.get_config('SSH_HOST')
-        ssh_port = int(data.get('ssh_port') or config_store.get_config('SSH_PORT') or 22)
-        ssh_user = data.get('ssh_user') or config_store.get_config('SSH_USER')
-        ssh_pass = data.get('ssh_password') or ''
-        if not ssh_pass or ssh_pass == '••••••••':
-            ssh_pass = config_store.get_config('SSH_PASSWORD') or ''
-        if not ssh_host or not ssh_user:
-            return jsonify({'status': 'error', 'message': 'SSH Host and User are required'}), 400
-        try:
-            import paramiko
-            client = paramiko.SSHClient()
-            client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
-            key_path = config_store.get_config('SSH_KEY_PATH', '/root/.ssh/id_rsa')
-            client.connect(
-                hostname=ssh_host,
-                port=ssh_port,
-                username=ssh_user,
-                password=ssh_pass if ssh_pass else None,
-                timeout=5
-            )
-            client.close()
-            return jsonify({'status': 'success', 'message': f'SSH connection to {ssh_host}:{ssh_port} successful!'}), 200
-        except Exception as exc:
-            return jsonify({'status': 'error', 'message': f'SSH connection failed: {exc}'}), 400
-
-    return jsonify({'status': 'error', 'message': 'Unknown service'}), 400
+    success, message = test_connection(service, data)
+    status_code = 200 if success else 400
+    status_str = 'success' if success else 'error'
+    return jsonify({'status': status_str, 'message': message}), status_code
 
 
 @app.route('/api/connection-status')
@@ -341,9 +161,7 @@ def api_nzbget_status():
 
 @app.route('/api/clear-logs', methods=['POST'])
 def api_clear_logs():
-    with history_lock:
-        webhook_history.clear()
-    save_history()
+    activity_log.clear()
     logger.info("Activity history cleared via UI.")
     return jsonify({"status": "success"}), 200
 
@@ -351,8 +169,7 @@ def api_clear_logs():
 @app.route('/api/activity')
 def api_activity():
     """Return the current activity log as JSON for live polling."""
-    with history_lock:
-        return jsonify(list(webhook_history)), 200
+    return jsonify(activity_log.get_entries()), 200
 
 
 @app.route('/api/disk-space')
