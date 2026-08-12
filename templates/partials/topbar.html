@@ -27,7 +27,10 @@
 <!-- Tab bar -->
 <div class="tabbar">
     <button class="tab-btn active" id="tab-dashboard" onclick="switchTab('dashboard')">Dashboard</button>
-    <button class="tab-btn" id="tab-disks" onclick="switchTab('disks')">Disk Space</button>
+    <button class="tab-btn" id="tab-disks" onclick="switchTab('disks')">
+        <span class="tab-label-desktop">Disk Space</span>
+        <span class="tab-label-mobile">Disk</span>
+    </button>
     <button class="tab-btn" id="tab-activity" onclick="switchTab('activity')">Activity</button>
     <button class="tab-btn" id="tab-config" onclick="switchTab('config')">Config</button>
 </div>

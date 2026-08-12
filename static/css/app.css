@@ -594,8 +594,13 @@ body {
     margin-right: 8px;
 }
 
+.tab-label-mobile { display: none; }
+.tab-label-desktop { display: inline; }
+
 /* ── Responsive & Large Display / 4K TV Scaling ──────── */
 @media (max-width: 600px) {
+    .tab-label-mobile { display: inline; }
+    .tab-label-desktop { display: none; }
     .topbar {
         flex-direction: column;
         align-items: flex-start;
