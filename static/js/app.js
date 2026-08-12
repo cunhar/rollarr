@@ -261,19 +261,31 @@ function updateActivityLog(logs) {
         return;
     }
 
+    // Preserve open <details> state across refreshes
+    const openDetailsKeys = new Set();
+    container.querySelectorAll('.log-entry').forEach(entry => {
+        const details = entry.querySelector('details');
+        if (details && details.open) {
+            const key = entry.getAttribute('data-log-key');
+            if (key) openDetailsKeys.add(key);
+        }
+    });
+
     container.className = 'log-list';
     container.innerHTML = logs.map(log => {
+        const logKey = (log.timestamp || '') + '::' + (log.message || '');
+        const isOpen = openDetailsKeys.has(logKey);
         const st = (log.status || '').toLowerCase();
         const gutter = (st === 'ok' || st === 'success' || st === 'info') ? 'ok'
                      : (st === 'warn' || st === 'warning') ? 'warn'
                      : 'err';
         const payloadHtml = log.payload
-            ? `<details>
+            ? `<details ${isOpen ? 'open' : ''}>
                 <summary class="log-payload-toggle">View payload</summary>
                 <pre class="log-payload-pre"><code>${escapeHtml(JSON.stringify(log.payload, null, 2))}</code></pre>
                </details>`
             : '';
-        return `<div class="log-entry">
+        return `<div class="log-entry" data-log-key="${escapeHtml(logKey)}">
             <div class="log-gutter ${gutter}"></div>
             <div class="log-body">
                 <div class="log-meta">

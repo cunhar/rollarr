@@ -14,7 +14,7 @@
         {% for log in history %}
         {% set st = (log.status or '') | lower %}
         {% set gutter = 'ok' if st in ['ok', 'success', 'info'] else ('warn' if st in ['warn', 'warning'] else 'err') %}
-        <div class="log-entry">
+        <div class="log-entry" data-log-key="{{ log.timestamp }}::{{ log.message }}">
             <div class="log-gutter {{ gutter }}"></div>
             <div class="log-body">
                 <div class="log-meta">
