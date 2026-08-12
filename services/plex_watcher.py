@@ -400,6 +400,8 @@ def _ssh_shutdown(force: bool = False) -> tuple[bool, str]:
 
 
 def _watcher_loop():
+    logger.info(f"[PlexWatcher] Starting power saver watcher loop. Delaying 15s to allow Plex to spin up...")
+    time.sleep(15)
     idle_streak = 0
 
     while True:

@@ -407,7 +407,8 @@ def _execute_poll() -> int:
 
 
 def _poller_loop():
-    logger.info(f"[PlexPoller] Starting stateless media poller loop.")
+    logger.info(f"[PlexPoller] Starting stateless media poller loop. Delaying 15s to allow Plex to spin up...")
+    time.sleep(15)
 
     while True:
         plex_url, plex_token = get_plex_credentials()
