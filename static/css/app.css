@@ -159,11 +159,51 @@ body {
     margin-bottom: 12px;
 }
 
-/* ── Key-value table ────────────────────────────────── */
+/* ── Key-value table & Collapsible Cards ─────────────── */
 .kv-block {
     border: 1px solid var(--border);
     background: var(--surface);
     margin-bottom: 24px;
+}
+.config-card {
+    border: 1px solid var(--border);
+    background: var(--surface);
+    margin-bottom: 16px;
+    border-radius: 4px;
+    overflow: hidden;
+}
+.config-card[open] {
+    border-color: var(--border-hi);
+}
+.config-card-summary {
+    padding: 14px 16px;
+    cursor: pointer;
+    user-select: none;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    list-style: none;
+    background: var(--surface);
+    transition: background 0.15s ease;
+}
+.config-card-summary:hover {
+    background: var(--surface-2);
+}
+.config-card-summary::-webkit-details-marker {
+    display: none;
+}
+.config-card-summary::after {
+    content: "▾";
+    font-size: 13px;
+    color: var(--text-sub);
+    transition: transform 0.15s ease;
+}
+.config-card[open] .config-card-summary::after {
+    transform: rotate(180deg);
+}
+.config-card-body {
+    padding: 16px;
+    border-top: 1px solid var(--border);
 }
 .kv-row {
     display: flex;
