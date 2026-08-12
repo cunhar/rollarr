@@ -65,6 +65,16 @@ def _update_state(**kwargs):
         watcher_state.update(kwargs)
 
 
+def _get_shutdown_mode() -> str:
+    mode = get_config('PLEX_SHUTDOWN_MODE')
+    if mode in ['disabled', 'dry_run', 'enabled']:
+        return mode
+    dry_run = get_config('PLEX_SHUTDOWN_DRY_RUN')
+    if dry_run is False or str(dry_run).lower() == 'false':
+        return 'enabled'
+    return 'dry_run'
+
+
 def get_state(refresh_live: bool = True):
     """
     Return a snapshot of the watcher state (thread-safe).
@@ -74,12 +84,15 @@ def get_state(refresh_live: bool = True):
 
     plex_url = (get_config('PLEX_URL') or '').rstrip('/')
     plex_token = get_config('PLEX_TOKEN') or ''
-    dry_run = bool(get_config('PLEX_SHUTDOWN_DRY_RUN', True))
+    shutdown_mode = _get_shutdown_mode()
+    dry_run = (shutdown_mode == 'dry_run')
+    enabled = bool(plex_url and plex_token and shutdown_mode != 'disabled')
     idle_needed = int(get_config('PLEX_IDLE_POLLS', 3))
     poll_interval = int(get_config('PLEX_POLL_INTERVAL', 1200))
 
     _update_state(
-        enabled=bool(plex_url and plex_token),
+        enabled=enabled,
+        shutdown_mode=shutdown_mode,
         dry_run=dry_run,
         plex_url=plex_url or 'Not configured',
         idle_needed=idle_needed,
@@ -317,7 +330,14 @@ def _ssh_shutdown(force: bool = False) -> tuple[bool, str]:
     ssh_user = get_config('SSH_USER', '')
     ssh_password = get_config('SSH_PASSWORD', '')
     ssh_key_path = get_config('SSH_KEY_PATH', '/root/.ssh/id_rsa')
-    dry_run = bool(get_config('PLEX_SHUTDOWN_DRY_RUN', True))
+    shutdown_mode = _get_shutdown_mode()
+    
+    if shutdown_mode == 'disabled' and not force:
+        msg = "Host shutdown watcher is disabled in configuration."
+        logger.info(f"[PlexWatcher] {msg}")
+        return False, msg
+
+    dry_run = (shutdown_mode == 'dry_run')
     resolved_key_path = _find_ssh_key(ssh_key_path)
 
     if ssh_password:
@@ -386,6 +406,22 @@ def _watcher_loop():
     idle_streak = 0
 
     while True:
+        shutdown_mode = _get_shutdown_mode()
+        if shutdown_mode == 'disabled':
+            _update_state(
+                enabled=False,
+                shutdown_mode='disabled',
+                status='disabled',
+                stream_count=0,
+                active_streams=[],
+                idle_streak=0,
+                last_action='Power saver watcher disabled in configuration',
+                last_check=_now(),
+                next_check=None
+            )
+            time.sleep(10)
+            continue
+
         plex_url = (get_config('PLEX_URL') or '').rstrip('/')
         plex_token = get_config('PLEX_TOKEN') or ''
         poll_interval = int(get_config('PLEX_POLL_INTERVAL', 1200))

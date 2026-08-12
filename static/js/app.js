@@ -42,6 +42,13 @@ function handleHashChange() {
 }
 
 function formatShutdownWatcher(s) {
+    if (s.shutdown_mode === 'disabled' || s.status === 'disabled') {
+        return {
+            label: 'Disabled',
+            detail: 'Power saver & idle host shutdown watcher is disabled'
+        };
+    }
+
     const idleNeeded = s.idle_needed || 3;
     const idleStreak = s.idle_streak || 0;
     const pollInterval = s.poll_interval || 1200;
@@ -436,7 +443,8 @@ function saveConfiguration() {
         PLEX_WATCH_INTERVAL: parseInt(el('cfg-PLEX_WATCH_INTERVAL').value) || 3600,
         PLEX_POLL_INTERVAL: parseInt(el('cfg-PLEX_POLL_INTERVAL').value) || 1200,
         PLEX_IDLE_POLLS: parseInt(el('cfg-PLEX_IDLE_POLLS').value) || 3,
-        PLEX_SHUTDOWN_DRY_RUN: el('cfg-PLEX_SHUTDOWN_DRY_RUN').value === 'true',
+        PLEX_SHUTDOWN_MODE: el('cfg-PLEX_SHUTDOWN_MODE') ? el('cfg-PLEX_SHUTDOWN_MODE').value : 'dry_run',
+        PLEX_SHUTDOWN_DRY_RUN: el('cfg-PLEX_SHUTDOWN_MODE') ? el('cfg-PLEX_SHUTDOWN_MODE').value === 'dry_run' : true,
         SSH_HOST: el('cfg-SSH_HOST').value,
         SSH_PORT: parseInt(el('cfg-SSH_PORT').value) || 22,
         SSH_USER: el('cfg-SSH_USER').value,
