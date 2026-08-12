@@ -145,9 +145,22 @@ body {
     border-bottom-color: var(--accent);
 }
 
-/* ── Tab panels ─────────────────────────────────────── */
-.tab-panel { display: none; padding-top: 28px; }
+/* ── Tab panels & Standardized Header Rows ────────────── */
+.tab-panel { display: none; padding-top: 24px; }
 .tab-panel.active { display: block; }
+
+.tab-header-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 20px;
+    min-height: 32px;
+}
+.tab-header-meta {
+    font-size: 10px;
+    color: var(--text-sub);
+    font-family: var(--mono);
+}
 
 /* ── Section title ──────────────────────────────────── */
 .section-title {

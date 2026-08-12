@@ -1,6 +1,13 @@
 <!-- ══ DASHBOARD TAB ══════════════════════════════════════ -->
 <div class="tab-panel active" id="panel-dashboard">
 
+    <div class="tab-header-row">
+        <span class="section-title" style="margin-bottom:0;">System Dashboard</span>
+        {% if poller_status.enabled %}
+        <button class="btn-clear" id="btn-run-poller" onclick="runPoller()">Re-check Now</button>
+        {% endif %}
+    </div>
+
     <!-- NZBGet Active Downloads Container -->
     <div id="nzbget-container" style="margin-bottom:16px;"></div>
 
@@ -9,10 +16,7 @@
 
     {% if poller_status.enabled %}
     <!-- Episode Poller stats -->
-    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
-        <p class="section-title" style="margin-bottom:0;">Media Poller</p>
-        <button class="btn-clear" id="btn-run-poller" onclick="runPoller()">Re-check Now</button>
-    </div>
+    <p class="section-title" style="margin-bottom:12px;">Media Poller</p>
     <div class="stat-grid" style="margin-bottom:16px;">
         <div class="stat-cell">
             <span class="stat-label">Items processed</span>
