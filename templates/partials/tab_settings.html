@@ -12,11 +12,24 @@
             <button type="button" class="btn-clear" id="btn-save-cfg" style="padding:8px 20px; font-weight:600; background:var(--accent); color:#000; border-color:var(--accent);" onclick="saveConfiguration()">Save Configuration</button>
         </div>
 
-        <!-- 1. Sonarr & Radarr Media Integrations -->
+        <!-- 1. Media Cleanup Policy -->
         <div class="kv-block" style="padding:16px; margin-bottom:24px;">
-            <p class="section-title" style="margin-bottom:16px;">🎬 Media Integrations & Cleanup (Sonarr & Radarr)</p>
-            
-            <p style="font-size:11px; font-family:var(--mono); color:var(--accent); margin-bottom:8px; text-transform:uppercase; letter-spacing:0.5px;">Sonarr Configuration</p>
+            <p class="section-title" style="margin-bottom:16px;">🧹 Media Cleanup Policy</p>
+            <div class="form-group" style="margin-bottom:0;">
+                <label class="form-label">Delete Watched Media Files (Sonarr &amp; Radarr)</label>
+                <select class="form-input" id="cfg-DELETE_WATCHED_EPISODES">
+                    <option value="true" {{ 'selected' if cfg.DELETE_WATCHED_EPISODES else '' }}>Enabled — delete file from disk after watching</option>
+                    <option value="false" {{ 'selected' if not cfg.DELETE_WATCHED_EPISODES else '' }}>Disabled — unmonitor only, keep file on disk</option>
+                </select>
+                <span style="font-size:11px; color:var(--text-muted); font-family:var(--mono); margin-top:4px; display:block;">
+                    Automatically unmonitors & deletes watched TV episodes (Sonarr) and movies (Radarr) when detected in Plex history.
+                </span>
+            </div>
+        </div>
+
+        <!-- 2. Sonarr Configuration -->
+        <div class="kv-block" style="padding:16px; margin-bottom:24px;">
+            <p class="section-title" style="margin-bottom:16px;">📺 Sonarr Configuration</p>
             <div class="form-grid">
                 <div class="form-group">
                     <label class="form-label">Sonarr URL</label>
@@ -31,8 +44,11 @@
                     <input type="number" class="form-input" id="cfg-ROLLING_WINDOW" value="{{ cfg.ROLLING_WINDOW }}" min="1" max="50">
                 </div>
             </div>
+        </div>
 
-            <p style="font-size:11px; font-family:var(--mono); color:var(--accent); margin-top:16px; margin-bottom:8px; text-transform:uppercase; letter-spacing:0.5px;">Radarr Configuration</p>
+        <!-- 3. Radarr Configuration -->
+        <div class="kv-block" style="padding:16px; margin-bottom:24px;">
+            <p class="section-title" style="margin-bottom:16px;">🍿 Radarr Configuration</p>
             <div class="form-grid">
                 <div class="form-group">
                     <label class="form-label">Radarr URL</label>
@@ -42,18 +58,6 @@
                     <label class="form-label">API Key</label>
                     <input type="password" class="form-input" id="cfg-RADARR_API_KEY" value="{{ '••••••••' if cfg.RADARR_API_KEY else '' }}" placeholder="Radarr API Key">
                 </div>
-            </div>
-
-            <p style="font-size:11px; font-family:var(--mono); color:var(--accent); margin-top:16px; margin-bottom:8px; text-transform:uppercase; letter-spacing:0.5px;">Global Media Cleanup Policy</p>
-            <div class="form-group" style="margin-bottom:0;">
-                <label class="form-label">Delete Watched Media Files (Sonarr &amp; Radarr)</label>
-                <select class="form-input" id="cfg-DELETE_WATCHED_EPISODES">
-                    <option value="true" {{ 'selected' if cfg.DELETE_WATCHED_EPISODES else '' }}>Enabled — delete file from disk after watching</option>
-                    <option value="false" {{ 'selected' if not cfg.DELETE_WATCHED_EPISODES else '' }}>Disabled — unmonitor only, keep file on disk</option>
-                </select>
-                <span style="font-size:11px; color:var(--text-muted); font-family:var(--mono); margin-top:4px; display:block;">
-                    Automatically unmonitors & deletes watched TV episodes and movies when detected in Plex history.
-                </span>
             </div>
         </div>
 
