@@ -607,7 +607,12 @@ body {
     .tabbar {
         width: 100%;
         overflow-x: auto;
+        overflow-y: hidden;
         -webkit-overflow-scrolling: touch;
+        scrollbar-width: none;
+    }
+    .tabbar::-webkit-scrollbar {
+        display: none;
     }
     .tab-btn {
         flex: 1;
@@ -615,6 +620,7 @@ body {
         padding: 12px 6px;
         font-size: 11px;
         white-space: nowrap;
+        margin-bottom: 0;
     }
     .topbar {
         flex-direction: column;
