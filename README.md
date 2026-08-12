@@ -1,58 +1,24 @@
 # Rolarr — Media Recycler & Power Saver 🎬⚡
 
-**Rolarr** is an automated media recycler and server power saver for **Sonarr**, **Radarr**, **Plex**, and **NZBGet**, designed to aggressively save disk space while automating media downloads and server power management.
+**Rolarr** is an automated media recycler and server power saver for **Sonarr**, **Radarr**, **Plex**, and **NZBGet**. It automatically deletes watched media to reclaim disk space, queues upcoming TV episodes using a configurable rolling window, and safely powers down your host server via SSH when idle.
 
 ---
 
-## Key Features 🚀
+## Features 🚀
 
-- 📦 **Rolling Window Episode Manager & Cleaner (Sonarr)**: Unmonitors and automatically deletes watched episode media files from disk via Sonarr (replacing Maintainerr), then drip-feeds and searches for the next $N$ episodes based on your configured rolling window size.
-- 🍿 **Movie Unmonitor & Cleanup (Radarr)**: Automatically unmonitors and cleans up watched movies from Radarr to save storage.
-- ⚡ **AES-128 Fernet Encrypted Config**: Sensitive settings (API keys, passwords, tokens, URLs) are stored in `/config/settings.enc` encrypted using AES-128 Fernet. Manage all settings through the interactive **Config** tab in the Web UI — no container restarts required.
-- 🔒 **DOM Security & Mask Sentinel**: Passwords and API keys are never exposed in HTML DOM attributes or client-side Javascript. Inspecting elements in browser DevTools only shows mask sentinels (`••••••••`).
-- 📺 **Plex Active Stream Watcher**: Real-time display of active Plex streams with user avatars, device details, resolution, direct play / transcode state, remaining time, and progress bars.
-- 📥 **NZBGet Active Downloads Card**: Live NZBGet status pill showing download speeds directly in the topbar, plus an Active Downloads card with progress bars, ETA, and download speeds on the Dashboard.
-- 🔌 **Host SSH Auto-Shutdown Watcher**: Monitors Plex for active streams. If the host remains idle for a configured number of consecutive poll cycles, Rolarr issues an SSH shutdown command (`sudo shutdown -h now`) to power down your media server.
-- 🔴 **Instant Manual Shutdown Button**: Manual **Shutdown Now** button in the UI header with confirmation prompt and live feedback toasts.
-- 📊 **Activity History & Live Status**: Dedicated Activity tab showing full audit logs of processed episodes, webhooks, and manual triggers with persistent counters and clear log controls.
-
----
-
-## Configuration & Management ⚙️
-
-Rolarr features an **Encrypted UI Settings Manager**. You can configure all services directly from the **Config** tab in the web interface (`http://your-server:5000`):
-
-### 1. Sonarr Settings
-- **Sonarr URL**: Base URL of your Sonarr instance (e.g. `http://localhost:8989`).
-- **API Key**: Sonarr API key.
-- **Rolling Window**: Number of sequential episodes to monitor ahead (e.g. `3`).
-
-### 2. Radarr Settings
-- **Radarr URL**: Base URL of your Radarr instance (e.g. `http://localhost:7878`).
-- **API Key**: Radarr API key.
-
-### 3. NZBGet Settings
-- **NZBGet URL**: Base URL of your NZBGet instance (e.g. `http://localhost:6789`).
-- **Username**: NZBGet RPC username (default `nzbget`).
-- **Password / API Key**: NZBGet password or API key.
-
-### 4. Plex & Polling Settings
-- **Plex URL**: Base URL of your Plex instance (e.g. `http://plex:32400`).
-- **Plex Token**: `X-Plex-Token` for Plex API authentication.
-- **Media Poll Interval**: Interval in seconds to poll Plex for watched media (default `3600`).
-- **Shutdown Poll Interval**: Interval in seconds between idle checks (default `1200`).
-- **Shutdown Idle Polls Threshold**: Number of consecutive idle checks required before triggering host shutdown (default `3`).
-- **Enable Shutdown Dry Run**: Simulates host shutdown in logs without executing the command.
-
-### 5. SSH Host Shutdown Settings
-- **SSH Host**: Host IP or domain (e.g. `172.17.0.1` or LAN IP).
-- **SSH Port**: SSH port (default `22`).
-- **SSH User**: Linux user on host machine (e.g. `ricardo`).
-- **SSH Password**: Optional SSH password (automatically feeds `sudo` if required).
+- 📦 **Automated Episode Recycler (Sonarr)**: Detects watched TV episodes in Plex, unmonitors them, deletes media files from disk, and queues/searches the next $N$ episodes using a rolling window.
+- 🍿 **Watched Movie Cleanup (Radarr)**: Automatically unmonitors and deletes watched movies from disk via Radarr upon completion in Plex.
+- 💾 **Storage & Disk Space Monitor**: Live tracking of available storage across Downloads, TV Shows, and Movies directories, querying host disk metrics and Sonarr/Radarr API root folders.
+- ⚡ **Host Power Saver & Idle Shutdown**: Monitors active Plex streams, NZBGet downloads, and background tasks. Powers down the host via SSH when idle for $N$ consecutive checks (includes Dry Run safe mode).
+- 📺 **Smart TV & Remote D-Pad Navigation**: Built-in 2D spatial arrow key navigation engine and high-visibility focus indicators tailored for Smart TVs (LG WebOS, Android TV, Fire TV).
+- 📱 **Mobile & Progressive Web App (PWA)**: Mobile-optimized responsive UI with PWA standalone mode (runs like a native mobile app without address bars).
+- 🔒 **Encrypted Storage & Secret Masking**: Persists credentials in AES-128 Fernet encrypted storage (`/config/settings.enc`) with automatic DevTools secret masking sentinels (`••••••••`).
+- 📥 **NZBGet & Service Connection Status**: Live status indicators for Sonarr, Radarr, NZBGet, and Plex with direct links and active download metrics.
+- 📊 **Activity Audit Log**: Real-time log tracking processed media, status events, and payload inspections with state preservation across refreshes.
 
 ---
 
-## Deployment 🐳
+## Quick Start / Deployment 🐳
 
 ### Docker Compose (Recommended)
 
@@ -63,9 +29,8 @@ services:
   rolarr:
     image: ghcr.io/cunhar/rollarr:latest
     container_name: rolarr
-    network_mode: "service:gluetun" # or ports: ["5000:5000"]
-    depends_on:
-      - gluetun
+    ports:
+      - "5000:5000"
     volumes:
       - ./config/rolarr:/config
     environment:
@@ -86,26 +51,36 @@ docker run -d \
 
 ---
 
-## Maintainerr Webhook Integration 🔗
+## Web Dashboard Tabs 💻
 
-To trigger automatic episode monitoring when Maintainerr deletes watched media:
+1. **Dashboard**: View active Plex streams, current episode poller state, NZBGet active downloads, and host shutdown watcher status with a one-click manual shutdown trigger.
+2. **Disk Space**: Monitor free, used, and total storage space across configured Downloads, TV Shows, and Movies storage paths.
+3. **Activity**: Persistent audit log of processed media, webhook triggers, and system events with expandable payload views.
+4. **Config**: Web UI form to securely manage encrypted settings without restarting containers.
 
-1. In **Maintainerr**, navigate to **Settings** -> **Notifications**.
-2. Create a new **Webhook** notification agent.
-3. Select the **Media Handled** event type.
-4. Set the Webhook URL to: `http://<rolarr-ip>:5000/webhook`.
-5. Set the JSON Payload to:
-   ```json
-   {
-     "subject": "{{subject}}",
-     "message": "{{message}}"
-   }
-   ```
+---
 
-*Rolarr automatically parses the show title, season, and episode number from standard payloads (e.g. `Clarkson's Farm - 1x01 - Tractoring`) and queues the next sequential episode in Sonarr.*
+## Settings Reference ⚙️
+
+All settings can be configured via the web UI at `http://your-server:5000/#config`:
+
+| Category | Setting | Description |
+| :--- | :--- | :--- |
+| **Cleanup** | `DELETE_WATCHED_EPISODES` | Enable/disable deleting media files from disk after watching |
+| **Sonarr** | `SONARR_URL` / `SONARR_API_KEY` | Sonarr instance URL & API key |
+| | `ROLLING_WINDOW` | Number of upcoming episodes to monitor and search (default `3`) |
+| **Radarr** | `RADARR_URL` / `RADARR_API_KEY` | Radarr instance URL & API key |
+| **NZBGet** | `NZBGET_URL` / `NZBGET_USERNAME` / `NZBGET_PASSWORD` | NZBGet connection credentials |
+| **Plex** | `PLEX_URL` / `PLEX_TOKEN` | Plex Media Server URL & `X-Plex-Token` |
+| | `PLEX_WATCH_INTERVAL` | Polling frequency for watched media cleanup in seconds (default `3600`) |
+| **Power Saver**| `PLEX_POLL_INTERVAL` | Idle check frequency in seconds (default `1200`) |
+| | `PLEX_IDLE_POLLS` | Consecutive idle checks required before triggering host shutdown (default `3`) |
+| | `PLEX_SHUTDOWN_DRY_RUN` | Dry-run mode to test shutdown triggers safely without powering off host |
+| **Host SSH** | `SSH_HOST` / `SSH_PORT` / `SSH_USER` / `SSH_PASSWORD` | Host SSH credentials for issuing shutdown commands |
+| **Storage** | `PATH_DOWNLOADS` / `PATH_TV` / `PATH_MOVIES` | Local storage directory paths for disk monitoring |
 
 ---
 
 ## License 📜
 
-MIT License. Developed for the *Arr ecosystem.
+MIT License. Developed for the *Arr & Plex ecosystem.
