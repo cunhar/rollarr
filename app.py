@@ -201,7 +201,7 @@ def api_config_save():
         data = request.json or {}
         updated = config_store.save_config(data)
         logger.info("[App] Saved updated encrypted configuration via UI.")
-        log_call('ok', 'Configuration saved securely via web dashboard')
+        log_call('success', 'Configuration saved securely via web dashboard')
         return jsonify({'status': 'success', 'message': 'Configuration saved securely', 'config': updated}), 200
     except Exception as exc:
         logger.error(f"[App] Failed to save configuration: {exc}")

@@ -104,7 +104,7 @@ def trigger_now() -> dict:
         return {'status': 'error', 'message': 'Plex is not configured'}
     
     logger.info("[PlexPoller] Stateless re-check triggered by user")
-    _activity_log('ok', "Stateless re-check triggered by user")
+    _activity_log('info', "Stateless re-check triggered by user")
     _wake_event.set()
     return {'status': 'success', 'message': 'Re-check cycle triggered'}
 
@@ -382,11 +382,11 @@ def _execute_poll() -> int:
     if not items:
         msg = "Plex library scanned — 0 items with watched tick mark found"
         logger.info(f"[PlexPoller] {msg}")
-        _activity_log('ok', msg)
+        _activity_log('info', msg)
         return 0
 
     logger.info(f"[PlexPoller] Found {len(items)} watched item(s) across all libraries.")
-    _activity_log('ok', f"Plex library scanned — {len(items)} watched item(s) found, processing...")
+    _activity_log('info', f"Plex library scanned — {len(items)} watched item(s) found, processing...")
     processed_count = 0
     for item in items:
         try:

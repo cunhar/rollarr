@@ -282,9 +282,11 @@ function updateActivityLog(logs) {
     container.innerHTML = logs.map(log => {
         const logKey = (log.timestamp || '') + '::' + (log.message || '');
         const isOpen = openDetailsKeys.has(logKey);
-        const st = (log.status || '').toLowerCase();
+        const rawStatus = (log.status || 'INFO').toUpperCase();
+        const displayStatus = (rawStatus === 'OK') ? 'INFO' : rawStatus;
+        const st = displayStatus.toLowerCase();
         const gutter = (st === 'success') ? 'success'
-                     : (st === 'ok' || st === 'info') ? 'info'
+                     : (st === 'info') ? 'info'
                      : (st === 'warn' || st === 'warning') ? 'warn'
                      : 'err';
         const payloadHtml = log.payload
@@ -298,7 +300,7 @@ function updateActivityLog(logs) {
             <div class="log-body">
                 <div class="log-meta">
                     <span class="log-ts">${escapeHtml(log.timestamp)}</span>
-                    <span class="log-tag ${gutter}">${escapeHtml(log.status)}</span>
+                    <span class="log-tag ${gutter}">${escapeHtml(displayStatus)}</span>
                 </div>
                 <div class="log-msg">${escapeHtml(log.message)}</div>
                 ${payloadHtml}

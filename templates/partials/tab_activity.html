@@ -12,14 +12,16 @@
     {% if history %}
     <div class="log-list" id="activity-log-container">
         {% for log in history %}
-        {% set st = (log.status or '') | lower %}
-        {% set gutter = 'success' if st == 'success' else ('info' if st in ['ok', 'info'] else ('warn' if st in ['warn', 'warning'] else 'err')) %}
+        {% set raw_st = (log.status or 'INFO') | upper %}
+        {% set display_st = 'INFO' if raw_st == 'OK' else raw_st %}
+        {% set st = display_st | lower %}
+        {% set gutter = 'success' if st == 'success' else ('info' if st == 'info' else ('warn' if st in ['warn', 'warning'] else 'err')) %}
         <div class="log-entry" data-log-key="{{ log.timestamp }}::{{ log.message }}">
             <div class="log-gutter {{ gutter }}"></div>
             <div class="log-body">
                 <div class="log-meta">
                     <span class="log-ts">{{ log.timestamp }}</span>
-                    <span class="log-tag {{ gutter }}">{{ log.status }}</span>
+                    <span class="log-tag {{ gutter }}">{{ display_st }}</span>
                 </div>
                 <div class="log-msg">{{ log.message }}</div>
                 {% if log.payload %}
