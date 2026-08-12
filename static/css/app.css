@@ -462,7 +462,6 @@ body {
 }
 .log-gutter.success { background: var(--green); }
 .log-gutter.info    { background: var(--accent); }
-.log-gutter.ok      { background: var(--accent); }
 .log-gutter.warn    { background: var(--amber); }
 .log-gutter.err     { background: var(--red); }
 .log-body {
@@ -490,9 +489,8 @@ body {
 }
 .log-tag.success { color: var(--green);  border-color: var(--green);  background: rgba(62,207,142,0.08); }
 .log-tag.info    { color: var(--accent); border-color: var(--accent); background: rgba(91,106,240,0.08); }
-.log-tag.ok      { color: var(--accent); border-color: var(--accent); background: rgba(91,106,240,0.08); }
-.log-tag.warn { color: var(--amber); border-color: var(--amber); background: rgba(229,160,13,0.08); }
-.log-tag.err  { color: var(--red);   border-color: var(--red);   background: rgba(224,82,82,0.08); }
+.log-tag.warn    { color: var(--amber);  border-color: var(--amber);  background: rgba(229,160,13,0.08); }
+.log-tag.err     { color: var(--red);    border-color: var(--red);    background: rgba(224,82,82,0.08); }
 .log-msg {
     color: var(--text);
     font-size: 11px;
@@ -713,6 +711,8 @@ body {
     .form-input { font-size: 16px; padding: 12px 18px; }
     .form-label { font-size: 14px; }
     .btn-clear { font-size: 15px; padding: 10px 20px; }
+    .config-card-summary { padding: 18px 22px; font-size: 16px; }
+    .config-card-body { padding: 22px; }
     .stream-card { padding: 20px 24px; gap: 14px; }
     .stream-user-name { font-size: 18px; }
     .stream-title { font-size: 18px; }
@@ -763,6 +763,8 @@ body {
     .idle-meta { font-size: 17px; }
     .idle-track { height: 10px; }
     .btn-clear { font-size: 17px; padding: 12px 24px; border-width: 2px; }
+    .config-card-summary { padding: 22px 28px; font-size: 20px; }
+    .config-card-body { padding: 28px; }
     .badge { font-size: 15px; padding: 5px 14px; }
     .toast-container { top: 40px; right: 40px; gap: 16px; }
     .toast { font-size: 20px; padding: 20px 32px; max-width: 620px; border-left-width: 6px; }
@@ -811,6 +813,8 @@ body {
     .idle-meta { font-size: 20px; }
     .idle-track { height: 12px; }
     .btn-clear { font-size: 20px; padding: 14px 30px; border-width: 2px; }
+    .config-card-summary { padding: 26px 34px; font-size: 24px; }
+    .config-card-body { padding: 34px; }
     .badge { font-size: 17px; padding: 6px 16px; }
     .toast-container { top: 50px; right: 50px; gap: 20px; }
     .toast { font-size: 24px; padding: 24px 38px; max-width: 750px; border-left-width: 8px; }
