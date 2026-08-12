@@ -601,6 +601,18 @@ body {
 @media (max-width: 600px) {
     .tab-label-mobile { display: inline; }
     .tab-label-desktop { display: none; }
+    .tabbar {
+        width: 100%;
+        overflow-x: auto;
+        -webkit-overflow-scrolling: touch;
+    }
+    .tab-btn {
+        flex: 1;
+        text-align: center;
+        padding: 12px 6px;
+        font-size: 11px;
+        white-space: nowrap;
+    }
     .topbar {
         flex-direction: column;
         align-items: flex-start;
