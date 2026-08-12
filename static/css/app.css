@@ -162,6 +162,16 @@ body {
     font-family: var(--mono);
 }
 
+#nzbget-container:empty,
+#pw-streams-container:empty {
+    display: none !important;
+    margin: 0 !important;
+}
+#nzbget-container:not(:empty),
+#pw-streams-container:not(:empty) {
+    margin-bottom: 20px;
+}
+
 /* ── Section title ──────────────────────────────────── */
 .section-title {
     font-size: 10px;
