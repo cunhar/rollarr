@@ -79,11 +79,11 @@
             </div>
         </div>
 
-        <!-- 3. NZBGet Downloader -->
+        <!-- Usenet Downloader (NZBGet) -->
         <div class="kv-block" style="padding:16px; margin-bottom:24px;">
             <p class="section-title" style="margin-bottom:16px;">📥 Usenet Downloader (NZBGet)</p>
             <div class="form-grid">
-                <div class="form-group">
+                <div class="form-group" style="grid-column: 1 / -1;">
                     <label class="form-label">NZBGet URL</label>
                     <input type="text" class="form-input" id="cfg-NZBGET_URL" value="{{ cfg.NZBGET_URL }}" placeholder="http://localhost:6789">
                 </div>
@@ -91,8 +91,8 @@
                     <label class="form-label">Username</label>
                     <input type="text" class="form-input" id="cfg-NZBGET_USERNAME" value="{{ cfg.NZBGET_USERNAME }}" placeholder="nzbget">
                 </div>
-                <div class="form-group" style="grid-column: 1 / -1;">
-                    <label class="form-label">Password / API Key</label>
+                <div class="form-group">
+                    <label class="form-label">Password</label>
                     <input type="password" class="form-input" id="cfg-NZBGET_PASSWORD" value="{{ '••••••••' if cfg.NZBGET_PASSWORD else '' }}" placeholder="NZBGet Password">
                 </div>
             </div>
