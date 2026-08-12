@@ -283,7 +283,8 @@ function updateActivityLog(logs) {
         const logKey = (log.timestamp || '') + '::' + (log.message || '');
         const isOpen = openDetailsKeys.has(logKey);
         const st = (log.status || '').toLowerCase();
-        const gutter = (st === 'ok' || st === 'success' || st === 'info') ? 'ok'
+        const gutter = (st === 'success') ? 'success'
+                     : (st === 'ok' || st === 'info') ? 'info'
                      : (st === 'warn' || st === 'warning') ? 'warn'
                      : 'err';
         const payloadHtml = log.payload

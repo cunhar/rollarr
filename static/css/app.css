@@ -460,9 +460,11 @@ body {
     width: 4px;
     flex-shrink: 0;
 }
-.log-gutter.ok   { background: var(--green); }
-.log-gutter.warn { background: var(--amber); }
-.log-gutter.err  { background: var(--red); }
+.log-gutter.success { background: var(--green); }
+.log-gutter.info    { background: var(--accent); }
+.log-gutter.ok      { background: var(--accent); }
+.log-gutter.warn    { background: var(--amber); }
+.log-gutter.err     { background: var(--red); }
 .log-body {
     padding: 10px 14px;
     flex: 1;
@@ -486,7 +488,9 @@ body {
     padding: 1px 5px;
     border: 1px solid;
 }
-.log-tag.ok   { color: var(--green); border-color: var(--green); background: rgba(62,207,142,0.08); }
+.log-tag.success { color: var(--green);  border-color: var(--green);  background: rgba(62,207,142,0.08); }
+.log-tag.info    { color: var(--accent); border-color: var(--accent); background: rgba(91,106,240,0.08); }
+.log-tag.ok      { color: var(--accent); border-color: var(--accent); background: rgba(91,106,240,0.08); }
 .log-tag.warn { color: var(--amber); border-color: var(--amber); background: rgba(229,160,13,0.08); }
 .log-tag.err  { color: var(--red);   border-color: var(--red);   background: rgba(224,82,82,0.08); }
 .log-msg {
