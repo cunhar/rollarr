@@ -37,17 +37,11 @@ def _build_disk_stat(
     free_bytes: int,
     source: str,
 ) -> dict:
-    """Construct a standardized disk space dictionary across local and remote sources."""
-    if exists and total_bytes > 0 and total_bytes >= free_bytes:
+    if total_bytes > 0 and total_bytes >= free_bytes:
         used_bytes = max(0, total_bytes - free_bytes)
         used_pct = round((used_bytes / total_bytes) * 100, 1)
         free_pct = round((free_bytes / total_bytes) * 100, 1)
         status = 'ok' if free_pct >= 20 else ('warning' if free_pct >= 10 else 'critical')
-    elif exists:
-        used_bytes = 0
-        used_pct = 0
-        free_pct = 100
-        status = 'ok'
     else:
         used_bytes = 0
         used_pct = 0
@@ -63,7 +57,7 @@ def _build_disk_stat(
         'free_bytes': free_bytes,
         'used_bytes': used_bytes,
         'total_formatted': _format_bytes(total_bytes) if total_bytes > 0 else 'N/A',
-        'free_formatted': _format_bytes(free_bytes) if (exists or free_bytes > 0) else 'N/A',
+        'free_formatted': _format_bytes(free_bytes) if free_bytes > 0 else 'N/A',
         'used_formatted': _format_bytes(used_bytes) if total_bytes > 0 else 'N/A',
         'used_pct': used_pct,
         'free_pct': free_pct,
