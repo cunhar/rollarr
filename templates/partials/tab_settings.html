@@ -4,7 +4,7 @@
     <form id="config-form" onsubmit="event.preventDefault(); saveConfiguration();">
 
         <!-- 1. Sonarr Connection -->
-        <details open class="config-card">
+        <details class="config-card">
             <summary class="config-card-summary">
                 <span class="section-title" style="margin-bottom:0;">📺 Sonarr Connection</span>
             </summary>
@@ -19,11 +19,14 @@
                         <input type="password" class="form-input" id="cfg-SONARR_API_KEY" value="{{ '••••••••' if cfg.SONARR_API_KEY else '' }}" placeholder="Sonarr API Key">
                     </div>
                 </div>
+                <div style="margin-top:14px; display:flex; justify-content:flex-end;">
+                    <button type="button" class="btn-clear" id="btn-test-sonarr" onclick="testConnection('sonarr')">Test Connection</button>
+                </div>
             </div>
         </details>
 
         <!-- 2. Radarr Connection -->
-        <details open class="config-card">
+        <details class="config-card">
             <summary class="config-card-summary">
                 <span class="section-title" style="margin-bottom:0;">🍿 Radarr Connection</span>
             </summary>
@@ -38,11 +41,14 @@
                         <input type="password" class="form-input" id="cfg-RADARR_API_KEY" value="{{ '••••••••' if cfg.RADARR_API_KEY else '' }}" placeholder="Radarr API Key">
                     </div>
                 </div>
+                <div style="margin-top:14px; display:flex; justify-content:flex-end;">
+                    <button type="button" class="btn-clear" id="btn-test-radarr" onclick="testConnection('radarr')">Test Connection</button>
+                </div>
             </div>
         </details>
 
         <!-- 3. Plex Connection -->
-        <details open class="config-card">
+        <details class="config-card">
             <summary class="config-card-summary">
                 <span class="section-title" style="margin-bottom:0;">🎬 Plex Connection</span>
             </summary>
@@ -57,11 +63,40 @@
                         <input type="password" class="form-input" id="cfg-PLEX_TOKEN" value="{{ '••••••••' if cfg.PLEX_TOKEN else '' }}" placeholder="X-Plex-Token">
                     </div>
                 </div>
+                <div style="margin-top:14px; display:flex; justify-content:flex-end;">
+                    <button type="button" class="btn-clear" id="btn-test-plex" onclick="testConnection('plex')">Test Connection</button>
+                </div>
             </div>
         </details>
 
-        <!-- 4. Media Cleanup Policy -->
-        <details open class="config-card">
+        <!-- 4. Usenet Downloader (NZBGet) -->
+        <details class="config-card">
+            <summary class="config-card-summary">
+                <span class="section-title" style="margin-bottom:0;">📥 Usenet Downloader (NZBGet)</span>
+            </summary>
+            <div class="config-card-body">
+                <div class="form-grid">
+                    <div class="form-group" style="grid-column: 1 / -1;">
+                        <label class="form-label">NZBGet URL</label>
+                        <input type="text" class="form-input" id="cfg-NZBGET_URL" value="{{ cfg.NZBGET_URL }}" placeholder="http://localhost:6789">
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Username</label>
+                        <input type="text" class="form-input" id="cfg-NZBGET_USERNAME" value="{{ cfg.NZBGET_USERNAME }}" placeholder="nzbget">
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Password</label>
+                        <input type="password" class="form-input" id="cfg-NZBGET_PASSWORD" value="{{ '••••••••' if cfg.NZBGET_PASSWORD else '' }}" placeholder="NZBGet Password">
+                    </div>
+                </div>
+                <div style="margin-top:14px; display:flex; justify-content:flex-end;">
+                    <button type="button" class="btn-clear" id="btn-test-nzbget" onclick="testConnection('nzbget')">Test Connection</button>
+                </div>
+            </div>
+        </details>
+
+        <!-- 5. Media Cleanup Policy -->
+        <details class="config-card">
             <summary class="config-card-summary">
                 <span class="section-title" style="margin-bottom:0;">🧹 Media Cleanup & Automation Policy</span>
             </summary>
@@ -95,31 +130,8 @@
             </div>
         </details>
 
-        <!-- 5. Usenet Downloader (NZBGet) -->
-        <details open class="config-card">
-            <summary class="config-card-summary">
-                <span class="section-title" style="margin-bottom:0;">📥 Usenet Downloader (NZBGet)</span>
-            </summary>
-            <div class="config-card-body">
-                <div class="form-grid">
-                    <div class="form-group" style="grid-column: 1 / -1;">
-                        <label class="form-label">NZBGet URL</label>
-                        <input type="text" class="form-input" id="cfg-NZBGET_URL" value="{{ cfg.NZBGET_URL }}" placeholder="http://localhost:6789">
-                    </div>
-                    <div class="form-group">
-                        <label class="form-label">Username</label>
-                        <input type="text" class="form-input" id="cfg-NZBGET_USERNAME" value="{{ cfg.NZBGET_USERNAME }}" placeholder="nzbget">
-                    </div>
-                    <div class="form-group">
-                        <label class="form-label">Password</label>
-                        <input type="password" class="form-input" id="cfg-NZBGET_PASSWORD" value="{{ '••••••••' if cfg.NZBGET_PASSWORD else '' }}" placeholder="NZBGet Password">
-                    </div>
-                </div>
-            </div>
-        </details>
-
         <!-- 6. Power Saver & SSH Host Shutdown -->
-        <details open class="config-card">
+        <details class="config-card">
             <summary class="config-card-summary">
                 <span class="section-title" style="margin-bottom:0;">⚡ Power Saver & Host Shutdown (SSH)</span>
             </summary>
@@ -167,11 +179,14 @@
                         <input type="password" class="form-input" id="cfg-SSH_PASSWORD" value="{{ '••••••••' if cfg.SSH_PASSWORD else '' }}" placeholder="SSH Password">
                     </div>
                 </div>
+                <div style="margin-top:14px; display:flex; justify-content:flex-end;">
+                    <button type="button" class="btn-clear" id="btn-test-ssh" onclick="testConnection('ssh')">Test Connection</button>
+                </div>
             </div>
         </details>
 
         <!-- 7. Storage Directory Paths -->
-        <details open class="config-card">
+        <details class="config-card">
             <summary class="config-card-summary">
                 <span class="section-title" style="margin-bottom:0;">📁 Storage & Directory Paths</span>
             </summary>

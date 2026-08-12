@@ -473,6 +473,51 @@ function saveConfiguration() {
         });
 }
 
+function testConnection(service) {
+    const btn = el(`btn-test-${service}`);
+    const origText = btn ? btn.textContent : 'Test Connection';
+    if (btn) {
+        btn.disabled = true;
+        btn.textContent = 'Testing...';
+    }
+
+    let params = {};
+    if (service === 'sonarr') {
+        params = { url: el('cfg-SONARR_URL').value, api_key: el('cfg-SONARR_API_KEY').value };
+    } else if (service === 'radarr') {
+        params = { url: el('cfg-RADARR_URL').value, api_key: el('cfg-RADARR_API_KEY').value };
+    } else if (service === 'plex') {
+        params = { url: el('cfg-PLEX_URL').value, token: el('cfg-PLEX_TOKEN').value };
+    } else if (service === 'nzbget') {
+        params = { url: el('cfg-NZBGET_URL').value, username: el('cfg-NZBGET_USERNAME').value, password: el('cfg-NZBGET_PASSWORD').value };
+    } else if (service === 'ssh') {
+        params = {
+            ssh_host: el('cfg-SSH_HOST').value,
+            ssh_port: parseInt(el('cfg-SSH_PORT').value) || 22,
+            ssh_user: el('cfg-SSH_USER').value,
+            ssh_password: el('cfg-SSH_PASSWORD').value
+        };
+    }
+
+    Api.testConnection(service, params)
+        .then(data => {
+            if (data && data.status === 'success') {
+                showToast(data.message, 'ok');
+            } else {
+                showToast((data && data.message) ? data.message : 'Connection test failed', 'err');
+            }
+        })
+        .catch(err => showToast('Test error: ' + err, 'err'))
+        .finally(() => {
+            if (btn) {
+                btn.disabled = false;
+                btn.textContent = origText;
+            }
+        });
+}
+
+window.testConnection = testConnection;
+
 function buildServiceUrl(configuredUrl) {
     if (!configuredUrl || configuredUrl === 'Not Configured' || configuredUrl === 'Not configured') return '#';
     try {

@@ -208,6 +208,105 @@ def api_config_save():
         return jsonify({'status': 'error', 'message': str(exc)}), 500
 
 
+@app.route('/api/test-connection', methods=['POST'])
+def api_test_connection():
+    data = request.json or {}
+    service = (data.get('service') or '').lower()
+
+    if service == 'sonarr':
+        url = (data.get('url') or get_sonarr_url() or '').rstrip('/')
+        key = data.get('api_key') or ''
+        if not key or key == '••••••••':
+            key = get_sonarr_api_key()
+        if not url or not key:
+            return jsonify({'status': 'error', 'message': 'Sonarr URL and API Key are required'}), 400
+        try:
+            res = requests.get(f"{url}/api/v3/system/status", headers={'X-Api-Key': key}, timeout=4)
+            if res.status_code == 200:
+                ver = res.json().get('version', '')
+                return jsonify({'status': 'success', 'message': f'Sonarr connected successfully! (v{ver})'}), 200
+            return jsonify({'status': 'error', 'message': f'Sonarr test failed (HTTP {res.status_code})'}), 400
+        except Exception as exc:
+            return jsonify({'status': 'error', 'message': f'Sonarr connection error: {exc}'}), 400
+
+    elif service == 'radarr':
+        url = (data.get('url') or get_radarr_url() or '').rstrip('/')
+        key = data.get('api_key') or ''
+        if not key or key == '••••••••':
+            key = get_radarr_api_key()
+        if not url or not key:
+            return jsonify({'status': 'error', 'message': 'Radarr URL and API Key are required'}), 400
+        try:
+            res = requests.get(f"{url}/api/v3/system/status", headers={'X-Api-Key': key}, timeout=4)
+            if res.status_code == 200:
+                ver = res.json().get('version', '')
+                return jsonify({'status': 'success', 'message': f'Radarr connected successfully! (v{ver})'}), 200
+            return jsonify({'status': 'error', 'message': f'Radarr test failed (HTTP {res.status_code})'}), 400
+        except Exception as exc:
+            return jsonify({'status': 'error', 'message': f'Radarr connection error: {exc}'}), 400
+
+    elif service == 'plex':
+        url = (data.get('url') or config_store.get_config('PLEX_URL') or '').rstrip('/')
+        token = data.get('token') or ''
+        if not token or token == '••••••••':
+            token = config_store.get_config('PLEX_TOKEN') or ''
+        if not url or not token:
+            return jsonify({'status': 'error', 'message': 'Plex URL and Token are required'}), 400
+        try:
+            res = requests.get(f"{url}/identity", headers={'X-Plex-Token': token, 'Accept': 'application/json'}, timeout=4)
+            if res.status_code == 200:
+                return jsonify({'status': 'success', 'message': 'Plex connected successfully!'}), 200
+            return jsonify({'status': 'error', 'message': f'Plex test failed (HTTP {res.status_code})'}), 400
+        except Exception as exc:
+            return jsonify({'status': 'error', 'message': f'Plex connection error: {exc}'}), 400
+
+    elif service == 'nzbget':
+        url = (data.get('url') or get_nzbget_url() or '').rstrip('/')
+        user = data.get('username') or get_nzbget_username() or 'nzbget'
+        password = data.get('password') or ''
+        if not password or password == '••••••••':
+            password = get_nzbget_password()
+        if not url:
+            return jsonify({'status': 'error', 'message': 'NZBGet URL is required'}), 400
+        try:
+            auth = (user, password) if (user or password) else None
+            res = requests.get(f"{url}/jsonrpc/version", auth=auth, timeout=4)
+            if res.status_code == 200:
+                ver = res.json().get('result', '')
+                return jsonify({'status': 'success', 'message': f'NZBGet connected successfully! (v{ver})'}), 200
+            return jsonify({'status': 'error', 'message': f'NZBGet test failed (HTTP {res.status_code})'}), 400
+        except Exception as exc:
+            return jsonify({'status': 'error', 'message': f'NZBGet connection error: {exc}'}), 400
+
+    elif service == 'ssh':
+        ssh_host = data.get('ssh_host') or config_store.get_config('SSH_HOST')
+        ssh_port = int(data.get('ssh_port') or config_store.get_config('SSH_PORT') or 22)
+        ssh_user = data.get('ssh_user') or config_store.get_config('SSH_USER')
+        ssh_pass = data.get('ssh_password') or ''
+        if not ssh_pass or ssh_pass == '••••••••':
+            ssh_pass = config_store.get_config('SSH_PASSWORD') or ''
+        if not ssh_host or not ssh_user:
+            return jsonify({'status': 'error', 'message': 'SSH Host and User are required'}), 400
+        try:
+            import paramiko
+            client = paramiko.SSHClient()
+            client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+            key_path = config_store.get_config('SSH_KEY_PATH', '/root/.ssh/id_rsa')
+            client.connect(
+                hostname=ssh_host,
+                port=ssh_port,
+                username=ssh_user,
+                password=ssh_pass if ssh_pass else None,
+                timeout=5
+            )
+            client.close()
+            return jsonify({'status': 'success', 'message': f'SSH connection to {ssh_host}:{ssh_port} successful!'}), 200
+        except Exception as exc:
+            return jsonify({'status': 'error', 'message': f'SSH connection failed: {exc}'}), 400
+
+    return jsonify({'status': 'error', 'message': 'Unknown service'}), 400
+
+
 @app.route('/api/connection-status')
 def api_connection_status():
     return jsonify(get_service_connections())

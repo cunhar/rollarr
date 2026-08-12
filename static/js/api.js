@@ -57,6 +57,15 @@ const Api = {
             body: JSON.stringify(payload)
         });
         return await res.json();
+    },
+
+    async testConnection(service, params) {
+        const res = await fetch('/api/test-connection', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ service, ...params })
+        });
+        return await res.json();
     }
 };
 
