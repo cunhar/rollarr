@@ -16,6 +16,7 @@ import datetime
 
 import requests
 from config_store import get_config
+from integrations.common import now_str as _now
 
 logger = logging.getLogger(__name__)
 
@@ -379,9 +380,6 @@ def _ssh_shutdown(force: bool = False) -> tuple[bool, str]:
 
 
 # ── Main loop ────────────────────────────────────────────────────────────────
-
-def _now() -> str:
-    return datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')
 
 
 def _watcher_loop():

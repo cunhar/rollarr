@@ -28,59 +28,80 @@ def _format_bytes(bytes_val: int) -> str:
     return f"{gb:.1f} GB"
 
 
+def _build_disk_stat(
+    label: str,
+    configured_path: str,
+    mounted_path: str,
+    exists: bool,
+    total_bytes: int,
+    free_bytes: int,
+    source: str,
+) -> dict:
+    """Construct a standardized disk space dictionary across local and remote sources."""
+    if exists and total_bytes > 0 and total_bytes >= free_bytes:
+        used_bytes = max(0, total_bytes - free_bytes)
+        used_pct = round((used_bytes / total_bytes) * 100, 1)
+        free_pct = round((free_bytes / total_bytes) * 100, 1)
+        status = 'ok' if free_pct >= 20 else ('warning' if free_pct >= 10 else 'critical')
+    elif exists:
+        used_bytes = 0
+        used_pct = 0
+        free_pct = 100
+        status = 'ok'
+    else:
+        used_bytes = 0
+        used_pct = 0
+        free_pct = 0
+        status = 'unknown'
+
+    return {
+        'label': label,
+        'configured_path': configured_path,
+        'mounted_path': mounted_path,
+        'exists': exists,
+        'total_bytes': total_bytes,
+        'free_bytes': free_bytes,
+        'used_bytes': used_bytes,
+        'total_formatted': _format_bytes(total_bytes) if total_bytes > 0 else 'N/A',
+        'free_formatted': _format_bytes(free_bytes) if (exists or free_bytes > 0) else 'N/A',
+        'used_formatted': _format_bytes(used_bytes) if total_bytes > 0 else 'N/A',
+        'used_pct': used_pct,
+        'free_pct': free_pct,
+        'status': status,
+        'source': source,
+    }
+
+
 def _check_local_disk(path_key: str, default_path: str, label: str) -> dict:
     configured_path = get_config(path_key, default_path) or default_path
-    
-    # Try configured path, fallback to root if path doesn't exist locally inside container
     target_path = configured_path if os.path.exists(configured_path) else ('C:\\' if os.name == 'nt' else '/')
     
     try:
         usage = shutil.disk_usage(target_path)
-        total = usage.total
-        free = usage.free
-        used = usage.used
-        used_pct = round((used / total) * 100, 1) if total > 0 else 0
-        free_pct = round((free / total) * 100, 1) if total > 0 else 0
-        
-        status = 'ok' if free_pct >= 20 else ('warning' if free_pct >= 10 else 'critical')
-        
-        return {
-            'label': label,
-            'configured_path': configured_path,
-            'mounted_path': target_path,
-            'exists': os.path.exists(configured_path),
-            'total_bytes': total,
-            'free_bytes': free,
-            'used_bytes': used,
-            'total_formatted': _format_bytes(total),
-            'free_formatted': _format_bytes(free),
-            'used_formatted': _format_bytes(used),
-            'used_pct': used_pct,
-            'free_pct': free_pct,
-            'status': status,
-            'source': 'Local Container Mount',
-        }
+        return _build_disk_stat(
+            label=label,
+            configured_path=configured_path,
+            mounted_path=target_path,
+            exists=os.path.exists(configured_path),
+            total_bytes=usage.total,
+            free_bytes=usage.free,
+            source='Local Container Mount',
+        )
     except Exception as exc:
         logger.warning(f"[DiskService] Error checking path {configured_path}: {exc}")
-        return {
-            'label': label,
-            'configured_path': configured_path,
-            'mounted_path': target_path,
-            'exists': False,
-            'total_formatted': 'N/A',
-            'free_formatted': 'N/A',
-            'used_formatted': 'N/A',
-            'used_pct': 0,
-            'free_pct': 0,
-            'status': 'unknown',
-            'source': 'Local Container Mount',
-        }
+        return _build_disk_stat(
+            label=label,
+            configured_path=configured_path,
+            mounted_path=target_path,
+            exists=False,
+            total_bytes=0,
+            free_bytes=0,
+            source='Local Container Mount',
+        )
 
 
 def _fetch_arr_diskspace(url: str, headers: dict, target_root_path: str) -> tuple[int, int]:
-    """
-    Query Sonarr/Radarr /api/v3/diskspace endpoint for matching mount freeSpace & totalSpace.
-    """
+    """Query Sonarr/Radarr /api/v3/diskspace endpoint for matching mount freeSpace & totalSpace."""
     try:
         res = requests.get(f"{url.rstrip('/')}/api/v3/diskspace", headers=headers, timeout=3)
         if res.status_code == 200:
@@ -122,13 +143,10 @@ def _check_arr_root_folder(service_name: str, url_fn, key_fn, headers_fn, label:
                     rf_free = rf.get('freeSpace', 0)
                     rf_total = rf.get('totalSpace', 0)
                     
-                    # Fetch detailed diskspace metrics from /api/v3/diskspace
                     ds_free, ds_total = _fetch_arr_diskspace(url, headers, path)
-                    
                     free_b = ds_free or rf_free
                     total_b = ds_total or rf_total
                     
-                    # Fallback to local container disk total if available
                     if not total_b or total_b <= 0:
                         if os.path.exists(path):
                             try:
@@ -137,47 +155,26 @@ def _check_arr_root_folder(service_name: str, url_fn, key_fn, headers_fn, label:
                             except Exception:
                                 pass
                     
-                    if total_b and total_b > 0 and total_b >= free_b:
-                        used_b = max(0, total_b - free_b)
-                        used_pct = round((used_b / total_b) * 100, 1)
-                        free_pct = round((free_b / total_b) * 100, 1)
-                        status = 'ok' if free_pct >= 20 else ('warning' if free_pct >= 10 else 'critical')
-                    else:
-                        used_b = 0
-                        used_pct = 0
-                        free_pct = 100
-                        status = 'ok'
-                    
-                    return {
-                        'label': label,
-                        'configured_path': path,
-                        'mounted_path': path,
-                        'exists': True,
-                        'total_bytes': total_b,
-                        'free_bytes': free_b,
-                        'used_bytes': used_b,
-                        'total_formatted': _format_bytes(total_b) if total_b > 0 else 'N/A',
-                        'free_formatted': _format_bytes(free_b),
-                        'used_formatted': _format_bytes(used_b) if total_b > 0 else 'N/A',
-                        'used_pct': used_pct,
-                        'free_pct': free_pct,
-                        'status': status,
-                        'source': f"{service_name} Host Path",
-                    }
+                    return _build_disk_stat(
+                        label=label,
+                        configured_path=path,
+                        mounted_path=path,
+                        exists=True,
+                        total_bytes=total_b,
+                        free_bytes=free_b,
+                        source=f"{service_name} Host Path",
+                    )
     except Exception as exc:
         logger.debug(f"[DiskService] Failed fetching {service_name} root folder: {exc}")
     
-    # Fallback to local container disk check if Arr service API unavailable
     return _check_local_disk(fallback_key, fallback_path, label)
 
 
 def get_disk_space_summary() -> dict:
-    disks = {
-        'downloads': _check_local_disk('PATH_DOWNLOADS', '/downloads', 'Downloads Directory'),
-        'tv':        _check_arr_root_folder('Sonarr', get_sonarr_url, get_sonarr_api_key, get_sonarr_headers, 'TV Shows Directory', 'PATH_TV', '/tv'),
-        'movies':    _check_arr_root_folder('Radarr', get_radarr_url, get_radarr_api_key, get_radarr_headers, 'Movies Directory', 'PATH_MOVIES', '/movies'),
-    }
-
     return {
-        'disks': disks,
+        'disks': {
+            'downloads': _check_local_disk('PATH_DOWNLOADS', '/downloads', 'Downloads Directory'),
+            'tv':        _check_arr_root_folder('Sonarr', get_sonarr_url, get_sonarr_api_key, get_sonarr_headers, 'TV Shows Directory', 'PATH_TV', '/tv'),
+            'movies':    _check_arr_root_folder('Radarr', get_radarr_url, get_radarr_api_key, get_radarr_headers, 'Movies Directory', 'PATH_MOVIES', '/movies'),
+        }
     }

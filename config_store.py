@@ -123,6 +123,16 @@ def _load_initial_config() -> dict[str, Any]:
 SECRET_KEYS = {'SONARR_API_KEY', 'RADARR_API_KEY', 'NZBGET_PASSWORD', 'PLEX_TOKEN', 'SSH_PASSWORD'}
 MASK_SENTINEL = '••••••••'
 
+
+def mask_secret(val: str | None, show_last: int = 4) -> str:
+    """Return a masked representation of a secret string (e.g. '••••••••1a2b' or 'Not Configured')."""
+    if not val:
+        return "Not Configured"
+    if len(val) >= show_last:
+        return "*" * (len(val) - show_last) + val[-show_last:]
+    return val
+
+
 def save_config(new_settings: dict[str, Any]) -> dict[str, Any]:
     """Encrypt and save configuration settings to disk."""
     global _current_config

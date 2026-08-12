@@ -6,10 +6,12 @@ import logging
 from logging.handlers import RotatingFileHandler
 import json
 from collections import deque
-import datetime
 import threading
+import concurrent.futures
 
 import config_store
+from config_store import mask_secret
+from integrations.common import now_str
 from integrations.sonarr import (
     get_sonarr_url,
     get_sonarr_api_key,
@@ -86,9 +88,8 @@ def save_history():
 
 
 def log_call(status, message, payload=None):
-    ts = datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')
     entry = {
-        "timestamp": ts,
+        "timestamp": now_str(),
         "status": status,
         "message": message,
         "payload": payload,
@@ -107,69 +108,59 @@ plex_watcher.start()
 
 # ── Live Service Connection Checks ───────────────────────────────────────────
 
-def get_service_connections() -> dict:
-    cfg = config_store.get_all_config()
+def _check_sonarr_status() -> dict:
+    url, key = get_sonarr_url(), get_sonarr_api_key()
+    if not url or not key:
+        return {'status': 'Disconnected', 'ok': False}
+    try:
+        res = requests.get(f"{url}/api/v3/system/status", headers=get_sonarr_headers(), timeout=2)
+        status = "Connected" if res.status_code == 200 else f"Error ({res.status_code})"
+    except Exception:
+        status = "Unreachable"
+    return {'status': status, 'ok': status == 'Connected'}
 
-    sonarr_url = get_sonarr_url()
-    sonarr_api_key = get_sonarr_api_key()
-    radarr_url = get_radarr_url()
-    radarr_api_key = get_radarr_api_key()
+
+def _check_radarr_status() -> dict:
+    url, key = get_radarr_url(), get_radarr_api_key()
+    if not url or not key:
+        return {'status': 'Disconnected', 'ok': False}
+    try:
+        res = requests.get(f"{url}/api/v3/system/status", headers=get_radarr_headers(), timeout=2)
+        status = "Connected" if res.status_code == 200 else f"Error ({res.status_code})"
+    except Exception:
+        status = "Unreachable"
+    return {'status': status, 'ok': status == 'Connected'}
+
+
+def _check_plex_status() -> dict:
+    cfg = config_store.get_all_config()
     plex_url = (cfg.get('PLEX_URL') or '').rstrip('/')
     plex_token = cfg.get('PLEX_TOKEN') or ''
+    if not plex_url or not plex_token:
+        return {'status': 'Disconnected', 'ok': False}
+    try:
+        res = requests.get(
+            f"{plex_url}/identity",
+            headers={'X-Plex-Token': plex_token, 'Accept': 'application/json'},
+            timeout=2,
+        )
+        status = "Connected" if res.status_code == 200 else f"Error ({res.status_code})"
+    except Exception:
+        status = "Unreachable"
+    return {'status': status, 'ok': status == 'Connected'}
 
-    # Sonarr check
-    sonarr_status = "Disconnected"
-    if sonarr_url and sonarr_api_key:
-        try:
-            res = requests.get(
-                f"{sonarr_url}/api/v3/system/status",
-                headers=get_sonarr_headers(),
-                timeout=2,
-            )
-            if res.status_code == 200:
-                sonarr_status = "Connected"
-            else:
-                sonarr_status = f"Error ({res.status_code})"
-        except Exception:
-            sonarr_status = "Unreachable"
 
-    # Radarr check
-    radarr_status = "Disconnected"
-    if radarr_url and radarr_api_key:
-        try:
-            res = requests.get(
-                f"{radarr_url}/api/v3/system/status",
-                headers=get_radarr_headers(),
-                timeout=2,
-            )
-            if res.status_code == 200:
-                radarr_status = "Connected"
-            else:
-                radarr_status = f"Error ({res.status_code})"
-        except Exception:
-            radarr_status = "Unreachable"
-
-    # Plex check
-    plex_status = "Disconnected"
-    if plex_url and plex_token:
-        try:
-            res = requests.get(
-                f"{plex_url}/identity",
-                headers={'X-Plex-Token': plex_token, 'Accept': 'application/json'},
-                timeout=2,
-            )
-            if res.status_code == 200:
-                plex_status = "Connected"
-            else:
-                plex_status = f"Error ({res.status_code})"
-        except Exception:
-            plex_status = "Unreachable"
-
-    return {
-        'sonarr': {'status': sonarr_status, 'ok': sonarr_status == 'Connected'},
-        'radarr': {'status': radarr_status, 'ok': radarr_status == 'Connected'},
-        'plex':   {'status': plex_status,   'ok': plex_status == 'Connected'},
-    }
+def get_service_connections() -> dict:
+    """Run connection checks concurrently to reduce dashboard latency."""
+    with concurrent.futures.ThreadPoolExecutor(max_workers=3) as executor:
+        f_sonarr = executor.submit(_check_sonarr_status)
+        f_radarr = executor.submit(_check_radarr_status)
+        f_plex = executor.submit(_check_plex_status)
+        return {
+            'sonarr': f_sonarr.result(),
+            'radarr': f_radarr.result(),
+            'plex':   f_plex.result(),
+        }
 
 
 # ── Routes ────────────────────────────────────────────────────────────────────
@@ -179,45 +170,23 @@ def index():
     cfg = config_store.get_all_config()
     conns = get_service_connections()
 
-    sonarr_api_key = get_sonarr_api_key()
-    radarr_api_key = get_radarr_api_key()
-
-    # Mask API key Sonarr
-    if sonarr_api_key:
-        masked_key = "*" * (len(sonarr_api_key) - 4) + sonarr_api_key[-4:] if len(sonarr_api_key) >= 4 else sonarr_api_key
-    else:
-        masked_key = "Not Configured"
-
-    # Mask API key Radarr
-    if radarr_api_key:
-        radarr_masked_key = "*" * (len(radarr_api_key) - 4) + radarr_api_key[-4:] if len(radarr_api_key) >= 4 else radarr_api_key
-    else:
-        radarr_masked_key = "Not Configured"
-
     with history_lock:
         history_list = list(webhook_history)
-
-    nzbget_status = get_nzbget_status()
-    nzbget_pwd = get_nzbget_password()
-    if nzbget_pwd:
-        nzbget_masked_pass = "*" * (len(nzbget_pwd) - 4) + nzbget_pwd[-4:] if len(nzbget_pwd) >= 4 else nzbget_pwd
-    else:
-        nzbget_masked_pass = "Not Configured"
 
     return render_template(
         "index.html",
         cfg=cfg,
         sonarr_url=get_sonarr_url() or "Not Configured",
-        masked_key=masked_key,
+        masked_key=mask_secret(get_sonarr_api_key()),
         status_text=conns['sonarr']['status'],
         radarr_url=get_radarr_url() or "Not Configured",
-        radarr_masked_key=radarr_masked_key,
+        radarr_masked_key=mask_secret(get_radarr_api_key()),
         radarr_status_text=conns['radarr']['status'],
         plex_conn_text=conns['plex']['status'],
         nzbget_url=get_nzbget_url() or "Not Configured",
         nzbget_username=get_nzbget_username() or "Not Configured",
-        nzbget_masked_pass=nzbget_masked_pass,
-        nzbget_status=nzbget_status,
+        nzbget_masked_pass=mask_secret(get_nzbget_password()),
+        nzbget_status=get_nzbget_status(),
         history=history_list,
         rolling_window=get_rolling_window(),
         plex_status=plex_watcher.get_state(),
@@ -264,7 +233,6 @@ def api_poller_run():
 def api_shutdown_now():
     res = plex_watcher.trigger_shutdown_now()
     return jsonify(res), 200 if res['status'] == 'success' else 400
-
 
 
 @app.route('/api/nzbget-status')

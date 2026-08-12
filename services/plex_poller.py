@@ -20,6 +20,7 @@ import datetime
 
 import requests
 
+from integrations.common import now_str as _now
 from integrations.sonarr import (
     get_rolling_window,
     find_series_id_by_title,
@@ -363,9 +364,6 @@ def _process_movie(item: dict) -> tuple[str, str]:
 
 
 # ── Main loop ─────────────────────────────────────────────────────────────────
-
-def _now() -> str:
-    return datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')
 
 
 def _execute_poll() -> int:
