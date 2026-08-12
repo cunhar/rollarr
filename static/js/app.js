@@ -337,17 +337,45 @@ function pollAll() {
     Api.fetchDiskSpace().then(d => { if (d) renderDiskSpace(d); });
 }
 
+function pollDiskSpace() {
+    const btn = document.querySelector('#panel-disks .btn-clear');
+    const origText = btn ? btn.textContent : 'Refresh Storage';
+    if (btn) {
+        btn.disabled = true;
+        btn.textContent = 'Refreshing...';
+    }
+    Api.fetchDiskSpace()
+        .then(d => {
+            if (d) {
+                renderDiskSpace(d);
+                showToast('Storage space refreshed', 'info');
+            }
+        })
+        .catch(() => showToast('Failed to refresh storage space', 'err'))
+        .finally(() => {
+            if (btn) {
+                btn.disabled = false;
+                btn.textContent = origText;
+            }
+        });
+}
+
+window.pollDiskSpace = pollDiskSpace;
+window.pollAll = pollAll;
+
 function clearLogs() {
     const btn = el('btn-clear-logs');
     if (btn) btn.disabled = true;
     Api.clearLogs()
         .then(() => {
             updateActivityLog([]);
-            showToast('Activity logs cleared', 'ok');
+            showToast('Activity logs cleared', 'info');
         })
         .catch(() => showToast('Failed to clear logs', 'err'))
         .finally(() => { if (btn) btn.disabled = false; });
 }
+
+window.clearLogs = clearLogs;
 
 function runPoller() {
     const btn = el('btn-run-poller');
@@ -357,7 +385,7 @@ function runPoller() {
     }
     Api.runPoller()
         .then(({ ok, data }) => {
-            showToast(data.message || 'Stateless re-check completed', ok ? 'ok' : 'err');
+            showToast(data.message || 'Stateless re-check completed', ok ? 'info' : 'err');
             setTimeout(pollAll, 1000);
         })
         .catch(() => showToast('Failed to trigger re-check', 'err'))
@@ -368,6 +396,8 @@ function runPoller() {
             }
         });
 }
+
+window.runPoller = runPoller;
 
 function resetShutdownBtn() {
     const btn = el('btn-shutdown-now');
@@ -475,6 +505,9 @@ function saveConfiguration() {
             }
         });
 }
+
+window.triggerShutdownNow = triggerShutdownNow;
+window.saveConfiguration = saveConfiguration;
 
 function testConnection(service) {
     const btn = el(`btn-test-${service}`);
