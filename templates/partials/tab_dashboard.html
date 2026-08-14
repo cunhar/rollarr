@@ -17,7 +17,7 @@
         <div class="idle-header" style="align-items:center;">
             <span class="idle-label">
                 Total items processed:
-                <strong id="ep-count" class="{{ 'green' if poller_status.episodes_session > 0 else '' }}" style="font-size:13px; font-family:var(--mono); margin-left:4px;">
+                <strong id="ep-count" class="{{ 'green' if poller_status.episodes_session > 0 else '' }}" style="font-family:var(--mono); margin-left:4px;">
                     {{ poller_status.episodes_session or 0 }}
                 </strong>
             </span>
