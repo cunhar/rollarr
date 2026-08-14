@@ -383,7 +383,8 @@ def _execute_poll() -> int:
 
     logger.info(f"[PlexPoller] Found {len(items)} watched item(s) across all libraries.")
     _activity_log('info', f"Plex library scanned — {len(items)} watched item(s) found, processing...")
-    processed_count = 0
+    with _state_lock:
+        processed_count = poller_state.get('episodes_session', 0)
     for item in items:
         try:
             itype = str(item.get('type', '')).lower()
@@ -411,32 +412,38 @@ def _poller_loop():
     time.sleep(15)
 
     while True:
-        plex_url, plex_token = get_plex_credentials()
-        poll_interval = int(get_config('PLEX_WATCH_INTERVAL', 3600))
+        try:
+            plex_url, plex_token = get_plex_credentials()
+            poll_interval = int(get_config('PLEX_WATCH_INTERVAL', 3600))
 
-        if not plex_url or not plex_token:
-            _update_state(status='not_configured')
+            if not plex_url or not plex_token:
+                _update_state(status='not_configured')
+                time.sleep(10)
+                continue
+
+            with _poll_active:
+                try:
+                    _execute_poll()
+                except Exception as exc:
+                    logger.error(f"[PlexPoller] Execution failed: {exc}")
+
+            # Calculate sleep until top-of-the-hour (or interval multiple)
+            now = datetime.datetime.now()
+            next_run = now + datetime.timedelta(seconds=poll_interval)
+            next_run = next_run.replace(minute=0, second=0, microsecond=0)
+            
+            sleep_secs = (next_run - now).total_seconds()
+            if sleep_secs <= 0:
+                sleep_secs = poll_interval
+                
+            _update_state(next_check=next_run.strftime('%Y-%m-%d %H:%M:%S'))
+            
+            # Wait until top-of-hour OR until triggered manually
+            _wake_event.wait(timeout=sleep_secs)
+            _wake_event.clear()
+        except Exception as exc:
+            logger.error(f"[PlexPoller] Unhandled loop exception: {exc}")
             time.sleep(10)
-            continue
-
-        with _poll_active:
-            _execute_poll()
-
-        # Calculate sleep until top-of-the-hour (or interval multiple)
-        now_epoch = time.time()
-        sleep_sec = poll_interval - int(now_epoch % poll_interval)
-        if sleep_sec <= 0:
-            sleep_sec = poll_interval
-
-        next_dt = datetime.datetime.now() + datetime.timedelta(seconds=sleep_sec)
-        next_ts = next_dt.strftime('%Y-%m-%d %H:%M:%S')
-        _update_state(next_check=next_ts)
-
-        logger.info(f"[PlexPoller] Next scheduled check at {next_ts} ({sleep_sec}s)")
-        
-        # Wait until top-of-hour OR until triggered manually
-        _wake_event.wait(timeout=sleep_sec)
-        _wake_event.clear()
 
 
 def start():
