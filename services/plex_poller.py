@@ -428,18 +428,25 @@ def _poller_loop():
                     logger.error(f"[PlexPoller] Execution failed: {exc}")
 
             # Calculate sleep until top-of-the-hour (or interval multiple)
-            now = datetime.datetime.now()
-            next_run = now + datetime.timedelta(seconds=poll_interval)
-            next_run = next_run.replace(minute=0, second=0, microsecond=0)
-            
-            sleep_secs = (next_run - now).total_seconds()
-            if sleep_secs <= 0:
-                sleep_secs = poll_interval
-                
-            _update_state(next_check=next_run.strftime('%Y-%m-%d %H:%M:%S'))
+            now_epoch = time.time()
+            sleep_sec = poll_interval - int(now_epoch % poll_interval)
+            if sleep_sec <= 0:
+                sleep_sec = poll_interval
+
+            next_dt = datetime.datetime.now() + datetime.timedelta(seconds=sleep_sec)
+            next_ts = next_dt.strftime('%Y-%m-%d %H:%M:%S')
+            _update_state(next_check=next_ts)
             
             # Wait until top-of-hour OR until triggered manually
-            _wake_event.wait(timeout=sleep_secs)
+            # Also check for config changes every 2 seconds
+            target_time = time.time() + sleep_sec
+            while time.time() < target_time:
+                if _wake_event.wait(timeout=2):
+                    break
+                current_interval = int(get_config('PLEX_WATCH_INTERVAL', 3600))
+                if current_interval != poll_interval:
+                    logger.info("[PlexPoller] Watch interval configuration changed. Waking up.")
+                    break
             _wake_event.clear()
         except Exception as exc:
             logger.error(f"[PlexPoller] Unhandled loop exception: {exc}")

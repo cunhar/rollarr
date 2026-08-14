@@ -485,7 +485,17 @@ def _watcher_loop():
                     idle_streak = 0
                     _update_state(idle_streak=0)
 
-            time.sleep(poll_interval)
+            target_time = time.time() + poll_interval
+            while time.time() < target_time:
+                time.sleep(2)
+                current_interval = int(get_config('PLEX_POLL_INTERVAL', 1200))
+                if current_interval != poll_interval:
+                    logger.info("[PlexWatcher] Poll interval configuration changed. Waking up.")
+                    break
+                current_mode = _get_shutdown_mode()
+                if current_mode != shutdown_mode:
+                    logger.info("[PlexWatcher] Shutdown mode configuration changed. Waking up.")
+                    break
         except Exception as exc:
             logger.error(f"[PlexWatcher] Unhandled loop exception: {exc}")
             time.sleep(10)
