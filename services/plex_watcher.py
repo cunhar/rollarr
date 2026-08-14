@@ -485,10 +485,27 @@ def _watcher_loop():
             target_time = time.time() + poll_interval
             while time.time() < target_time:
                 time.sleep(2)
+                
+                # Check for interval changes
                 current_interval = int(get_config('PLEX_POLL_INTERVAL', 1200))
                 if current_interval != poll_interval:
-                    logger.info("[PlexWatcher] Poll interval configuration changed. Waking up.")
-                    break
+                    logger.info("[PlexWatcher] Poll interval configuration changed. Adjusting sleep.")
+                    elapsed = poll_interval - (target_time - time.time())
+                    remaining = max(0, current_interval - elapsed)
+                    target_time = time.time() + remaining
+                    poll_interval = current_interval
+                    next_ts = (datetime.datetime.now() + datetime.timedelta(seconds=remaining)).strftime('%Y-%m-%d %H:%M:%S')
+                    _update_state(poll_interval=poll_interval, next_check=next_ts)
+                
+                # Check for idle_needed changes
+                current_needed = int(get_config('PLEX_IDLE_POLLS', 3))
+                if current_needed != idle_needed:
+                    logger.info("[PlexWatcher] Idle threshold configuration changed.")
+                    idle_needed = current_needed
+                    _update_state(idle_needed=idle_needed)
+                    if idle_streak >= idle_needed:
+                        break  # Break early so the main loop triggers shutdown
+                
                 current_mode = _get_shutdown_mode()
                 if current_mode != shutdown_mode:
                     logger.info("[PlexWatcher] Shutdown mode configuration changed. Waking up.")
