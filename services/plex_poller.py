@@ -374,7 +374,7 @@ def _execute_poll() -> int:
         _activity_log('warning', msg)
         return 0
 
-    _update_state(status='ok', last_check=now_ts, last_error=None)
+    _update_state(status='ok', last_check=now_ts, last_error=None, last_run_count=0)
     if not items:
         msg = "Plex library scanned — 0 items with watched tick mark found"
         logger.info(f"[PlexPoller] {msg}")
@@ -383,8 +383,11 @@ def _execute_poll() -> int:
 
     logger.info(f"[PlexPoller] Found {len(items)} watched item(s) across all libraries.")
     _activity_log('info', f"Plex library scanned — {len(items)} watched item(s) found, processing...")
+    
+    items_this_run = 0
     with _state_lock:
         processed_count = poller_state.get('episodes_session', 0)
+        
     for item in items:
         try:
             itype = str(item.get('type', '')).lower()
@@ -396,6 +399,7 @@ def _execute_poll() -> int:
                 continue
 
             processed_count += 1
+            items_this_run += 1
             _activity_log(status, msg, {
                 'title': item.get('title') or item.get('grandparentTitle'),
                 'type':  item.get('type'),
@@ -404,7 +408,14 @@ def _execute_poll() -> int:
         except Exception as exc:
             _activity_log('error', f"Failed processing watched item: {exc}")
 
-    return processed_count
+    _update_state(
+        status='ok',
+        episodes_session=processed_count,
+        last_run_count=items_this_run,
+        last_check=datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
+        last_episode=f"{item.get('grandparentTitle', '')} S{item.get('parentIndex')}E{item.get('index')} - {item.get('title', '')}" if items else None
+    )
+    return items_this_run
 
 
 def _poller_loop():

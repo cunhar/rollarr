@@ -247,6 +247,7 @@ function updateEpisodePoller(s) {
     
     setText('ep-last-label', 'Last check: ' + (s.last_check || '—'));
     setText('ep-next-time', 'Scheduled: ' + (s.next_check || '—'));
+    setText('ep-last-run-count', s.last_run_count || 0);
     
     let pct = 0;
     let label = 'Next check: —';
