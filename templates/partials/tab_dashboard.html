@@ -14,13 +14,13 @@
         <button class="btn-clear" id="btn-run-poller" onclick="runPoller()">Re-check Now</button>
     </div>
     <div class="idle-section" style="margin-bottom:24px;">
-        <div class="idle-header" style="align-items:flex-end;">
-            <div style="display:flex; flex-direction:column; gap:4px;">
-                <span class="idle-label">Total items processed</span>
-                <span class="idle-count {{ 'green' if poller_status.episodes_session > 0 else '' }}" id="ep-count" style="font-size:24px; font-weight:700; color:var(--text); line-height:1;">
+        <div class="idle-header" style="align-items:center;">
+            <span class="idle-label">
+                Total items processed:
+                <strong id="ep-count" class="{{ 'green' if poller_status.episodes_session > 0 else '' }}" style="font-size:13px; font-family:var(--mono); margin-left:4px;">
                     {{ poller_status.episodes_session or 0 }}
-                </span>
-            </div>
+                </strong>
+            </span>
             <span class="idle-count" id="ep-next-label">Calculating next check...</span>
         </div>
         <div class="idle-track" style="margin-top:12px;">
