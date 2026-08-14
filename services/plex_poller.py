@@ -38,7 +38,7 @@ from integrations.radarr import (
     unmonitor_movie,
 )
 
-from config_store import get_config
+from config_store import get_config, save_config
 
 logger = logging.getLogger(__name__)
 
@@ -374,7 +374,7 @@ def _execute_poll() -> int:
         _activity_log('warning', msg)
         return 0
 
-    _update_state(status='ok', last_check=now_ts, last_error=None, last_run_count=0)
+    _update_state(status='ok', last_check=now_ts, last_error=None)
     if not items:
         msg = "Plex library scanned — 0 items with watched tick mark found"
         logger.info(f"[PlexPoller] {msg}")
@@ -385,8 +385,7 @@ def _execute_poll() -> int:
     _activity_log('info', f"Plex library scanned — {len(items)} watched item(s) found, processing...")
     
     items_this_run = 0
-    with _state_lock:
-        processed_count = poller_state.get('episodes_session', 0)
+    rolling_count = int(get_config('STATS_MEDIA_PROCESSED', 0))
         
     for item in items:
         try:
@@ -398,20 +397,23 @@ def _execute_poll() -> int:
             else:
                 continue
 
-            processed_count += 1
             items_this_run += 1
             _activity_log(status, msg, {
                 'title': item.get('title') or item.get('grandparentTitle'),
                 'type':  item.get('type'),
             })
-            _update_state(episodes_session=processed_count, last_episode=msg)
+            # Intentionally don't save every iteration to avoid IO overhead, just keep running tally
+            rolling_count += 1
+            _update_state(episodes_session=rolling_count, last_episode=msg)
         except Exception as exc:
             _activity_log('error', f"Failed processing watched item: {exc}")
 
+    if items_this_run > 0:
+        save_config({'STATS_MEDIA_PROCESSED': rolling_count})
+
     _update_state(
         status='ok',
-        episodes_session=processed_count,
-        last_run_count=items_this_run,
+        episodes_session=rolling_count,
         last_check=datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
         last_episode=f"{item.get('grandparentTitle', '')} S{item.get('parentIndex')}E{item.get('index')} - {item.get('title', '')}" if items else None
     )

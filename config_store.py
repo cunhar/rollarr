@@ -73,6 +73,7 @@ DEFAULT_CONFIG = {
     'PATH_DOWNLOADS': '/downloads',
     'PATH_TV': '/tv',
     'PATH_MOVIES': '/movies',
+    'STATS_MEDIA_PROCESSED': 0,
 }
 
 _current_config: dict[str, Any] = {}

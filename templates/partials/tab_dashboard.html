@@ -16,7 +16,7 @@
     <div class="idle-section" style="margin-bottom:24px;">
         <div class="idle-header" style="align-items:flex-end;">
             <div style="display:flex; flex-direction:column; gap:4px;">
-                <span class="idle-label">Total processed this session</span>
+                <span class="idle-label">Total items processed</span>
                 <span class="idle-count {{ 'green' if poller_status.episodes_session > 0 else '' }}" id="ep-count" style="font-size:24px; font-weight:700; color:var(--text); line-height:1;">
                     {{ poller_status.episodes_session or 0 }}
                 </span>
@@ -29,11 +29,6 @@
         <div class="idle-meta" style="display:flex; justify-content:space-between; margin-bottom: 8px;">
             <span id="ep-last-label">Last check: {{ poller_status.last_check or '—' }}</span>
             <span id="ep-next-time">Scheduled: {{ poller_status.next_check or '—' }}</span>
-        </div>
-        <div class="idle-meta" style="border-top: 1px solid var(--border); padding-top: 8px; margin-top: 8px;">
-            <span style="color:var(--text-sub);">
-                <strong id="ep-last-run-count" style="color:var(--text);">{{ poller_status.last_run_count or 0 }}</strong> items processed during the last check.
-            </span>
         </div>
     </div>
     {% else %}
