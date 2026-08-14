@@ -13,25 +13,22 @@
         <span class="section-title" style="margin-bottom:0;">Media Poller</span>
         <button class="btn-clear" id="btn-run-poller" onclick="runPoller()">Re-check Now</button>
     </div>
-    <div class="stat-grid" style="margin-bottom:16px;">
-        <div class="stat-cell">
-            <span class="stat-label">Items processed</span>
-            <span class="stat-value {{ 'green' if poller_status.episodes_session > 0 else '' }}" id="ep-count">
-                {{ poller_status.episodes_session }}
+    <div class="idle-section" style="margin-bottom:24px;">
+        <div class="idle-header">
+            <span class="idle-label">
+                Items processed: 
+                <strong id="ep-count" class="{{ 'green' if poller_status.episodes_session > 0 else '' }}" style="font-size:13px; font-family:var(--mono);">
+                    {{ poller_status.episodes_session }}
+                </strong>
             </span>
-            <span class="stat-meta">processed in session</span>
+            <span class="idle-count" id="ep-next-label">Calculating next check...</span>
         </div>
-        <div class="stat-cell">
-            <span class="stat-label">Last check</span>
-            <span class="stat-value timestamp" id="ep-last">
-                {{ poller_status.last_check or '—' }}
-            </span>
+        <div class="idle-track">
+            <div class="idle-fill" id="ep-bar" style="width: 0%; background: var(--accent);"></div>
         </div>
-        <div class="stat-cell">
-            <span class="stat-label">Next check</span>
-            <span class="stat-value timestamp" id="ep-next">
-                {{ poller_status.next_check or '—' }}
-            </span>
+        <div class="idle-meta" style="display:flex; justify-content:space-between;">
+            <span id="ep-last-label">Last check: {{ poller_status.last_check or '—' }}</span>
+            <span id="ep-next-time">Scheduled: {{ poller_status.next_check or '—' }}</span>
         </div>
     </div>
     {% else %}

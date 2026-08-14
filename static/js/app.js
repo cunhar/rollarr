@@ -241,13 +241,45 @@ function updateEpisodePoller(s) {
     if (!s) return;
     const cnt = el('ep-count');
     if (cnt) {
-        cnt.textContent = s.episodes_session;
-        cnt.className = 'stat-value';
-        if (s.episodes_session > 0) cnt.classList.add('green');
+        cnt.textContent = s.episodes_session || 0;
+        cnt.className = (s.episodes_session > 0) ? 'green' : '';
     }
-    setText('ep-last',    s.last_check || '—');
-    setText('ep-next',    s.next_check || '—');
-    setText('ep-last-ep', s.last_episode || '');
+    
+    setText('ep-last-label', 'Last check: ' + (s.last_check || '—'));
+    setText('ep-next-time', 'Scheduled: ' + (s.next_check || '—'));
+    
+    let pct = 0;
+    let label = 'Next check: —';
+    
+    if (s.next_check && s.poll_interval) {
+        const nextTime = new Date(s.next_check.replace(' ', 'T')).getTime();
+        const now = Date.now();
+        const diffMs = nextTime - now;
+        
+        if (diffMs <= 0) {
+            pct = 100;
+            label = 'Checking now...';
+        } else {
+            const totalMs = s.poll_interval * 1000;
+            const elapsedMs = totalMs - diffMs;
+            pct = Math.min(100, Math.max(0, (elapsedMs / totalMs) * 100));
+            
+            const diffMins = Math.ceil(diffMs / 60000);
+            if (diffMins > 60) {
+                const h = Math.floor(diffMins / 60);
+                const m = diffMins % 60;
+                label = `Next check in ~${h}h ${m}m`;
+            } else {
+                label = `Next check in ~${diffMins} min`;
+            }
+        }
+    }
+    
+    setText('ep-next-label', label);
+    const bar = el('ep-bar');
+    if (bar) {
+        bar.style.width = pct + '%';
+    }
 }
 
 function updateConnectionPills(d) {
