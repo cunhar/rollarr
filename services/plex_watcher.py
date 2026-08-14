@@ -467,14 +467,11 @@ def _watcher_loop():
                 logger.info(f"[PlexWatcher] {now_ts} — No streams/downloads, but Plex task active ({act_detail}). Idle streak reset.")
                 idle_streak = 0
                 _update_state(**base, status='ok', stream_count=0, active_streams=[],
-                              nzbget_active=False, nzbget_detail='',
                               idle_streak=0, last_action=f"{now_ts} — {act_detail}, idle streak reset")
             else:
                 idle_streak += 1
                 logger.info(f"[PlexWatcher] {now_ts} — System idle (no streams/downloads/tasks). Idle streak: {idle_streak}/{idle_needed}")
                 _update_state(**base, status='ok', stream_count=0, active_streams=[],
-                              nzbget_active=False, nzbget_detail='',
-                              plex_activity_active=False, plex_activity_detail='',
                               idle_streak=idle_streak,
                               last_action=f"{now_ts} — System idle (idle streak {idle_streak}/{idle_needed})")
 
