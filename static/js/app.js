@@ -523,7 +523,7 @@ function loadShowEpisodes(showId, forceReload = false) {
                                        : st === 'missing' ? 'badge-amber'
                                        : 'badge-dim';
                         const badgeTxt = st === 'downloaded' ? 'ON DISK' : st.toUpperCase();
-                        const actions = (st === 'missing' || st === 'watched')
+                        const actions = (st === 'missing' || st === 'watched' || st === 'upcoming')
                             ? `<button class="btn-clear btn-ep" onclick="queueSingleEpisode(${showId}, ${ep.season}, ${ep.episode}, this)">Get</button>
                                <button class="btn-clear btn-ep" onclick="queueShowFrom(${showId}, ${ep.season}, ${ep.episode}, this)">Start Here</button>`
                             : '';

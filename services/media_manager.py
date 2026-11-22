@@ -362,12 +362,14 @@ def get_show_episodes_status(show_id: int) -> dict[str, Any]:
         and d.get('episode') is not None
     }
 
-    # Determine watch watermark: explicit last_watched cursor OR earliest episode on disk/queued
+    # Determine watch watermark & rolling-window horizon
     lw_s = show.get('last_watched_season')
     lw_e = show.get('last_watched_episode')
     explicit_cursor = (int(lw_s), int(lw_e)) if (lw_s is not None and lw_e is not None) else None
     active_eps = on_disk | queued_set
     earliest_active = min(active_eps) if active_eps else None
+    latest_active = max(active_eps) if active_eps else None
+    window_full = len(active_eps) >= get_rolling_window()
 
     seasons_map: dict[int, list[dict[str, Any]]] = {}
     for ep in episodes:
@@ -381,6 +383,8 @@ def get_show_episodes_status(show_id: int) -> dict[str, Any]:
             ep_status = 'unaired'
         elif (explicit_cursor and cur_key <= explicit_cursor) or (earliest_active and cur_key < earliest_active):
             ep_status = 'watched'
+        elif window_full and latest_active and cur_key > latest_active:
+            ep_status = 'upcoming'
         else:
             ep_status = 'missing'
 
