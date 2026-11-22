@@ -3,7 +3,13 @@ FROM python:3.11-alpine AS builder
 
 WORKDIR /app
 
-RUN apk add --no-cache gcc musl-dev libffi-dev openssl-dev rust cargo
+RUN apk add --no-cache gcc g++ make curl musl-dev libffi-dev openssl-dev rust cargo
+
+# Build official RARLAB unrar (Alpine's 7zip omits RAR/RAR5 support)
+RUN curl -fsSL https://www.rarlab.com/rar/unrarsrc-7.1.3.tar.gz | tar -xz -C /tmp \
+    && cd /tmp/unrar \
+    && make -j$(nproc) \
+    && install -m 755 unrar /usr/local/bin/unrar
 
 COPY requirements.txt .
 RUN pip install --no-cache-dir --prefix=/install -r requirements.txt
@@ -13,11 +19,12 @@ FROM python:3.11-alpine
 
 WORKDIR /app
 
-# Usenet post-processing tools: PAR2 repair + RAR/7z/ZIP extraction
-RUN apk add --no-cache par2cmdline 7zip
+# Usenet post-processing tools: PAR2 repair + 7zip + official RARLAB unrar
+RUN apk add --no-cache par2cmdline 7zip libstdc++
 
-# Copy compiled Python packages from builder (no build tools left in final image)
+# Copy compiled Python packages and unrar binary from builder (no build tools left in final image)
 COPY --from=builder /install /usr/local
+COPY --from=builder /usr/local/bin/unrar /usr/local/bin/unrar
 
 # Copy application code
 COPY templates templates
