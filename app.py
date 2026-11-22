@@ -216,9 +216,10 @@ def api_library_add():
                 poster_url=data.get('poster_url'),
             )
         else:
+            auto_queue = bool(data.get('auto_queue', False))
             start_s = int(data.get('start_season') or 1)
             start_e = int(data.get('start_episode') or 1)
-            res = media_manager.add_show(int(item_id), start_season=start_s, start_episode=start_e)
+            res = media_manager.add_show(int(item_id), auto_queue=auto_queue, start_season=start_s, start_episode=start_e)
 
         activity_log.log_call(res.get('status', 'info'), res.get('message', 'Media added'))
         code = 200 if res.get('status') in ('success', 'warning') else 400

@@ -388,19 +388,14 @@ function searchMedia() {
                 container.innerHTML = '<div class="no-logs">No results found.</div>';
                 return;
             }
+            const btnLabel = type === 'tv' ? 'Add Show' : 'Add & Download';
             container.innerHTML = results.map((item, idx) => `
                 <div class="media-card">
                     ${item.poster_url ? `<img class="media-poster" src="${escapeHtml(item.poster_url)}" alt="">` : `<div class="media-poster media-poster-placeholder">?</div>`}
                     <div class="media-card-info">
                         <div class="media-card-title">${escapeHtml(item.title)} ${item.year ? `<span class="media-year">(${item.year})</span>` : ''}</div>
                         <div class="media-card-overview">${escapeHtml((item.overview || '').slice(0, 120))}</div>
-                        <div class="ep-controls-row">
-                            ${type === 'tv' ? `
-                                <label class="ep-mini-label">S<input type="number" class="ep-mini-input" id="add-s-${idx}" value="1" min="1"></label>
-                                <label class="ep-mini-label">E<input type="number" class="ep-mini-input" id="add-e-${idx}" value="1" min="1"></label>
-                            ` : ''}
-                            <button class="btn-clear" onclick="addLibraryItem('${escapeHtml(type)}', ${idx}, this)">Add & Download</button>
-                        </div>
+                        <button class="btn-clear" onclick="addLibraryItem('${escapeHtml(type)}', ${idx}, this)">${btnLabel}</button>
                     </div>
                 </div>
             `).join('');
@@ -431,12 +426,6 @@ function addLibraryItem(type, idx, btnEl) {
         imdb_id: item.imdb_id || '',
         poster_url: item.poster_url || ''
     };
-    if (type === 'tv') {
-        const sEl = el(`add-s-${idx}`);
-        const eEl = el(`add-e-${idx}`);
-        payload.start_season = parseInt(sEl && sEl.value) || 1;
-        payload.start_episode = parseInt(eEl && eEl.value) || 1;
-    }
     Api.addMedia(type, payload)
         .then(({ ok, data }) => {
             showToast(data.message || 'Added to library', ok ? 'ok' : 'err');

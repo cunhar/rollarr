@@ -277,8 +277,8 @@ def retry_failed_download(failed_job: dict[str, Any]) -> tuple[bool, str]:
 
 # ── High-Level Library Operations ────────────────────────────────────────────
 
-def add_show(tvmaze_id: int, start_season: int = 1, start_episode: int = 1) -> dict[str, Any]:
-    """Add a TV show from TVMaze and queue the first ROLLING_WINDOW aired episodes."""
+def add_show(tvmaze_id: int, auto_queue: bool = False, start_season: int = 1, start_episode: int = 1) -> dict[str, Any]:
+    """Add a TV show from TVMaze to the library (untracked/no downloads unless auto_queue=True)."""
     info = metadata.get_show_by_id(tvmaze_id)
     if not info:
         return {'status': 'error', 'message': f'Could not fetch TVMaze show #{tvmaze_id}'}
@@ -292,6 +292,15 @@ def add_show(tvmaze_id: int, start_season: int = 1, start_episode: int = 1) -> d
         poster_url=info.get('poster_url'),
         status='active',
     )
+
+    if not auto_queue:
+        return {
+            'status': 'success',
+            'message': f"Added '{show['title']}' — open it in Tracked TV Shows to pick an episode to start from",
+            'show': show,
+            'queued': [],
+            'skipped': [],
+        }
 
     episodes = metadata.get_show_episodes(tvmaze_id)
     aired = [
