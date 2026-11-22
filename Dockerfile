@@ -8,10 +8,13 @@ RUN apk add --no-cache gcc musl-dev libffi-dev openssl-dev rust cargo
 COPY requirements.txt .
 RUN pip install --no-cache-dir --prefix=/install -r requirements.txt
 
-# ── Stage 2: Final lightweight image (~16MB) ──────────────────────────────────
+# ── Stage 2: Final lightweight image ─────────────────────────────────────────
 FROM python:3.11-alpine
 
 WORKDIR /app
+
+# Usenet post-processing tools: PAR2 repair + RAR/7z/ZIP extraction
+RUN apk add --no-cache par2cmdline unrar 7zip
 
 # Copy compiled Python packages from builder (no build tools left in final image)
 COPY --from=builder /install /usr/local
@@ -26,6 +29,3 @@ COPY *.py .
 EXPOSE 5000
 
 CMD ["sh", "-c", "gunicorn --bind 0.0.0.0:${PORT:-5000} --workers 1 --threads 4 --timeout 120 app:app"]
-
-
-

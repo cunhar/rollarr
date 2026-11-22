@@ -1,14 +1,14 @@
 """
 services/plex_poller.py
 -----------------------
-Stateless background daemon thread that polls Plex watch history.
+Stateless background daemon thread that polls Plex / Jellyfin watch history.
 
-For each watched TV episode found in recent Plex history:
-  Unmonitors the episode, deletes its file from disk via Sonarr (if enabled),
-  and applies the rolling-window monitoring logic (monitor + search the next N episodes).
+For each watched TV episode found:
+  Deletes its file directly from disk (if enabled), removes from Plex / refreshes Jellyfin,
+  and applies the rolling-window logic via TVMaze + NZBgeek + built-in Usenet downloader.
 
-For each watched Movie found in recent Plex history:
-  Resolves the movie in Radarr, unmonitors it, and deletes its media file from disk.
+For each watched Movie found:
+  Deletes its media file directly from disk (if enabled) and updates Rolarr's catalog.
 """
 from __future__ import annotations
 
@@ -21,22 +21,8 @@ import datetime
 import requests
 
 from integrations.common import now_str as _now, get_plex_credentials, get_jellyfin_credentials, get_jellyfin_headers
-from integrations.sonarr import (
-    get_rolling_window,
-    find_series_id_by_title,
-    get_episodes,
-    monitor_episode,
-    unmonitor_episode,
-    delete_episode_file,
-    search_episode,
-)
-from integrations.radarr import (
-    get_radarr_url,
-    get_radarr_api_key,
-    find_movie_by_title_and_year,
-    unmonitor_and_delete_movie,
-    unmonitor_movie,
-)
+from integrations import metadata
+from services import db, media_manager
 
 from config_store import get_config, save_config
 
@@ -269,6 +255,7 @@ def _fetch_all_watched_from_jellyfin() -> list | None:
                     'jellyfinId': item_id,
                     'title': item.get('Name') or '',
                     'year': item.get('ProductionYear'),
+                    'filePath': item.get('Path') or '',
                 })
             elif jtype == 'Episode':
                 watched_items.append({
@@ -279,6 +266,7 @@ def _fetch_all_watched_from_jellyfin() -> list | None:
                     'parentIndex': item.get('ParentIndexNumber'),
                     'index': item.get('IndexNumber'),
                     'title': item.get('Name') or '',
+                    'filePath': item.get('Path') or '',
                 })
     return watched_items
 
@@ -332,137 +320,130 @@ def _plex_delete_item(rating_key):
         return False
 
 
-# ── Sonarr rolling-window logic (Episodes) ────────────────────────────────────
+def trigger_plex_refresh() -> bool:
+    """Trigger a Plex library refresh across all movie/show sections."""
+    plex_url, plex_token = get_plex_credentials()
+    if not plex_url or not plex_token:
+        return False
+    sections = _get_library_sections()
+    refreshed = False
+    for sec in sections:
+        if sec.get('type') in ('movie', 'show') and sec.get('key'):
+            try:
+                r = requests.get(
+                    f"{plex_url}/library/sections/{sec['key']}/refresh",
+                    params={'X-Plex-Token': plex_token},
+                    timeout=10,
+                )
+                if r.status_code in (200, 204):
+                    refreshed = True
+            except Exception as exc:
+                logger.warning(f"[PlexPoller] Failed refreshing Plex section {sec.get('key')}: {exc}")
+    return refreshed
+
+
+def _extract_reported_path(item: dict) -> str | None:
+    """Extract the on-disk file path reported by Plex or Jellyfin metadata, if present."""
+    if item.get('filePath'):
+        return item['filePath']
+    media_list = item.get('Media') or []
+    if media_list and isinstance(media_list, list):
+        parts = media_list[0].get('Part') or []
+        if parts and isinstance(parts, list):
+            return parts[0].get('file')
+    return None
+
+
+# ── Built-in rolling-window logic (Episodes) ──────────────────────────────────
 
 def _process_episode(item: dict) -> tuple[str, str]:
-    """Given a Plex history item for a TV episode, unmonitor/delete it and apply the Sonarr rolling window."""
+    """Delete watched TV episode directly from disk and queue the next N aired episodes."""
     item        = _enrich_metadata(item)
     show_title  = (item.get('grandparentTitle') or '').strip()
     season_num  = item.get('parentIndex')
     episode_num = item.get('index')
 
     if not show_title or season_num is None or episode_num is None:
-        return 'warning', f"Incomplete metadata for Plex ratingKey {item.get('ratingKey')} — skipped"
+        return 'warning', f"Incomplete metadata for ratingKey {item.get('ratingKey')} — skipped"
 
     season_num  = int(season_num)
     episode_num = int(episode_num)
     ep_str      = f"S{season_num:02d}E{episode_num:02d}"
 
-    # Resolve in Sonarr
-    series_id, series_title = find_series_id_by_title(show_title)
-    if not series_id:
-        return 'warning', f"{show_title} {ep_str} — not found in Sonarr library, skipping"
-
-    series_title = series_title or show_title
-
-    # Locate episode in Sonarr's list
-    episodes = get_episodes(series_id)
-    regular  = sorted(
-        [e for e in episodes if e.get('seasonNumber', 0) > 0],
-        key=lambda e: (e['seasonNumber'], e['episodeNumber']),
-    )
-    current_idx = next(
-        (i for i, e in enumerate(regular)
-         if e['seasonNumber'] == season_num and e['episodeNumber'] == episode_num),
-        None,
-    )
-
-    if current_idx is None:
-        return 'warning', f"{series_title} {ep_str} — episode not found in Sonarr"
-
-    current_ep = regular[current_idx]
-
-    # Unmonitor watched episode and delete file from disk if enabled
     delete_enabled = bool(get_config('DELETE_WATCHED_EPISODES', True))
-    try:
-        unmonitor_episode(current_ep['id'])
-    except Exception as exc:
-        logger.warning(f"[PlexPoller] Could not unmonitor episode {current_ep['id']}: {exc}")
-
-    ep_file_id = current_ep.get('episodeFileId', 0)
     rating_key = item.get('ratingKey')
     source = item.get('_source', 'plex')
+    reported_path = _extract_reported_path(item)
 
-    if not ep_file_id or ep_file_id == 0:
-        # File already missing from disk — remove item from Plex if sourced from Plex
+    if delete_enabled:
+        deleted, detail = media_manager.delete_episode_file(show_title, season_num, episode_num, reported_path=reported_path)
         if source == 'plex':
             deleted_from_plex = _plex_delete_item(rating_key)
             media_note = ", removed from Plex" if deleted_from_plex else ", Plex removal failed"
         else:
             media_note = " (from Jellyfin)"
-        file_action = f"unmonitored (file already absent from disk{media_note})"
-    elif delete_enabled:
-        try:
-            delete_episode_file(ep_file_id)
-            if source == 'plex':
-                deleted_from_plex = _plex_delete_item(rating_key)
-                media_note = ", removed from Plex" if deleted_from_plex else ", Plex removal failed"
-            else:
-                media_note = " (from Jellyfin)"
-            file_action = f"unmonitored & file deleted from disk{media_note}"
-        except Exception as exc:
-            logger.warning(f"[PlexPoller] Failed deleting episode file ID {ep_file_id}: {exc}")
-            file_action = f"unmonitored (file delete failed: {exc})"
+        file_action = f"{detail}{media_note}" if deleted else f"cleanup skipped ({detail}{media_note})"
     else:
-        file_action = "unmonitored (delete disabled)"
+        file_action = "delete disabled (file kept on disk)"
 
-    next_eps = regular[current_idx + 1 : current_idx + 1 + get_rolling_window()]
+    # Resolve show in Rolarr DB / TVMaze to queue next ROLLING_WINDOW aired episodes
+    show = media_manager.resolve_or_track_show(show_title)
+    if not show:
+        return 'warning', f"{show_title} {ep_str} watched — {file_action}; show not found on TVMaze"
+
+    episodes = metadata.get_show_episodes(show['tvmaze_id'])
+    aired = [e for e in episodes if e['aired']]
+    upcoming = [e for e in aired if (e['season'], e['episode']) > (season_num, episode_num)]
+    next_eps = upcoming[:media_manager.get_rolling_window()]
 
     if not next_eps:
-        return 'success', f"{series_title} {ep_str} watched — {file_action}; final episode, nothing to queue"
+        return 'success', f"{show['title']} {ep_str} watched — {file_action}; no newer aired episodes to queue"
 
-    newly, already = [], []
+    newly, skipped = [], []
     for e in next_eps:
-        tag = f"S{e['seasonNumber']:02d}E{e['episodeNumber']:02d}"
-        if not e.get('monitored'):
-            monitor_episode(e['id'])
-            search_episode(e['id'])
+        tag = f"S{e['season']:02d}E{e['episode']:02d}"
+        ok, _ = media_manager.queue_episode(show, e['season'], e['episode'])
+        if ok:
             newly.append(tag)
         else:
-            already.append(tag)
+            skipped.append(tag)
 
     return 'success', (
-        f"{series_title} {ep_str} watched — {file_action}; "
-        f"queued: {newly or 'none'}, already monitored: {already or 'none'}"
+        f"{show['title']} {ep_str} watched — {file_action}; "
+        f"queued: {newly or 'none'}, already present/queued: {skipped or 'none'}"
     )
 
 
-# ── Radarr cleanup logic (Movies) ──────────────────────────────────────────────
+# ── Built-in movie cleanup logic ──────────────────────────────────────────────
 
 def _process_movie(item: dict) -> tuple[str, str]:
-    """Given a Plex history item for a Movie, unmonitor it and delete its file in Radarr."""
+    """Delete watched movie directly from disk and update Rolarr catalog."""
     item   = _enrich_metadata(item)
     title  = (item.get('title') or '').strip()
     year   = item.get('year')
 
     if not title:
-        return 'warning', f"Incomplete movie title for Plex ratingKey {item.get('ratingKey')} — skipped"
+        return 'warning', f"Incomplete movie title for ratingKey {item.get('ratingKey')} — skipped"
 
-    if not get_radarr_url() or not get_radarr_api_key():
-        return 'warning', f"Movie '{title}' watched, but Radarr is not configured (RADARR_URL / RADARR_API_KEY missing)"
-
-    movie_id, movie_title = find_movie_by_title_and_year(title, year)
-    if not movie_id:
-        return 'warning', f"Movie '{title} ({year or ''})' — not found in Radarr library, skipping"
-
-    movie_title = movie_title or title
-
-    # Respect the global delete flag — same setting that governs Sonarr episode cleanup
     delete_enabled = bool(get_config('DELETE_WATCHED_EPISODES', True))
-    if delete_enabled:
-        _, action_detail = unmonitor_and_delete_movie(movie_id)
-    else:
-        _, action_detail = unmonitor_movie(movie_id)
-
-    # Remove item directly from Plex library if sourced from Plex
+    reported_path = _extract_reported_path(item)
     source = item.get('_source', 'plex')
+
+    if delete_enabled:
+        deleted, detail = media_manager.delete_movie_file(title, year, reported_path=reported_path)
+        action_detail = detail if deleted else f"cleanup skipped ({detail})"
+    else:
+        action_detail = "file kept on disk (delete disabled)"
+
+    db.mark_movie_watched_by_title(title, year)
+
     if source == 'plex':
         deleted_from_plex = _plex_delete_item(item.get('ratingKey'))
         media_note = ", removed from Plex" if deleted_from_plex else ", Plex removal failed"
     else:
         media_note = " (from Jellyfin)"
 
-    return 'success', f"Movie '{movie_title}' watched — {action_detail} in Radarr{media_note}"
+    return 'success', f"Movie '{title}' watched — {action_detail}{media_note}"
 
 
 # ── Main loop ─────────────────────────────────────────────────────────────────

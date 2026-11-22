@@ -1,20 +1,18 @@
-# Rolarr — Media Recycler & Power Saver 🎬⚡
+# Rolarr — All-in-One Usenet Media Manager, Recycler & Power Saver 🎬⚡
 
-**Rolarr** is an automated media recycler and server power saver for **Sonarr**, **Radarr**, **Plex**, and **NZBGet**. It automatically deletes watched media to reclaim disk space, queues upcoming TV episodes using a configurable rolling window, and safely powers down your host server via SSH when idle.
+**Rolarr** is a lightweight, self-contained Usenet media manager, downloader, recycler, and server power saver for **Plex** and **Jellyfin**. It replaces Sonarr, Radarr, and NZBGet with a single minimal container: search & add shows/movies, pick the best NZBgeek releases by resolution & audio with junk filtering, download & unpack natively over NNTP, delete watched media directly from disk, roll TV episodes forward automatically, and safely power down your host via SSH when idle.
 
 ---
 
 ## Features 🚀
 
-- 📦 **Automated Episode Recycler (Sonarr)**: Detects watched TV episodes in Plex, unmonitors them, deletes media files from disk, and queues/searches the next $N$ episodes using a rolling window.
-- 🍿 **Watched Movie Cleanup (Radarr)**: Automatically unmonitors and deletes watched movies from disk via Radarr upon completion in Plex.
-- 💾 **Storage & Disk Space Monitor**: Live tracking of available storage across Downloads, TV Shows, and Movies directories, querying host disk metrics and Sonarr/Radarr API root folders.
-- ⚡ **Host Power Saver & Idle Shutdown**: Monitors active Plex streams, NZBGet downloads, and background tasks. Powers down the host via SSH when idle for $N$ consecutive checks (includes Dry Run safe mode).
-- 📺 **Smart TV & Remote D-Pad Navigation**: Built-in 2D spatial arrow key navigation engine and high-visibility focus indicators tailored for Smart TVs (LG WebOS, Android TV, Fire TV).
-- 📱 **Mobile & Progressive Web App (PWA)**: Mobile-optimized responsive UI with PWA standalone mode (runs like a native mobile app without address bars).
-- 🔒 **Encrypted Storage & Secret Masking**: Persists credentials in AES-128 Fernet encrypted storage (`/config/settings.enc`) with automatic DevTools secret masking sentinels (`••••••••`).
-- 📥 **NZBGet & Service Connection Status**: Live status indicators for Sonarr, Radarr, NZBGet, and Plex with direct links and active download metrics.
-- 📊 **Activity Audit Log**: Real-time log tracking processed media, status events, and payload inspections with state preservation across refreshes.
+- 🔍 **Built-in Search & Library**: Search TV shows via **TVMaze** (no API key needed) and Movies via **TMDB**, add them from the web UI, and auto-download.
+- 🎯 **NZBgeek Release Selection Engine**: Sonarr/Radarr-inspired scoring with configurable **Preferred Resolution**, **Preferred Audio**, **Size Limits**, strict **Junk Filter** (blocks CAM/TS/HC/SAMPLE/3D/passworded), `PROPER`/`REPACK` bonuses, and automatic **blocklist + retry** of the next-best release on failure.
+- 📥 **Native Usenet (NNTP) Downloader**: Built-in multi-connection TLS NNTP + yEnc downloader with `par2cmdline` repair, `unrar`/`7zip` extraction, clean renaming into `/tv` and `/movies`, and Plex/Jellyfin library refresh.
+- 📦 **Direct Media Recycler & Rolling Window**: Detects watched TV episodes and movies in Plex/Jellyfin, deletes files directly from disk, and automatically queues the next $N$ aired episodes.
+- ⚡ **Host Power Saver & Idle Shutdown**: Monitors active Plex/Jellyfin streams, built-in Usenet downloads, and background tasks. Powers down the host via SSH when idle for $N$ consecutive checks (includes Dry Run safe mode).
+- 📺 **Smart TV D-Pad & Mobile PWA UI**: Spatial arrow-key navigation for Smart TVs and responsive mobile PWA support.
+- 🔒 **Encrypted Storage & Secret Masking**: Persists credentials in AES-128 Fernet encrypted storage (`/config/settings.enc`).
 
 ---
 
@@ -33,54 +31,32 @@ services:
       - "5000:5000"
     volumes:
       - ./config/rolarr:/config
+      - /path/to/downloads:/downloads
+      - /path/to/tv:/tv
+      - /path/to/movies:/movies
     environment:
       - TZ=Europe/Lisbon
     restart: unless-stopped
 ```
 
-### Docker Run
-
-```bash
-docker run -d \
-  --name rolarr \
-  -p 5000:5000 \
-  -v /your/host/config:/config \
-  -e TZ="Europe/Lisbon" \
-  ghcr.io/cunhar/rollarr:latest
-```
-
----
-
-## Web Dashboard Tabs 💻
-
-1. **Dashboard**: View active Plex streams, current episode poller state, NZBGet active downloads, and host shutdown watcher status with a one-click manual shutdown trigger.
-2. **Disk Space**: Monitor free, used, and total storage space across configured Downloads, TV Shows, and Movies storage paths.
-3. **Activity**: Persistent audit log of processed media, webhook triggers, and system events with expandable payload views.
-4. **Config**: Web UI form to securely manage encrypted settings without restarting containers.
-
 ---
 
 ## Settings Reference ⚙️
 
-All settings can be configured via the web UI at `http://your-server:5000/#config`:
+All settings are configured via the web UI at `http://your-server:5000/#config`:
 
 | Category | Setting | Description |
 | :--- | :--- | :--- |
-| **Cleanup** | `DELETE_WATCHED_EPISODES` | Enable/disable deleting media files from disk after watching |
-| **Sonarr** | `SONARR_URL` / `SONARR_API_KEY` | Sonarr instance URL & API key |
-| | `ROLLING_WINDOW` | Number of upcoming episodes to monitor and search (default `3`) |
-| **Radarr** | `RADARR_URL` / `RADARR_API_KEY` | Radarr instance URL & API key |
-| **NZBGet** | `NZBGET_URL` / `NZBGET_USERNAME` / `NZBGET_PASSWORD` | NZBGet connection credentials |
-| **Plex** | `PLEX_URL` / `PLEX_TOKEN` | Plex Media Server URL & `X-Plex-Token` |
-| | `PLEX_WATCH_INTERVAL` | Polling frequency for watched media cleanup in seconds (default `3600`) |
-| **Power Saver**| `PLEX_POLL_INTERVAL` | Idle check frequency in seconds (default `1200`) |
-| | `PLEX_IDLE_POLLS` | Consecutive idle checks required before triggering host shutdown (default `3`) |
-| | `PLEX_SHUTDOWN_DRY_RUN` | Dry-run mode to test shutdown triggers safely without powering off host |
-| **Host SSH** | `SSH_HOST` / `SSH_PORT` / `SSH_USER` / `SSH_PASSWORD` | Host SSH credentials for issuing shutdown commands |
-| **Storage** | `PATH_DOWNLOADS` / `PATH_TV` / `PATH_MOVIES` | Local storage directory paths for disk monitoring |
-
----
-
-## License 📜
-
-MIT License. Developed for the *Arr & Plex ecosystem.
+| **NZBgeek** | `NZBGEEK_URL` / `NZBGEEK_API_KEY` | NZBgeek Newznab URL & API key |
+| **Usenet** | `NNTP_HOST` / `NNTP_PORT` / `NNTP_SSL` | Usenet server connection details |
+| | `NNTP_USERNAME` / `NNTP_PASSWORD` / `NNTP_CONNECTIONS` | Usenet auth & concurrent connections |
+| **Metadata** | `TMDB_API_KEY` | Free TMDB v3 API key for Movies (TV uses TVMaze with no key) |
+| **Release** | `PREFERRED_RESOLUTION` / `PREFERRED_AUDIO` | Target resolution (`2160p`/`1080p`/`720p`/`any`) & audio (`atmos`/`dts`/`ddp`/`aac`/`any`) |
+| | `MAX_EPISODE_SIZE_GB` / `MAX_MOVIE_SIZE_GB` | Maximum acceptable release size in GB |
+| **Cleanup** | `DELETE_WATCHED_EPISODES` | Delete watched files directly from disk |
+| | `ROLLING_WINDOW` | Number of upcoming aired episodes to keep downloaded ahead |
+| **Media** | `PLEX_URL` / `PLEX_TOKEN` | Plex Media Server connection |
+| | `JELLYFIN_URL` / `JELLYFIN_API_KEY` | Jellyfin Server connection |
+| **Power Saver**| `PLEX_SHUTDOWN_MODE` / `PLEX_POLL_INTERVAL` / `PLEX_IDLE_POLLS` | Idle host shutdown policy |
+| **Host SSH** | `SSH_HOST` / `SSH_PORT` / `SSH_USER` / `SSH_PASSWORD` | Host SSH credentials for shutdown |
+| **Storage** | `PATH_DOWNLOADS` / `PATH_TV` / `PATH_MOVIES` | Mounted read/write directories |

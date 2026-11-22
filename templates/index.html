@@ -7,6 +7,7 @@
 <div class="shell">
     {% include 'partials/topbar.html' %}
     {% include 'partials/tab_dashboard.html' %}
+    {% include 'partials/tab_library.html' %}
     {% include 'partials/tab_disk.html' %}
     {% include 'partials/tab_activity.html' %}
     {% include 'partials/tab_settings.html' %}
@@ -17,11 +18,8 @@
 <script src="{{ url_for('static', filename='js/tv-nav.js') }}"></script>
 <script>
     updatePillLinks({
-        SONARR_URL:   "{{ cfg.SONARR_URL | safe }}",
-        RADARR_URL:   "{{ cfg.RADARR_URL | safe }}",
         PLEX_URL:     "{{ cfg.PLEX_URL | safe }}",
-        JELLYFIN_URL: "{{ cfg.JELLYFIN_URL | safe }}",
-        NZBGET_URL:   "{{ cfg.NZBGET_URL | safe }}"
+        JELLYFIN_URL: "{{ cfg.JELLYFIN_URL | safe }}"
     });
 </script>
 </body>

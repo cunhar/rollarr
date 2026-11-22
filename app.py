@@ -6,24 +6,13 @@ from logging.handlers import RotatingFileHandler
 import concurrent.futures
 
 import config_store
-from config_store import mask_secret
-from integrations.sonarr import (
-    get_sonarr_url,
-    get_sonarr_api_key,
-    get_rolling_window,
-)
-from integrations.nzbget import (
-    get_nzbget_status,
-    get_nzbget_url,
-    get_nzbget_username,
-    get_nzbget_password,
-)
-from services import plex_watcher, plex_poller, activity_log
+from integrations import metadata
+from services import db, plex_watcher, plex_poller, activity_log, usenet_downloader, media_manager
 from services.disk_service import get_disk_space_summary
 from services.connection_tester import (
     test_connection,
-    check_sonarr_status,
-    check_radarr_status,
+    check_nzbgeek_status,
+    check_usenet_status,
     check_plex_status,
     check_jellyfin_status,
 )
@@ -53,12 +42,17 @@ except Exception as e:
 
 app = Flask(__name__)
 
-# Initialize activity log and wire into services
+# Initialize SQLite database, activity log, and background services
+db.init_db()
 activity_log.load()
 plex_poller.set_log_callback(activity_log.log_call)
 plex_watcher.set_log_callback(activity_log.log_call)
-plex_poller.start()
-plex_watcher.start()
+usenet_downloader.set_log_callback(activity_log.log_call)
+
+if not os.environ.get('ROLARR_NO_BACKGROUND'):
+    plex_poller.start()
+    plex_watcher.start()
+    usenet_downloader.start()
 
 
 # ── Live Service Connection Checks ───────────────────────────────────────────
@@ -66,13 +60,13 @@ plex_watcher.start()
 def get_service_connections() -> dict:
     """Run connection checks concurrently to reduce dashboard latency."""
     with concurrent.futures.ThreadPoolExecutor(max_workers=4) as executor:
-        f_sonarr = executor.submit(check_sonarr_status)
-        f_radarr = executor.submit(check_radarr_status)
-        f_plex = executor.submit(check_plex_status)
+        f_nzbgeek  = executor.submit(check_nzbgeek_status)
+        f_usenet   = executor.submit(check_usenet_status)
+        f_plex     = executor.submit(check_plex_status)
         f_jellyfin = executor.submit(check_jellyfin_status)
         return {
-            'sonarr':   f_sonarr.result(),
-            'radarr':   f_radarr.result(),
+            'nzbgeek':  f_nzbgeek.result(),
+            'usenet':   f_usenet.result(),
             'plex':     f_plex.result(),
             'jellyfin': f_jellyfin.result(),
         }
@@ -88,20 +82,13 @@ def index():
     return render_template(
         "index.html",
         cfg=cfg,
-        sonarr_url=get_sonarr_url() or "Not Configured",
-        masked_key=mask_secret(get_sonarr_api_key()),
-        status_text=conns['sonarr']['status'],
-        radarr_url=config_store.get_config('RADARR_URL') or "Not Configured",
-        radarr_masked_key=mask_secret(config_store.get_config('RADARR_API_KEY')),
-        radarr_status_text=conns['radarr']['status'],
+        nzbgeek_conn=conns['nzbgeek'],
+        usenet_conn=conns['usenet'],
         plex_conn_text=conns['plex']['status'],
         jellyfin_conn_text=conns['jellyfin']['status'],
-        nzbget_url=get_nzbget_url() or "Not Configured",
-        nzbget_username=get_nzbget_username() or "Not Configured",
-        nzbget_masked_pass=mask_secret(get_nzbget_password()),
-        nzbget_status=get_nzbget_status(),
+        downloads_status=usenet_downloader.get_status(),
         history=activity_log.get_entries(),
-        rolling_window=get_rolling_window(),
+        rolling_window=media_manager.get_rolling_window(),
         plex_status=plex_watcher.get_state(),
         poller_status=plex_poller.get_state(),
         disk_info=get_disk_space_summary(),
@@ -115,6 +102,7 @@ def api_config_save():
         updated = config_store.save_config(data)
         logger.info("[App] Saved updated encrypted configuration via UI.")
         activity_log.log_call('success', 'Configuration saved securely via web dashboard')
+        usenet_downloader.notify_queue()
         return jsonify({'status': 'success', 'message': 'Configuration saved securely', 'config': updated}), 200
     except Exception as exc:
         logger.error(f"[App] Failed to save configuration: {exc}")
@@ -158,10 +146,94 @@ def api_shutdown_now():
     return jsonify(res), 200 if res['status'] == 'success' else 400
 
 
-@app.route('/api/nzbget-status')
-def api_nzbget_status():
-    return jsonify(get_nzbget_status())
+# ── Built-in Usenet Downloader Endpoints ─────────────────────────────────────
 
+@app.route('/api/downloads-status')
+def api_downloads_status():
+    return jsonify(usenet_downloader.get_status())
+
+
+@app.route('/api/downloads/pause', methods=['POST'])
+def api_downloads_pause():
+    usenet_downloader.pause()
+    return jsonify({'status': 'success', 'paused': True}), 200
+
+
+@app.route('/api/downloads/resume', methods=['POST'])
+def api_downloads_resume():
+    usenet_downloader.resume()
+    return jsonify({'status': 'success', 'paused': False}), 200
+
+
+@app.route('/api/downloads/<int:download_id>/cancel', methods=['POST'])
+def api_downloads_cancel(download_id: int):
+    ok = usenet_downloader.cancel_download(download_id)
+    return jsonify({'status': 'success' if ok else 'error'}), 200 if ok else 404
+
+
+# ── Search & Library Endpoints ───────────────────────────────────────────────
+
+@app.route('/api/search')
+def api_search():
+    media_type = (request.args.get('type') or 'tv').lower()
+    query = (request.args.get('q') or '').strip()
+    if not query:
+        return jsonify({'results': []}), 200
+
+    if media_type == 'movie':
+        if not metadata.get_tmdb_api_key():
+            return jsonify({'status': 'error', 'message': 'TMDB API Key is required in Config for Movie search', 'results': []}), 400
+        results = metadata.search_movies(query)
+    else:
+        results = metadata.search_tv(query)
+    return jsonify({'results': results}), 200
+
+
+@app.route('/api/library')
+def api_library():
+    return jsonify({
+        'shows': db.list_shows(),
+        'movies': db.list_movies(),
+        'recent_downloads': db.list_recent_downloads(15),
+    }), 200
+
+
+@app.route('/api/library/add', methods=['POST'])
+def api_library_add():
+    data = request.json or {}
+    media_type = (data.get('type') or 'tv').lower()
+    item_id = data.get('id')
+    if not item_id:
+        return jsonify({'status': 'error', 'message': 'Missing media id'}), 400
+
+    try:
+        if media_type == 'movie':
+            res = media_manager.add_movie(int(item_id))
+        else:
+            start_s = int(data.get('start_season') or 1)
+            start_e = int(data.get('start_episode') or 1)
+            res = media_manager.add_show(int(item_id), start_season=start_s, start_episode=start_e)
+
+        activity_log.log_call(res.get('status', 'info'), res.get('message', 'Media added'))
+        code = 200 if res.get('status') in ('success', 'warning') else 400
+        return jsonify(res), code
+    except Exception as exc:
+        logger.error(f"[App] Failed adding media: {exc}")
+        return jsonify({'status': 'error', 'message': str(exc)}), 500
+
+
+@app.route('/api/library/<media_type>/<int:item_id>', methods=['DELETE'])
+def api_library_delete(media_type: str, item_id: int):
+    if media_type == 'movie':
+        ok = db.delete_movie(item_id)
+    elif media_type == 'tv':
+        ok = db.delete_show(item_id)
+    else:
+        return jsonify({'status': 'error', 'message': 'Invalid media type'}), 400
+    return jsonify({'status': 'success' if ok else 'error'}), 200 if ok else 404
+
+
+# ── Activity & Disk Endpoints ────────────────────────────────────────────────
 
 @app.route('/api/clear-logs', methods=['POST'])
 def api_clear_logs():
@@ -172,13 +244,11 @@ def api_clear_logs():
 
 @app.route('/api/activity')
 def api_activity():
-    """Return the current activity log as JSON for live polling."""
     return jsonify(activity_log.get_entries()), 200
 
 
 @app.route('/api/disk-space')
 def api_disk_space():
-    """Return current disk space for downloads, tv, movies, and arr root folders."""
     return jsonify(get_disk_space_summary()), 200
 
 

@@ -1,10 +1,13 @@
 """
 services/connection_tester.py
 -----------------------------
-Registry of connection test functions for each service.
-Each tester returns (success: bool, message: str).
-
-Extracted from app.py to keep route handler clean.
+Registry of connection test functions and live status checks for each service:
+  - NZBgeek (Newznab)
+  - Usenet (NNTP)
+  - TMDB (Movie metadata)
+  - Plex
+  - Jellyfin
+  - SSH (Host power saver)
 """
 from __future__ import annotations
 
@@ -12,54 +15,66 @@ import logging
 import requests
 
 import config_store
-from config_store import get_config
 from integrations.common import get_plex_credentials, get_jellyfin_credentials, get_jellyfin_headers
-from integrations.sonarr import get_sonarr_url, get_sonarr_api_key
-from integrations.radarr import get_radarr_url, get_radarr_api_key
-from integrations.nzbget import get_nzbget_url, get_nzbget_username, get_nzbget_password
+from integrations.nzbgeek import get_nzbgeek_url, get_nzbgeek_api_key
+from integrations.metadata import get_tmdb_api_key
+from services.usenet_downloader import test_nntp_connection
 
 logger = logging.getLogger(__name__)
 
 
-def _test_sonarr(data: dict) -> tuple[bool, str]:
-    url = (data.get('url') or get_sonarr_url() or '').rstrip('/')
-    key = data.get('api_key') or ''
-    if not key or key == '••••••••':
-        key = get_sonarr_api_key()
-    if not url or not key:
-        return False, 'Sonarr URL and API Key are required'
-    try:
-        res = requests.get(f"{url}/api/v3/system/status", headers={'X-Api-Key': key}, timeout=4)
-        if res.status_code == 200:
-            ver = res.json().get('version', '')
-            return True, f'Sonarr connected successfully! (v{ver})'
-        return False, f'Sonarr test failed (HTTP {res.status_code})'
-    except Exception as exc:
-        return False, f'Sonarr connection error: {exc}'
+def _resolve_secret(submitted: str | None, config_key: str) -> str:
+    val = submitted or ''
+    if not val or val == '••••••••' or str(val).startswith('••••'):
+        return config_store.get_config(config_key) or ''
+    return val
 
 
-def _test_radarr(data: dict) -> tuple[bool, str]:
-    url = (data.get('url') or get_radarr_url() or '').rstrip('/')
-    key = data.get('api_key') or ''
-    if not key or key == '••••••••':
-        key = get_radarr_api_key()
+def _test_nzbgeek(data: dict) -> tuple[bool, str]:
+    url = (data.get('url') or get_nzbgeek_url() or '').rstrip('/')
+    key = _resolve_secret(data.get('api_key'), 'NZBGEEK_API_KEY')
     if not url or not key:
-        return False, 'Radarr URL and API Key are required'
+        return False, 'NZBgeek URL and API Key are required'
+    endpoint = f"{url}/api" if not url.endswith('/api') else url
     try:
-        res = requests.get(f"{url}/api/v3/system/status", headers={'X-Api-Key': key}, timeout=4)
-        if res.status_code == 200:
-            ver = res.json().get('version', '')
-            return True, f'Radarr connected successfully! (v{ver})'
-        return False, f'Radarr test failed (HTTP {res.status_code})'
+        res = requests.get(endpoint, params={'t': 'caps', 'apikey': key}, timeout=6)
+        if res.status_code == 200 and '<caps' in res.text.lower():
+            return True, 'NZBgeek connected successfully!'
+        if 'error' in res.text.lower():
+            return False, 'NZBgeek rejected API key'
+        return False, f'NZBgeek test failed (HTTP {res.status_code})'
     except Exception as exc:
-        return False, f'Radarr connection error: {exc}'
+        return False, f'NZBgeek connection error: {exc}'
+
+
+def _test_usenet(data: dict) -> tuple[bool, str]:
+    host = (data.get('host') or config_store.get_config('NNTP_HOST') or '').strip()
+    port = int(data.get('port') or config_store.get_config('NNTP_PORT') or 563)
+    raw_ssl = data.get('ssl')
+    use_ssl = config_store.get_config('NNTP_SSL', True) if raw_ssl is None else (
+        raw_ssl if isinstance(raw_ssl, bool) else str(raw_ssl).lower() in ('true', '1', 'yes')
+    )
+    user = (data.get('username') or config_store.get_config('NNTP_USERNAME') or '').strip()
+    pwd = _resolve_secret(data.get('password'), 'NNTP_PASSWORD')
+    return test_nntp_connection(host, port, use_ssl, user, pwd)
+
+
+def _test_tmdb(data: dict) -> tuple[bool, str]:
+    key = _resolve_secret(data.get('api_key'), 'TMDB_API_KEY')
+    if not key:
+        return False, 'TMDB API Key is required for Movie search'
+    try:
+        res = requests.get('https://api.themoviedb.org/3/configuration', params={'api_key': key}, timeout=6)
+        if res.status_code == 200:
+            return True, 'TMDB API connected successfully!'
+        return False, f'TMDB test failed (HTTP {res.status_code})'
+    except Exception as exc:
+        return False, f'TMDB connection error: {exc}'
 
 
 def _test_plex(data: dict) -> tuple[bool, str]:
     url = (data.get('url') or config_store.get_config('PLEX_URL') or '').rstrip('/')
-    token = data.get('token') or ''
-    if not token or token == '••••••••':
-        token = config_store.get_config('PLEX_TOKEN') or ''
+    token = _resolve_secret(data.get('token'), 'PLEX_TOKEN')
     if not url or not token:
         return False, 'Plex URL and Token are required'
     try:
@@ -73,9 +88,7 @@ def _test_plex(data: dict) -> tuple[bool, str]:
 
 def _test_jellyfin(data: dict) -> tuple[bool, str]:
     url = (data.get('url') or config_store.get_config('JELLYFIN_URL') or '').rstrip('/')
-    api_key = data.get('api_key') or ''
-    if not api_key or api_key == '••••••••':
-        api_key = config_store.get_config('JELLYFIN_API_KEY') or ''
+    api_key = _resolve_secret(data.get('api_key'), 'JELLYFIN_API_KEY')
     if not url or not api_key:
         return False, 'Jellyfin URL and API Key are required'
     try:
@@ -88,32 +101,11 @@ def _test_jellyfin(data: dict) -> tuple[bool, str]:
         return False, f'Jellyfin connection error: {exc}'
 
 
-def _test_nzbget(data: dict) -> tuple[bool, str]:
-    url = (data.get('url') or get_nzbget_url() or '').rstrip('/')
-    user = data.get('username') or get_nzbget_username() or 'nzbget'
-    password = data.get('password') or ''
-    if not password or password == '••••••••':
-        password = get_nzbget_password()
-    if not url:
-        return False, 'NZBGet URL is required'
-    try:
-        auth = (user, password) if (user or password) else None
-        res = requests.get(f"{url}/jsonrpc/version", auth=auth, timeout=4)
-        if res.status_code == 200:
-            ver = res.json().get('result', '')
-            return True, f'NZBGet connected successfully! (v{ver})'
-        return False, f'NZBGet test failed (HTTP {res.status_code})'
-    except Exception as exc:
-        return False, f'NZBGet connection error: {exc}'
-
-
 def _test_ssh(data: dict) -> tuple[bool, str]:
     ssh_host = data.get('ssh_host') or config_store.get_config('SSH_HOST')
     ssh_port = int(data.get('ssh_port') or config_store.get_config('SSH_PORT') or 22)
     ssh_user = data.get('ssh_user') or config_store.get_config('SSH_USER')
-    ssh_pass = data.get('ssh_password') or ''
-    if not ssh_pass or ssh_pass == '••••••••':
-        ssh_pass = config_store.get_config('SSH_PASSWORD') or ''
+    ssh_pass = _resolve_secret(data.get('ssh_password'), 'SSH_PASSWORD')
     if not ssh_host or not ssh_user:
         return False, 'SSH Host and User are required'
     try:
@@ -125,7 +117,7 @@ def _test_ssh(data: dict) -> tuple[bool, str]:
             port=ssh_port,
             username=ssh_user,
             password=ssh_pass if ssh_pass else None,
-            timeout=5
+            timeout=5,
         )
         client.close()
         return True, f'SSH connection to {ssh_host}:{ssh_port} successful!'
@@ -133,13 +125,12 @@ def _test_ssh(data: dict) -> tuple[bool, str]:
         return False, f'SSH connection failed: {exc}'
 
 
-# Registry mapping service names to test functions
 CONNECTION_TESTERS: dict[str, callable] = {
-    'sonarr': _test_sonarr,
-    'radarr': _test_radarr,
+    'nzbgeek': _test_nzbgeek,
+    'usenet': _test_usenet,
+    'tmdb': _test_tmdb,
     'plex': _test_plex,
     'jellyfin': _test_jellyfin,
-    'nzbget': _test_nzbget,
     'ssh': _test_ssh,
 }
 
@@ -152,10 +143,9 @@ def test_connection(service: str, data: dict) -> tuple[bool, str]:
     return tester(data)
 
 
-# ── Generic connection status checker ─────────────────────────────────────────
+# ── Live connection status checkers ──────────────────────────────────────────
 
 def _check_service_status(url: str, headers: dict, endpoint: str, timeout: int = 2) -> dict:
-    """Generic connection status check for any HTTP service."""
     if not url:
         return {'status': 'Disconnected', 'ok': False}
     try:
@@ -166,18 +156,18 @@ def _check_service_status(url: str, headers: dict, endpoint: str, timeout: int =
     return {'status': status, 'ok': status == 'Connected'}
 
 
-def check_sonarr_status() -> dict:
-    url, key = get_sonarr_url(), get_sonarr_api_key()
+def check_nzbgeek_status() -> dict:
+    url, key = get_nzbgeek_url(), get_nzbgeek_api_key()
     if not url or not key:
         return {'status': 'Disconnected', 'ok': False}
-    return _check_service_status(url, {'X-Api-Key': key}, '/api/v3/system/status')
+    return {'status': 'Configured', 'ok': True}
 
 
-def check_radarr_status() -> dict:
-    url, key = get_radarr_url(), get_radarr_api_key()
-    if not url or not key:
+def check_usenet_status() -> dict:
+    host = (config_store.get_config('NNTP_HOST') or '').strip()
+    if not host:
         return {'status': 'Disconnected', 'ok': False}
-    return _check_service_status(url, {'X-Api-Key': key}, '/api/v3/system/status')
+    return {'status': 'Configured', 'ok': True}
 
 
 def check_plex_status() -> dict:

@@ -8,51 +8,132 @@
 
     <form id="config-form" onsubmit="event.preventDefault(); saveConfiguration();">
 
-        <!-- 1. Sonarr Connection -->
+        <!-- 1. NZBgeek Indexer -->
         <details class="config-card">
             <summary class="config-card-summary">
-                <span class="section-title" style="margin-bottom:0;">📺 Sonarr Connection</span>
+                <span class="section-title" style="margin-bottom:0;">🔍 NZBgeek Indexer (Newznab)</span>
             </summary>
             <div class="config-card-body">
                 <div class="form-grid">
                     <div class="form-group">
-                        <label class="form-label">Sonarr URL</label>
-                        <input type="text" class="form-input" id="cfg-SONARR_URL" value="{{ cfg.SONARR_URL }}" placeholder="http://localhost:8989">
+                        <label class="form-label">Indexer URL</label>
+                        <input type="text" class="form-input" id="cfg-NZBGEEK_URL" value="{{ cfg.NZBGEEK_URL }}" placeholder="https://api.nzbgeek.info">
                     </div>
                     <div class="form-group">
                         <label class="form-label">API Key</label>
-                        <input type="password" class="form-input" id="cfg-SONARR_API_KEY" value="{{ '••••••••' if cfg.SONARR_API_KEY else '' }}" placeholder="Sonarr API Key">
+                        <input type="password" class="form-input" id="cfg-NZBGEEK_API_KEY" value="{{ '••••••••' if cfg.NZBGEEK_API_KEY else '' }}" placeholder="NZBgeek API Key">
                     </div>
                 </div>
                 <div style="margin-top:14px; display:flex; justify-content:flex-end;">
-                    <button type="button" class="btn-clear" id="btn-test-sonarr" onclick="testConnection('sonarr')">Test Connection</button>
+                    <button type="button" class="btn-clear" id="btn-test-nzbgeek" onclick="testConnection('nzbgeek')">Test Connection</button>
                 </div>
             </div>
         </details>
 
-        <!-- 2. Radarr Connection -->
+        <!-- 2. Usenet Server (Built-in NNTP Downloader) -->
         <details class="config-card">
             <summary class="config-card-summary">
-                <span class="section-title" style="margin-bottom:0;">🍿 Radarr Connection</span>
+                <span class="section-title" style="margin-bottom:0;">📥 Usenet Server (Built-in Downloader)</span>
             </summary>
             <div class="config-card-body">
                 <div class="form-grid">
                     <div class="form-group">
-                        <label class="form-label">Radarr URL</label>
-                        <input type="text" class="form-input" id="cfg-RADARR_URL" value="{{ cfg.RADARR_URL }}" placeholder="http://localhost:7878">
+                        <label class="form-label">NNTP Host</label>
+                        <input type="text" class="form-input" id="cfg-NNTP_HOST" value="{{ cfg.NNTP_HOST }}" placeholder="news.newshosting.com">
                     </div>
                     <div class="form-group">
-                        <label class="form-label">API Key</label>
-                        <input type="password" class="form-input" id="cfg-RADARR_API_KEY" value="{{ '••••••••' if cfg.RADARR_API_KEY else '' }}" placeholder="Radarr API Key">
+                        <label class="form-label">Port</label>
+                        <input type="number" class="form-input" id="cfg-NNTP_PORT" value="{{ cfg.NNTP_PORT }}" placeholder="563">
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Username</label>
+                        <input type="text" class="form-input" id="cfg-NNTP_USERNAME" value="{{ cfg.NNTP_USERNAME }}" placeholder="Usenet Username">
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Password</label>
+                        <input type="password" class="form-input" id="cfg-NNTP_PASSWORD" value="{{ '••••••••' if cfg.NNTP_PASSWORD else '' }}" placeholder="Usenet Password">
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Use SSL / TLS</label>
+                        <select class="form-input" id="cfg-NNTP_SSL">
+                            <option value="true" {{ 'selected' if cfg.NNTP_SSL else '' }}>Enabled (Port 563 / 443)</option>
+                            <option value="false" {{ 'selected' if not cfg.NNTP_SSL else '' }}>Disabled (Plain NNTP)</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Connections</label>
+                        <input type="number" class="form-input" id="cfg-NNTP_CONNECTIONS" value="{{ cfg.NNTP_CONNECTIONS }}" min="1" max="30">
                     </div>
                 </div>
                 <div style="margin-top:14px; display:flex; justify-content:flex-end;">
-                    <button type="button" class="btn-clear" id="btn-test-radarr" onclick="testConnection('radarr')">Test Connection</button>
+                    <button type="button" class="btn-clear" id="btn-test-usenet" onclick="testConnection('usenet')">Test Connection</button>
                 </div>
             </div>
         </details>
 
-        <!-- 3. Plex Connection -->
+        <!-- 3. Metadata (TMDB for Movies; TVMaze needs no key) -->
+        <details class="config-card">
+            <summary class="config-card-summary">
+                <span class="section-title" style="margin-bottom:0;">🎞️ Movie Metadata (TMDB)</span>
+            </summary>
+            <div class="config-card-body">
+                <div class="form-grid">
+                    <div class="form-group" style="grid-column: 1 / -1;">
+                        <label class="form-label">TMDB API Key (v3)</label>
+                        <input type="password" class="form-input" id="cfg-TMDB_API_KEY" value="{{ '••••••••' if cfg.TMDB_API_KEY else '' }}" placeholder="Free API key from themoviedb.org">
+                        <span style="font-size:11px; color:var(--text-muted); font-family:var(--mono); margin-top:4px; display:block;">
+                            Used for searching Movies & resolving IMDB IDs. TV Shows use TVMaze automatically (no API key required).
+                        </span>
+                    </div>
+                </div>
+                <div style="margin-top:14px; display:flex; justify-content:flex-end;">
+                    <button type="button" class="btn-clear" id="btn-test-tmdb" onclick="testConnection('tmdb')">Test Connection</button>
+                </div>
+            </div>
+        </details>
+
+        <!-- 4. Release Selection & Quality Preferences -->
+        <details class="config-card">
+            <summary class="config-card-summary">
+                <span class="section-title" style="margin-bottom:0;">🎯 Release Selection & Junk Filter</span>
+            </summary>
+            <div class="config-card-body">
+                <div class="form-grid">
+                    <div class="form-group">
+                        <label class="form-label">Preferred Resolution</label>
+                        <select class="form-input" id="cfg-PREFERRED_RESOLUTION">
+                            <option value="2160p" {{ 'selected' if cfg.PREFERRED_RESOLUTION == '2160p' else '' }}>2160p (4K UHD)</option>
+                            <option value="1080p" {{ 'selected' if cfg.PREFERRED_RESOLUTION == '1080p' else '' }}>1080p (Full HD)</option>
+                            <option value="720p" {{ 'selected' if cfg.PREFERRED_RESOLUTION == '720p' else '' }}>720p (HD)</option>
+                            <option value="any" {{ 'selected' if cfg.PREFERRED_RESOLUTION == 'any' else '' }}>Any Resolution</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Preferred Audio</label>
+                        <select class="form-input" id="cfg-PREFERRED_AUDIO">
+                            <option value="any" {{ 'selected' if cfg.PREFERRED_AUDIO == 'any' else '' }}>Any Audio</option>
+                            <option value="atmos" {{ 'selected' if cfg.PREFERRED_AUDIO == 'atmos' else '' }}>Atmos / TrueHD</option>
+                            <option value="dts" {{ 'selected' if cfg.PREFERRED_AUDIO == 'dts' else '' }}>DTS-HD / DTS-X / DTS</option>
+                            <option value="ddp" {{ 'selected' if cfg.PREFERRED_AUDIO == 'ddp' else '' }}>DDP / EAC3 / AC3 5.1</option>
+                            <option value="aac" {{ 'selected' if cfg.PREFERRED_AUDIO == 'aac' else '' }}>AAC / Stereo</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Max Episode Size (GB)</label>
+                        <input type="number" class="form-input" id="cfg-MAX_EPISODE_SIZE_GB" value="{{ cfg.MAX_EPISODE_SIZE_GB }}" min="1" max="100">
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Max Movie Size (GB)</label>
+                        <input type="number" class="form-input" id="cfg-MAX_MOVIE_SIZE_GB" value="{{ cfg.MAX_MOVIE_SIZE_GB }}" min="1" max="200">
+                    </div>
+                </div>
+                <span style="font-size:11px; color:var(--text-muted); font-family:var(--mono); margin-top:10px; display:block;">
+                    Junk filter always blocks CAM, TS, TELESYNC, SCREENER, HARDCODED, 3D, SAMPLE, passworded NZBs, and automatically retries the next-best release on failure.
+                </span>
+            </div>
+        </details>
+
+        <!-- 5. Plex Connection -->
         <details class="config-card">
             <summary class="config-card-summary">
                 <span class="section-title" style="margin-bottom:0;">🎬 Plex Connection</span>
@@ -74,7 +155,7 @@
             </div>
         </details>
 
-        <!-- 3b. Jellyfin Connection -->
+        <!-- 6. Jellyfin Connection -->
         <details class="config-card">
             <summary class="config-card-summary">
                 <span class="section-title" style="margin-bottom:0;">🪼 Jellyfin Connection</span>
@@ -96,68 +177,42 @@
             </div>
         </details>
 
-        <!-- 4. Usenet Downloader (NZBGet) -->
+        <!-- 7. Media Cleanup Policy -->
         <details class="config-card">
             <summary class="config-card-summary">
-                <span class="section-title" style="margin-bottom:0;">📥 Usenet Downloader (NZBGet)</span>
+                <span class="section-title" style="margin-bottom:0;">🧹 Media Cleanup & Rolling Window</span>
             </summary>
             <div class="config-card-body">
                 <div class="form-grid">
                     <div class="form-group" style="grid-column: 1 / -1;">
-                        <label class="form-label">NZBGet URL</label>
-                        <input type="text" class="form-input" id="cfg-NZBGET_URL" value="{{ cfg.NZBGET_URL }}" placeholder="http://localhost:6789">
-                    </div>
-                    <div class="form-group">
-                        <label class="form-label">Username</label>
-                        <input type="text" class="form-input" id="cfg-NZBGET_USERNAME" value="{{ cfg.NZBGET_USERNAME }}" placeholder="nzbget">
-                    </div>
-                    <div class="form-group">
-                        <label class="form-label">Password</label>
-                        <input type="password" class="form-input" id="cfg-NZBGET_PASSWORD" value="{{ '••••••••' if cfg.NZBGET_PASSWORD else '' }}" placeholder="NZBGet Password">
-                    </div>
-                </div>
-                <div style="margin-top:14px; display:flex; justify-content:flex-end;">
-                    <button type="button" class="btn-clear" id="btn-test-nzbget" onclick="testConnection('nzbget')">Test Connection</button>
-                </div>
-            </div>
-        </details>
-
-        <!-- 5. Media Cleanup Policy -->
-        <details class="config-card">
-            <summary class="config-card-summary">
-                <span class="section-title" style="margin-bottom:0;">🧹 Media Cleanup & Automation Policy</span>
-            </summary>
-            <div class="config-card-body">
-                <div class="form-grid">
-                    <div class="form-group" style="grid-column: 1 / -1;">
-                        <label class="form-label">Delete Watched Media Files (Sonarr &amp; Radarr)</label>
+                        <label class="form-label">Delete Watched Media Files</label>
                         <select class="form-input" id="cfg-DELETE_WATCHED_EPISODES">
                             <option value="true" {{ 'selected' if cfg.DELETE_WATCHED_EPISODES else '' }}>Enabled — delete file from disk after watching</option>
-                            <option value="false" {{ 'selected' if not cfg.DELETE_WATCHED_EPISODES else '' }}>Disabled — unmonitor only, keep file on disk</option>
+                            <option value="false" {{ 'selected' if not cfg.DELETE_WATCHED_EPISODES else '' }}>Disabled — keep file on disk</option>
                         </select>
                         <span style="font-size:11px; color:var(--text-muted); font-family:var(--mono); margin-top:4px; display:block;">
-                            Automatically unmonitors & deletes watched TV episodes (Sonarr) and movies (Radarr) when detected in Plex history.
+                            Automatically deletes watched TV episodes and movies directly from disk when detected in Plex / Jellyfin.
                         </span>
                     </div>
                     <div class="form-group">
-                        <label class="form-label">Sonarr Rolling Window (Episodes)</label>
+                        <label class="form-label">Rolling Window (Episodes)</label>
                         <input type="number" class="form-input" id="cfg-ROLLING_WINDOW" value="{{ cfg.ROLLING_WINDOW }}" min="1" max="50">
                         <span style="font-size:11px; color:var(--text-muted); font-family:var(--mono); margin-top:4px; display:block;">
-                            Number of upcoming episodes to monitor and search ahead in Sonarr.
+                            Number of upcoming episodes to search and download ahead automatically.
                         </span>
                     </div>
                     <div class="form-group">
-                        <label class="form-label">Plex Media Scan Interval (Seconds)</label>
+                        <label class="form-label">Media Scan Interval (Seconds)</label>
                         <input type="number" class="form-input" id="cfg-PLEX_WATCH_INTERVAL" value="{{ cfg.PLEX_WATCH_INTERVAL }}">
                         <span style="font-size:11px; color:var(--text-muted); font-family:var(--mono); margin-top:4px; display:block;">
-                            Frequency in seconds to scan Plex library for newly watched media.
+                            Frequency in seconds to scan Plex / Jellyfin for newly watched media.
                         </span>
                     </div>
                 </div>
             </div>
         </details>
 
-        <!-- 6. Power Saver & SSH Host Shutdown -->
+        <!-- 8. Power Saver & SSH Host Shutdown -->
         <details class="config-card">
             <summary class="config-card-summary">
                 <span class="section-title" style="margin-bottom:0;">⚡ Power Saver & Host Shutdown (SSH)</span>
@@ -170,9 +225,6 @@
                         <option value="dry_run" {{ 'selected' if cfg.PLEX_SHUTDOWN_MODE in ['dry_run', True] or not cfg.PLEX_SHUTDOWN_MODE else '' }}>Dry Run — log shutdown triggers without turning off host (Safe Mode)</option>
                         <option value="enabled" {{ 'selected' if cfg.PLEX_SHUTDOWN_MODE in ['enabled', False] else '' }}>Enabled — perform real host shutdown via SSH when idle threshold reached</option>
                     </select>
-                    <span style="font-size:11px; color:var(--text-muted); font-family:var(--mono); margin-top:4px; display:block;">
-                        Controls whether idle monitoring polls Plex/SSH and executes actual host shutdown commands.
-                    </span>
                 </div>
 
                 <p style="font-size:11px; font-family:var(--mono); color:var(--accent); margin-bottom:8px; text-transform:uppercase; letter-spacing:0.5px;">Idle Detection Thresholds</p>
@@ -212,7 +264,7 @@
             </div>
         </details>
 
-        <!-- 7. Storage Directory Paths -->
+        <!-- 9. Storage Directory Paths -->
         <details class="config-card">
             <summary class="config-card-summary">
                 <span class="section-title" style="margin-bottom:0;">📁 Storage & Directory Paths</span>

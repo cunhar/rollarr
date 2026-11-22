@@ -1,0 +1,194 @@
+"""
+integrations/nzbgeek.py
+-----------------------
+Newznab API client tailored for NZBgeek (works with any standard Newznab endpoint).
+Parses XML search results using Python's stdlib xml.etree.ElementTree.
+"""
+from __future__ import annotations
+
+import re
+import logging
+import xml.etree.ElementTree as ET
+from typing import Any
+
+import requests
+
+from config_store import get_config
+
+logger = logging.getLogger(__name__)
+
+NEWZNAB_NS = '{http://www.newznab.com/DTD/2010/feeds/attributes/}'
+
+
+def get_nzbgeek_url() -> str:
+    return (get_config('NZBGEEK_URL') or 'https://api.nzbgeek.info').rstrip('/')
+
+
+def get_nzbgeek_api_key() -> str:
+    return (get_config('NZBGEEK_API_KEY') or '').strip()
+
+
+def _parse_newznab_xml(xml_text: str) -> list[dict[str, Any]]:
+    """Parse Newznab RSS XML into a list of normalized release candidate dicts."""
+    items: list[dict[str, Any]] = []
+    try:
+        root = ET.fromstring(xml_text)
+    except ET.ParseError as exc:
+        logger.warning(f"[NZBgeek] Failed parsing Newznab XML: {exc}")
+        return items
+
+    for item in root.findall('.//item'):
+        title = (item.findtext('title') or '').strip()
+        link = (item.findtext('link') or '').strip()
+        guid = (item.findtext('guid') or link or title).strip()
+        pub_date = (item.findtext('pubDate') or '').strip()
+
+        enclosure = item.find('enclosure')
+        size_bytes = 0
+        if enclosure is not None:
+            if not link and enclosure.attrib.get('url'):
+                link = enclosure.attrib['url'].strip()
+            try:
+                size_bytes = int(enclosure.attrib.get('length') or 0)
+            except (ValueError, TypeError):
+                size_bytes = 0
+
+        attrs: dict[str, str] = {}
+        for attr in item.findall(f'{NEWZNAB_NS}attr'):
+            name = (attr.attrib.get('name') or '').lower()
+            val = attr.attrib.get('value') or ''
+            if name:
+                attrs[name] = val
+
+        # Also handle non-namespaced <attr> fallback
+        if not attrs:
+            for child in item:
+                if child.tag.endswith('attr'):
+                    name = (child.attrib.get('name') or '').lower()
+                    val = child.attrib.get('value') or ''
+                    if name:
+                        attrs[name] = val
+
+        if not size_bytes and 'size' in attrs:
+            try:
+                size_bytes = int(attrs['size'])
+            except (ValueError, TypeError):
+                size_bytes = 0
+
+        try:
+            grabs = int(attrs.get('grabs') or 0)
+        except (ValueError, TypeError):
+            grabs = 0
+
+        passworded = attrs.get('password', '0') in ('1', 'true', 'yes')
+
+        if title and link:
+            items.append({
+                'title': title,
+                'nzb_url': link,
+                'guid': guid,
+                'size_bytes': size_bytes,
+                'grabs': grabs,
+                'passworded': passworded,
+                'pub_date': pub_date,
+                'attrs': attrs,
+            })
+
+    return items
+
+
+def _query(params: dict[str, Any]) -> list[dict[str, Any]]:
+    url = get_nzbgeek_url()
+    api_key = get_nzbgeek_api_key()
+    if not url or not api_key:
+        logger.warning("[NZBgeek] URL or API key not configured")
+        return []
+
+    endpoint = f"{url}/api" if not url.endswith('/api') else url
+    full_params = {'apikey': api_key, 'limit': 100, **params}
+    try:
+        resp = requests.get(endpoint, params=full_params, timeout=15)
+        resp.raise_for_status()
+        return _parse_newznab_xml(resp.text)
+    except Exception as exc:
+        logger.warning(f"[NZBgeek] Search request failed ({params.get('t')}): {exc}")
+        return []
+
+
+def search_episode(
+    show_title: str,
+    season: int,
+    episode: int,
+    tvdb_id: int | None = None,
+    imdb_id: str | None = None,
+) -> list[dict[str, Any]]:
+    """
+    Search NZBgeek for a specific TV episode.
+    Prefers TVDB ID lookup (exact, like Sonarr), falling back to text query.
+    """
+    results: list[dict[str, Any]] = []
+    if tvdb_id:
+        results = _query({
+            't': 'tvsearch',
+            'tvdbid': int(tvdb_id),
+            'season': int(season),
+            'ep': int(episode),
+        })
+    if not results and imdb_id:
+        clean_imdb = re.sub(r'^tt', '', str(imdb_id))
+        if clean_imdb.isdigit():
+            results = _query({
+                't': 'tvsearch',
+                'imdbid': clean_imdb,
+                'season': int(season),
+                'ep': int(episode),
+            })
+    if not results:
+        results = _query({
+            't': 'tvsearch',
+            'q': show_title,
+            'season': int(season),
+            'ep': int(episode),
+        })
+    if not results:
+        ep_tag = f"S{int(season):02d}E{int(episode):02d}"
+        results = _query({
+            't': 'search',
+            'q': f"{show_title} {ep_tag}",
+        })
+    logger.info(f"[NZBgeek] Episode search '{show_title}' S{season:02d}E{episode:02d} -> {len(results)} candidate(s)")
+    return results
+
+
+def search_movie(
+    title: str,
+    year: int | None = None,
+    imdb_id: str | None = None,
+) -> list[dict[str, Any]]:
+    """
+    Search NZBgeek for a movie.
+    Prefers IMDB ID lookup (exact, like Radarr), falling back to title + year query.
+    """
+    results: list[dict[str, Any]] = []
+    if imdb_id:
+        clean_imdb = re.sub(r'^tt', '', str(imdb_id))
+        if clean_imdb.isdigit():
+            results = _query({
+                't': 'movie',
+                'imdbid': clean_imdb,
+            })
+    if not results:
+        q = f"{title} {year}" if year else title
+        results = _query({
+            't': 'movie',
+            'q': q,
+        })
+    logger.info(f"[NZBgeek] Movie search '{title}' ({year or ''}) -> {len(results)} candidate(s)")
+    return results
+
+
+def download_nzb_bytes(nzb_url: str) -> bytes:
+    """Fetch the raw .nzb XML payload from NZBgeek."""
+    resp = requests.get(nzb_url, timeout=20)
+    resp.raise_for_status()
+    return resp.content

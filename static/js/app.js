@@ -4,7 +4,7 @@
  * Main UI logic, tab switching, polling loop, DOM rendering, and toast alerts.
  */
 
-const VALID_TABS = ['dashboard', 'disks', 'activity', 'config'];
+const VALID_TABS = ['dashboard', 'library', 'disks', 'activity', 'config'];
 const REFRESH_MS = 10000;
 
 let shutdownConfirmTimer = null;
@@ -28,6 +28,10 @@ function switchTab(name, updateHash = true) {
     const panel = document.getElementById('panel-' + name);
     if (btn) btn.classList.add('active');
     if (panel) panel.classList.add('active');
+
+    if (name === 'library') {
+        loadLibrary();
+    }
 
     if (updateHash && window.location.hash !== '#' + name) {
         history.pushState(null, null, '#' + name);
@@ -66,18 +70,22 @@ function renderStreamCard(st) {
     </div>`;
 }
 
-function renderNZBGetCard(d) {
+function renderDownloadCard(d) {
     const statusBadge = d.status === 'DOWNLOADING' ? 'badge-green' : (d.status === 'PAUSED' ? 'badge-amber' : 'badge-dim');
-    const meta = d.remaining_mb > 0 ? (d.size_mb - d.remaining_mb).toFixed(1) + ' / ' + d.size_mb + ' MB' : d.size_mb + ' MB';
+    const meta = d.size_mb > 0
+        ? (d.size_mb - d.remaining_mb).toFixed(1) + ' / ' + d.size_mb + ' MB'
+        : 'Starting...';
     return `
     <div class="stream-card">
         <div class="stream-header">
             <div class="stream-user">
-                <span class="stream-user-name" style="word-break:break-all;">${escapeHtml(d.name)}</span>
+                <span class="stream-user-name" style="word-break:break-all;">${escapeHtml(d.media_label || d.name)}</span>
+                <span class="stream-device" style="word-break:break-all;">${escapeHtml(d.name)}</span>
             </div>
             <div class="stream-badges">
                 <span class="badge ${statusBadge}">${escapeHtml(d.status)}</span>
                 ${d.category ? `<span class="badge badge-dim">${escapeHtml(d.category)}</span>` : ''}
+                <button class="btn-clear" style="padding:2px 8px; font-size:10px;" onclick="cancelDownload(${d.id})">Cancel</button>
             </div>
         </div>
         <div class="stream-progress-wrap">
@@ -182,7 +190,7 @@ function formatShutdownWatcher(s) {
         detail = `Shutdown paused — ${streamStr}`;
     } else if (s.nzbget_active) {
         label = `0 of ${idleNeeded} idle polls (Paused)`;
-        detail = `Shutdown paused — ${s.nzbget_detail || 'NZBGet active'}`;
+        detail = `Shutdown paused — ${s.nzbget_detail || 'Usenet download active'}`;
     } else if (s.plex_activity_active) {
         label = `0 of ${idleNeeded} idle polls (Paused)`;
         detail = `Shutdown paused — ${s.plex_activity_detail || 'Media server background task running'}`;
@@ -284,52 +292,206 @@ function updateEpisodePoller(s) {
 
 function updateConnectionPills(d) {
     if (!d) return;
-    if (d.sonarr) {
-        const p = el('pip-sonarr');
-        if (p) p.className = 'conn-pip ' + (d.sonarr.ok ? 'ok' : (d.sonarr.status.includes('Error') ? 'warn' : 'err'));
-    }
-    if (d.radarr) {
-        const p = el('pip-radarr');
-        if (p) p.className = 'conn-pip ' + (d.radarr.ok ? 'ok' : (d.radarr.status.includes('Error') ? 'warn' : 'err'));
-    }
-    if (d.plex) {
-        const p = el('pip-plex');
-        if (p) p.className = 'conn-pip ' + (d.plex.ok ? 'ok' : (d.plex.status.includes('Error') ? 'warn' : 'err'));
-    }
-    if (d.jellyfin) {
-        const p = el('pip-jellyfin');
-        if (p) p.className = 'conn-pip ' + (d.jellyfin.ok ? 'ok' : (d.jellyfin.status.includes('Error') ? 'warn' : 'err'));
-    }
+    ['nzbgeek', 'usenet', 'plex', 'jellyfin'].forEach(k => {
+        if (d[k]) {
+            const p = el(`pip-${k}`);
+            if (p) {
+                p.className = 'conn-pip ' + (d[k].ok ? 'ok' : ((d[k].status || '').includes('Error') ? 'warn' : 'err'));
+            }
+        }
+    });
 }
 
-function updateNZBGet(s) {
+function updateDownloads(s) {
     if (!s) return;
-    const pip = el('pip-nzbget');
+    const pip = el('pip-usenet');
     if (pip) {
-        pip.className = 'conn-pip ' + (s.connected ? 'ok' : 'err');
+        pip.className = 'conn-pip ' + (s.enabled ? 'ok' : 'err');
     }
 
-    const container = el('nzbget-container');
+    const container = el('downloads-container');
     if (container) {
-        if (!s.enabled || !s.connected || !s.downloads || s.downloads.length === 0) {
+        if (!s.downloads || s.downloads.length === 0) {
             container.innerHTML = '';
         } else {
+            const toggleBtn = s.download_paused
+                ? `<button class="btn-clear" onclick="resumeDownloads()">Resume</button>`
+                : `<button class="btn-clear" onclick="pauseDownloads()">Pause</button>`;
             const html = [
                 `<div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
-                    <p class="section-title" style="margin-bottom:0;">Active Downloads (NZBGet)</p>
-                    <span style="font-family:var(--mono); font-size:11px; color:var(--green); font-weight:600;">${escapeHtml(s.download_rate)}</span>
+                    <p class="section-title" style="margin-bottom:0;">Active Downloads</p>
+                    <div style="display:flex; align-items:center; gap:10px;">
+                        <span style="font-family:var(--mono); font-size:11px; color:var(--green); font-weight:600;">${escapeHtml(s.download_rate)}</span>
+                        ${toggleBtn}
+                    </div>
                 </div>`
             ];
-            s.downloads.forEach(d => html.push(renderNZBGetCard(d)));
+            s.downloads.forEach(d => html.push(renderDownloadCard(d)));
             container.innerHTML = html.join('');
         }
     }
 }
 
+function pauseDownloads() {
+    Api.pauseDownloads().then(() => {
+        showToast('Downloads paused', 'info');
+        pollAll();
+    });
+}
+
+function resumeDownloads() {
+    Api.resumeDownloads().then(() => {
+        showToast('Downloads resumed', 'ok');
+        pollAll();
+    });
+}
+
+function cancelDownload(id) {
+    Api.cancelDownload(id).then(() => {
+        showToast('Download cancelled', 'info');
+        pollAll();
+    });
+}
+
+window.pauseDownloads = pauseDownloads;
+window.resumeDownloads = resumeDownloads;
+window.cancelDownload = cancelDownload;
+
+
+// ── Search & Library ─────────────────────────────────────────────────────────
+
+function searchMedia() {
+    const type = el('search-media-type').value;
+    const query = (el('search-media-query').value || '').trim();
+    const btn = el('btn-search-media');
+    const container = el('search-results-container');
+    if (!query) return;
+
+    if (btn) {
+        btn.disabled = true;
+        btn.textContent = 'Searching...';
+    }
+    container.innerHTML = '<div class="no-logs">Searching...</div>';
+
+    Api.searchMedia(type, query)
+        .then(({ ok, data }) => {
+            if (!ok) {
+                showToast(data.message || 'Search failed', 'err');
+                container.innerHTML = '';
+                return;
+            }
+            const results = data.results || [];
+            if (results.length === 0) {
+                container.innerHTML = '<div class="no-logs">No results found.</div>';
+                return;
+            }
+            container.innerHTML = results.map(item => `
+                <div class="media-card">
+                    ${item.poster_url ? `<img class="media-poster" src="${escapeHtml(item.poster_url)}" alt="">` : `<div class="media-poster media-poster-placeholder">?</div>`}
+                    <div class="media-card-info">
+                        <div class="media-card-title">${escapeHtml(item.title)} ${item.year ? `<span class="media-year">(${item.year})</span>` : ''}</div>
+                        <div class="media-card-overview">${escapeHtml((item.overview || '').slice(0, 120))}</div>
+                        <button class="btn-clear" onclick="addLibraryItem('${escapeHtml(type)}', ${item.id}, this)">Add & Download</button>
+                    </div>
+                </div>
+            `).join('');
+        })
+        .catch(() => {
+            showToast('Search request failed', 'err');
+            container.innerHTML = '';
+        })
+        .finally(() => {
+            if (btn) {
+                btn.disabled = false;
+                btn.textContent = 'Search';
+            }
+        });
+}
+
+function addLibraryItem(type, id, btnEl) {
+    if (btnEl) {
+        btnEl.disabled = true;
+        btnEl.textContent = 'Adding...';
+    }
+    Api.addMedia(type, id)
+        .then(({ ok, data }) => {
+            showToast(data.message || 'Added to library', ok ? 'ok' : 'err');
+            if (btnEl) btnEl.textContent = ok ? 'Added ✓' : 'Retry';
+            if (btnEl && !ok) btnEl.disabled = false;
+            loadLibrary();
+            setTimeout(pollAll, 500);
+        })
+        .catch(() => {
+            showToast('Failed to add media', 'err');
+            if (btnEl) {
+                btnEl.disabled = false;
+                btnEl.textContent = 'Add & Download';
+            }
+        });
+}
+
+function deleteLibraryItem(type, id) {
+    Api.deleteLibraryItem(type, id).then(() => {
+        showToast('Removed from tracked library', 'info');
+        loadLibrary();
+    });
+}
+
+function loadLibrary() {
+    Api.fetchLibrary().then(data => {
+        if (!data) return;
+        const showsEl = el('library-shows-container');
+        const moviesEl = el('library-movies-container');
+
+        if (showsEl) {
+            const shows = data.shows || [];
+            if (shows.length === 0) {
+                showsEl.innerHTML = '<div class="no-logs">No tracked TV shows yet.</div>';
+            } else {
+                showsEl.innerHTML = shows.map(s => `
+                    <div class="library-row">
+                        <div>
+                            <strong>${escapeHtml(s.title)}</strong>
+                            ${s.year ? `<span class="media-year">(${s.year})</span>` : ''}
+                            <span class="badge badge-green" style="margin-left:8px;">${escapeHtml(s.status || 'active')}</span>
+                        </div>
+                        <button class="btn-clear" onclick="deleteLibraryItem('tv', ${s.id})">Remove</button>
+                    </div>
+                `).join('');
+            }
+        }
+
+        if (moviesEl) {
+            const movies = data.movies || [];
+            if (movies.length === 0) {
+                moviesEl.innerHTML = '<div class="no-logs">No tracked movies yet.</div>';
+            } else {
+                moviesEl.innerHTML = movies.map(m => `
+                    <div class="library-row">
+                        <div>
+                            <strong>${escapeHtml(m.title)}</strong>
+                            ${m.year ? `<span class="media-year">(${m.year})</span>` : ''}
+                            <span class="badge badge-dim" style="margin-left:8px;">${escapeHtml(m.status || 'wanted')}</span>
+                        </div>
+                        <button class="btn-clear" onclick="deleteLibraryItem('movie', ${m.id})">Remove</button>
+                    </div>
+                `).join('');
+            }
+        }
+    });
+}
+
+window.searchMedia = searchMedia;
+window.addLibraryItem = addLibraryItem;
+window.deleteLibraryItem = deleteLibraryItem;
+window.loadLibrary = loadLibrary;
+
+
+// ── Disk, Activity & Polling ─────────────────────────────────────────────────
+
 function renderDiskSpace(data) {
     const grid = el('disk-grid');
     if (!grid || !data || !data.disks) return;
-
     grid.innerHTML = Object.entries(data.disks).map(([key, d]) => renderDiskSpaceCell(d)).join('');
 }
 
@@ -343,7 +505,6 @@ function updateActivityLog(logs) {
         return;
     }
 
-    // Preserve open <details> state across refreshes
     const openDetailsKeys = new Set();
     container.querySelectorAll('.log-entry').forEach(entry => {
         const details = entry.querySelector('details');
@@ -384,7 +545,7 @@ function pollAll() {
     Api.fetchConnectionStatus().then(d => { if (d) updateConnectionPills(d); });
     Api.fetchPlexStatus().then(d => { if (d) updateShutdownWatcher(d); });
     Api.fetchPollerStatus().then(d => { if (d) updateEpisodePoller(d); });
-    Api.fetchNZBGetStatus().then(d => { if (d) updateNZBGet(d); });
+    Api.fetchDownloadsStatus().then(d => { if (d) updateDownloads(d); });
     Api.fetchActivityLogs().then(d => { if (d) updateActivityLog(d); });
     Api.fetchDiskSpace().then(d => { if (d) renderDiskSpace(d); });
 }
@@ -514,15 +675,21 @@ function saveConfiguration() {
     }
 
     const payload = {
-        SONARR_URL: el('cfg-SONARR_URL').value,
-        SONARR_API_KEY: el('cfg-SONARR_API_KEY').value,
+        NZBGEEK_URL: el('cfg-NZBGEEK_URL').value,
+        NZBGEEK_API_KEY: el('cfg-NZBGEEK_API_KEY').value,
+        NNTP_HOST: el('cfg-NNTP_HOST').value,
+        NNTP_PORT: parseInt(el('cfg-NNTP_PORT').value) || 563,
+        NNTP_SSL: el('cfg-NNTP_SSL').value === 'true',
+        NNTP_USERNAME: el('cfg-NNTP_USERNAME').value,
+        NNTP_PASSWORD: el('cfg-NNTP_PASSWORD').value,
+        NNTP_CONNECTIONS: parseInt(el('cfg-NNTP_CONNECTIONS').value) || 8,
+        TMDB_API_KEY: el('cfg-TMDB_API_KEY').value,
+        PREFERRED_RESOLUTION: el('cfg-PREFERRED_RESOLUTION').value,
+        PREFERRED_AUDIO: el('cfg-PREFERRED_AUDIO').value,
+        MAX_EPISODE_SIZE_GB: parseInt(el('cfg-MAX_EPISODE_SIZE_GB').value) || 8,
+        MAX_MOVIE_SIZE_GB: parseInt(el('cfg-MAX_MOVIE_SIZE_GB').value) || 25,
         ROLLING_WINDOW: parseInt(el('cfg-ROLLING_WINDOW').value) || 3,
         DELETE_WATCHED_EPISODES: el('cfg-DELETE_WATCHED_EPISODES').value === 'true',
-        RADARR_URL: el('cfg-RADARR_URL').value,
-        RADARR_API_KEY: el('cfg-RADARR_API_KEY').value,
-        NZBGET_URL: el('cfg-NZBGET_URL').value,
-        NZBGET_USERNAME: el('cfg-NZBGET_USERNAME').value,
-        NZBGET_PASSWORD: el('cfg-NZBGET_PASSWORD').value,
         PLEX_URL: el('cfg-PLEX_URL').value,
         PLEX_TOKEN: el('cfg-PLEX_TOKEN').value,
         JELLYFIN_URL: el('cfg-JELLYFIN_URL').value,
@@ -531,7 +698,6 @@ function saveConfiguration() {
         PLEX_POLL_INTERVAL: parseInt(el('cfg-PLEX_POLL_INTERVAL').value) || 1200,
         PLEX_IDLE_POLLS: parseInt(el('cfg-PLEX_IDLE_POLLS').value) || 3,
         PLEX_SHUTDOWN_MODE: el('cfg-PLEX_SHUTDOWN_MODE') ? el('cfg-PLEX_SHUTDOWN_MODE').value : 'dry_run',
-        PLEX_SHUTDOWN_DRY_RUN: el('cfg-PLEX_SHUTDOWN_MODE') ? el('cfg-PLEX_SHUTDOWN_MODE').value === 'dry_run' : true,
         SSH_HOST: el('cfg-SSH_HOST').value,
         SSH_PORT: parseInt(el('cfg-SSH_PORT').value) || 22,
         SSH_USER: el('cfg-SSH_USER').value,
@@ -572,16 +738,22 @@ function testConnection(service) {
     }
 
     let params = {};
-    if (service === 'sonarr') {
-        params = { url: el('cfg-SONARR_URL').value, api_key: el('cfg-SONARR_API_KEY').value };
-    } else if (service === 'radarr') {
-        params = { url: el('cfg-RADARR_URL').value, api_key: el('cfg-RADARR_API_KEY').value };
+    if (service === 'nzbgeek') {
+        params = { url: el('cfg-NZBGEEK_URL').value, api_key: el('cfg-NZBGEEK_API_KEY').value };
+    } else if (service === 'usenet') {
+        params = {
+            host: el('cfg-NNTP_HOST').value,
+            port: parseInt(el('cfg-NNTP_PORT').value) || 563,
+            ssl: el('cfg-NNTP_SSL').value === 'true',
+            username: el('cfg-NNTP_USERNAME').value,
+            password: el('cfg-NNTP_PASSWORD').value
+        };
+    } else if (service === 'tmdb') {
+        params = { api_key: el('cfg-TMDB_API_KEY').value };
     } else if (service === 'plex') {
         params = { url: el('cfg-PLEX_URL').value, token: el('cfg-PLEX_TOKEN').value };
     } else if (service === 'jellyfin') {
         params = { url: el('cfg-JELLYFIN_URL').value, api_key: el('cfg-JELLYFIN_API_KEY').value };
-    } else if (service === 'nzbget') {
-        params = { url: el('cfg-NZBGET_URL').value, username: el('cfg-NZBGET_USERNAME').value, password: el('cfg-NZBGET_PASSWORD').value };
     } else if (service === 'ssh') {
         params = {
             ssh_host: el('cfg-SSH_HOST').value,
@@ -640,11 +812,8 @@ function buildServiceUrl(configuredUrl) {
 
 function updatePillLinks(urls) {
     const mappings = {
-        sonarr:   urls.SONARR_URL || urls.sonarr,
-        radarr:   urls.RADARR_URL || urls.radarr,
         plex:     urls.PLEX_URL || urls.plex,
         jellyfin: urls.JELLYFIN_URL || urls.jellyfin,
-        nzbget:   urls.NZBGET_URL || urls.nzbget
     };
     for (const [key, rawUrl] of Object.entries(mappings)) {
         const pillEl = el(`pill-${key}`);
@@ -665,5 +834,6 @@ window.addEventListener('hashchange', handleHashChange);
 window.addEventListener('DOMContentLoaded', () => {
     handleHashChange();
     pollAll();
+    loadLibrary();
     setInterval(pollAll, REFRESH_MS);
 });

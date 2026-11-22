@@ -842,3 +842,82 @@ body {
     .toast-container { top: 50px; right: 50px; gap: 20px; }
     .toast { font-size: 24px; padding: 24px 38px; max-width: 750px; border-left-width: 8px; }
 }
+
+
+/* ── Library & Search Tab ───────────────────────────── */
+.search-bar-row {
+    display: flex;
+    gap: 10px;
+    margin-bottom: 18px;
+    flex-wrap: wrap;
+}
+.search-type-select {
+    width: 170px;
+    flex-shrink: 0;
+}
+.search-query-input {
+    flex: 1;
+    min-width: 200px;
+}
+.media-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+    gap: 12px;
+}
+.media-card {
+    display: flex;
+    gap: 12px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    padding: 12px;
+}
+.media-poster {
+    width: 64px;
+    height: 96px;
+    object-fit: cover;
+    background: var(--surface-2);
+    flex-shrink: 0;
+    border: 1px solid var(--border);
+}
+.media-poster-placeholder {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--text-sub);
+    font-family: var(--mono);
+}
+.media-card-info {
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    gap: 6px;
+    min-width: 0;
+}
+.media-card-title {
+    font-weight: 600;
+    color: var(--text);
+}
+.media-year {
+    color: var(--text-sub);
+    font-weight: 400;
+    font-family: var(--mono);
+    font-size: 11px;
+}
+.media-card-overview {
+    font-size: 11px;
+    color: var(--text-sub);
+    line-height: 1.4;
+}
+.media-list {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+.library-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    padding: 10px 14px;
+}

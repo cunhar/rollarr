@@ -2,21 +2,17 @@
 <div class="topbar">
     <div class="brand">
         <span class="brand-name">Rolarr</span>
-        <span class="brand-sub">Media Recycler & Power Saver</span>
+        <span class="brand-sub">Usenet Media Manager & Power Saver</span>
     </div>
     <div class="conn-pills">
-        <a class="conn-pill" id="pill-sonarr" target="_blank" rel="noopener noreferrer" title="Open Sonarr">
-            <span class="conn-pip {{ 'ok' if status_text == 'Connected' else ('warn' if 'Error' in status_text else 'err') }}" id="pip-sonarr"></span>
-            <span id="label-sonarr">Sonarr</span>
-        </a>
-        <a class="conn-pill" id="pill-radarr" target="_blank" rel="noopener noreferrer" title="Open Radarr">
-            <span class="conn-pip {{ 'ok' if radarr_status_text == 'Connected' else ('warn' if 'Error' in radarr_status_text else 'err') }}" id="pip-radarr"></span>
-            <span id="label-radarr">Radarr</span>
-        </a>
-        <a class="conn-pill" id="pill-nzbget" target="_blank" rel="noopener noreferrer" title="Open NZBGet">
-            <span class="conn-pip {{ 'ok' if nzbget_status.connected else 'err' }}" id="pip-nzbget"></span>
-            <span id="label-nzbget">NZBGet</span>
-        </a>
+        <span class="conn-pill" id="pill-nzbgeek" title="NZBgeek Indexer">
+            <span class="conn-pip {{ 'ok' if nzbgeek_conn.ok else 'err' }}" id="pip-nzbgeek"></span>
+            <span id="label-nzbgeek">NZBgeek</span>
+        </span>
+        <span class="conn-pill" id="pill-usenet" title="Usenet NNTP Downloader">
+            <span class="conn-pip {{ 'ok' if usenet_conn.ok else 'err' }}" id="pip-usenet"></span>
+            <span id="label-usenet">Usenet</span>
+        </span>
         <a class="conn-pill" id="pill-plex" target="_blank" rel="noopener noreferrer" title="Open Plex">
             <span class="conn-pip {{ 'ok' if plex_conn_text == 'Connected' else ('warn' if 'Error' in plex_conn_text else 'err') }}" id="pip-plex"></span>
             <span id="label-plex">Plex</span>
@@ -31,6 +27,7 @@
 <!-- Tab bar -->
 <div class="tabbar">
     <button class="tab-btn active" id="tab-dashboard" onclick="switchTab('dashboard')">Dashboard</button>
+    <button class="tab-btn" id="tab-library" onclick="switchTab('library')">Library</button>
     <button class="tab-btn" id="tab-disks" onclick="switchTab('disks')">
         <span class="tab-label-desktop">Disk Space</span>
         <span class="tab-label-mobile">Disk</span>

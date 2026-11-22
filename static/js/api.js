@@ -20,8 +20,48 @@ const Api = {
         return res.ok ? await res.json() : null;
     },
 
-    async fetchNZBGetStatus() {
-        const res = await fetch('/api/nzbget-status');
+    async fetchDownloadsStatus() {
+        const res = await fetch('/api/downloads-status');
+        return res.ok ? await res.json() : null;
+    },
+
+    async pauseDownloads() {
+        const res = await fetch('/api/downloads/pause', { method: 'POST' });
+        return res.ok ? await res.json() : null;
+    },
+
+    async resumeDownloads() {
+        const res = await fetch('/api/downloads/resume', { method: 'POST' });
+        return res.ok ? await res.json() : null;
+    },
+
+    async cancelDownload(id) {
+        const res = await fetch(`/api/downloads/${id}/cancel`, { method: 'POST' });
+        return res.ok ? await res.json() : null;
+    },
+
+    async searchMedia(type, query) {
+        const params = new URLSearchParams({ type, q: query });
+        const res = await fetch(`/api/search?${params.toString()}`);
+        return { ok: res.ok, data: await res.json() };
+    },
+
+    async fetchLibrary() {
+        const res = await fetch('/api/library');
+        return res.ok ? await res.json() : null;
+    },
+
+    async addMedia(type, id) {
+        const res = await fetch('/api/library/add', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ type, id })
+        });
+        return { ok: res.ok, data: await res.json() };
+    },
+
+    async deleteLibraryItem(type, id) {
+        const res = await fetch(`/api/library/${type}/${id}`, { method: 'DELETE' });
         return res.ok ? await res.json() : null;
     },
 

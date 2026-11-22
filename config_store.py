@@ -50,13 +50,19 @@ _cipher = Fernet(_get_or_create_key())
 # ── Default Configuration ─────────────────────────────────────────────────────
 
 DEFAULT_CONFIG = {
-    'SONARR_URL': 'http://localhost:8989',
-    'SONARR_API_KEY': '',
-    'RADARR_URL': 'http://localhost:7878',
-    'RADARR_API_KEY': '',
-    'NZBGET_URL': 'http://localhost:6789',
-    'NZBGET_USERNAME': 'nzbget',
-    'NZBGET_PASSWORD': '',
+    'NZBGEEK_URL': 'https://api.nzbgeek.info',
+    'NZBGEEK_API_KEY': '',
+    'TMDB_API_KEY': '',
+    'NNTP_HOST': '',
+    'NNTP_PORT': 563,
+    'NNTP_SSL': True,
+    'NNTP_USERNAME': '',
+    'NNTP_PASSWORD': '',
+    'NNTP_CONNECTIONS': 8,
+    'PREFERRED_RESOLUTION': '1080p',
+    'PREFERRED_AUDIO': 'any',
+    'MAX_EPISODE_SIZE_GB': 8,
+    'MAX_MOVIE_SIZE_GB': 25,
     'PLEX_URL': 'http://plex:32400',
     'PLEX_TOKEN': '',
     'JELLYFIN_URL': 'http://jellyfin:8096',
@@ -123,7 +129,7 @@ def _load_initial_config() -> dict[str, Any]:
     return config
 
 
-SECRET_KEYS = {'SONARR_API_KEY', 'RADARR_API_KEY', 'NZBGET_PASSWORD', 'PLEX_TOKEN', 'JELLYFIN_API_KEY', 'SSH_PASSWORD'}
+SECRET_KEYS = {'NZBGEEK_API_KEY', 'TMDB_API_KEY', 'NNTP_PASSWORD', 'PLEX_TOKEN', 'JELLYFIN_API_KEY', 'SSH_PASSWORD'}
 MASK_SENTINEL = '••••••••'
 
 

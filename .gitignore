@@ -152,3 +152,8 @@ history.json
 plex_poll_state.json
 *.log
 
+
+# Local SQLite database
+rolarr.db
+rolarr.db-wal
+rolarr.db-shm

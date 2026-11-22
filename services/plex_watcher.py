@@ -378,24 +378,24 @@ def _get_all_active_sessions() -> tuple[int | None, list[dict]]:
 
 
 def _has_active_downloads() -> tuple[bool, str]:
-    """Check if NZBGet is active (downloading or queued items)."""
+    """Check if Rolarr's built-in Usenet downloader has active or queued items."""
     try:
-        from integrations.nzbget import get_nzbget_status
-        nzb_st = get_nzbget_status()
-        if nzb_st.get('connected') and not nzb_st.get('download_paused', False):
-            dls = nzb_st.get('downloads', [])
-            rate_bps = nzb_st.get('download_rate_bps', 0)
+        from services.usenet_downloader import get_status
+        dl_st = get_status()
+        if dl_st.get('enabled') and not dl_st.get('download_paused', False):
+            dls = dl_st.get('downloads', [])
+            rate_bps = dl_st.get('download_rate_bps', 0)
             active_dls = [
-                d for d in dls 
-                if d.get('status') in ('DOWNLOADING', 'QUEUED', 'FETCHING', 'EXTRACTING', 'POST-PROCESSING')
+                d for d in dls
+                if d.get('status') in ('DOWNLOADING', 'QUEUED', 'VERIFYING', 'UNPACKING')
             ]
             if rate_bps > 0 or len(active_dls) > 0:
-                rate_str = nzb_st.get('download_rate', '')
+                rate_str = dl_st.get('download_rate', '')
                 count = len(active_dls) or len(dls)
-                detail = f"{count} NZBGet download(s) active" + (f" ({rate_str})" if rate_str else "")
+                detail = f"{count} Usenet download(s) active" + (f" ({rate_str})" if rate_bps > 0 and rate_str else "")
                 return True, detail
     except Exception as exc:
-        logger.warning(f"[PlexWatcher] Failed checking NZBGet status: {exc}")
+        logger.warning(f"[PlexWatcher] Failed checking Usenet downloader status: {exc}")
     return False, ""
 
 
@@ -509,9 +509,9 @@ def _ssh_shutdown(force: bool = False) -> tuple[bool, str]:
     resolved_key_path = _find_ssh_key(ssh_key_path)
 
     if ssh_password:
-        cmd = f'echo "{ssh_password}" | sudo -S docker stop -t 30 plex jellyfin || true; echo "{ssh_password}" | sudo -S shutdown -h now || sudo poweroff'
+        cmd = f'echo "{ssh_password}" | sudo -S shutdown -h now || sudo poweroff'
     else:
-        cmd = 'sudo docker stop -t 30 plex jellyfin || true; sudo shutdown -h now || sudo poweroff'
+        cmd = 'sudo shutdown -h now || sudo poweroff'
 
     if dry_run and not force:
         msg = f"[DRY-RUN] Would SSH {ssh_user}@{ssh_host}:{ssh_port} and run: {cmd}"
@@ -631,10 +631,10 @@ def _watcher_loop():
                 _update_state(**base, status='ok', stream_count=stream_count, active_streams=active_streams,
                               idle_streak=0, last_action=f"{now_ts} — {stream_count} stream(s) active, idle streak reset")
             elif has_dl:
-                logger.info(f"[PlexWatcher] {now_ts} — No Plex streams, but NZBGet downloads active ({dl_detail}). Idle streak reset.")
+                logger.info(f"[PlexWatcher] {now_ts} — No streams, but Usenet downloads active ({dl_detail}). Idle streak reset.")
                 idle_streak = 0
                 _update_state(**base, status='ok', stream_count=0, active_streams=[],
-                              idle_streak=0, last_action=f"{now_ts} — NZBGet active ({dl_detail}), idle streak reset")
+                              idle_streak=0, last_action=f"{now_ts} — Usenet active ({dl_detail}), idle streak reset")
             elif has_act:
                 logger.info(f"[PlexWatcher] {now_ts} — No streams/downloads, but Plex task active ({act_detail}). Idle streak reset.")
                 idle_streak = 0

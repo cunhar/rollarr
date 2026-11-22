@@ -1,0 +1,33 @@
+<!-- ══ LIBRARY & SEARCH TAB ═══════════════════════════════ -->
+<div class="tab-panel" id="panel-library">
+
+    <div class="tab-header-row">
+        <span class="section-title" style="margin-bottom:0;">Search & Add Media</span>
+    </div>
+
+    <form class="search-bar-row" onsubmit="event.preventDefault(); searchMedia();">
+        <select class="form-input search-type-select" id="search-media-type">
+            <option value="tv">TV Show (TVMaze)</option>
+            <option value="movie">Movie (TMDB)</option>
+        </select>
+        <input type="text" class="form-input search-query-input" id="search-media-query" placeholder="Search for a TV show or movie...">
+        <button type="submit" class="btn-clear" id="btn-search-media">Search</button>
+    </form>
+
+    <div id="search-results-container" class="media-grid"></div>
+
+    <div class="tab-header-row" style="margin-top:28px;">
+        <span class="section-title" style="margin-bottom:0;">Tracked TV Shows</span>
+    </div>
+    <div id="library-shows-container" class="media-list">
+        <div class="no-logs">No tracked TV shows yet.</div>
+    </div>
+
+    <div class="tab-header-row" style="margin-top:28px;">
+        <span class="section-title" style="margin-bottom:0;">Tracked Movies</span>
+    </div>
+    <div id="library-movies-container" class="media-list">
+        <div class="no-logs">No tracked movies yet.</div>
+    </div>
+
+</div>
