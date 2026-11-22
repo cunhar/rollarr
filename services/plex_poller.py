@@ -391,6 +391,9 @@ def _process_episode(item: dict) -> tuple[str, str]:
     if not show:
         return 'warning', f"{show_title} {ep_str} watched — {file_action}; show not found on TVMaze"
 
+    if show.get('id'):
+        db.update_show_watch_cursor(show['id'], season_num, episode_num)
+
     episodes = metadata.get_show_episodes(show['tvmaze_id'])
     aired = [e for e in episodes if e['aired']]
     upcoming = [e for e in aired if (e['season'], e['episode']) > (season_num, episode_num)]

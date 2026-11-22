@@ -111,6 +111,12 @@ def init_db():
                 failed_at  TEXT NOT NULL
             );
         """)
+        # Lightweight schema migration for episode watch-cursor columns
+        cols = {r['name'] for r in c.execute("PRAGMA table_info(shows)").fetchall()}
+        if 'last_watched_season' not in cols:
+            c.execute("ALTER TABLE shows ADD COLUMN last_watched_season INTEGER")
+        if 'last_watched_episode' not in cols:
+            c.execute("ALTER TABLE shows ADD COLUMN last_watched_episode INTEGER")
     logger.info(f"[DB] Initialized SQLite database at {DB_PATH}")
 
 
@@ -161,6 +167,23 @@ def get_show_by_tvmaze(tvmaze_id: int) -> dict[str, Any] | None:
     with _conn() as c:
         row = c.execute("SELECT * FROM shows WHERE tvmaze_id = ?", (tvmaze_id,)).fetchone()
         return dict(row) if row else None
+
+
+def update_show_watch_cursor(show_id: int, season: int, episode: int, force: bool = False):
+    """Advance (or set if force=True) the show's last watched (season, episode) cursor."""
+    with _conn() as c:
+        if not force:
+            row = c.execute(
+                "SELECT last_watched_season, last_watched_episode FROM shows WHERE id = ?",
+                (show_id,),
+            ).fetchone()
+            if row and row['last_watched_season'] is not None and row['last_watched_episode'] is not None:
+                if (int(season), int(episode)) <= (int(row['last_watched_season']), int(row['last_watched_episode'])):
+                    return
+        c.execute(
+            "UPDATE shows SET last_watched_season = ?, last_watched_episode = ? WHERE id = ?",
+            (int(season), int(episode), show_id),
+        )
 
 
 def delete_show(show_id: int) -> bool:

@@ -337,7 +337,7 @@ def _scan_show_episodes_on_disk(show_title: str) -> set[tuple[int, int]]:
 
 
 def get_show_episodes_status(show_id: int) -> dict[str, Any]:
-    """Return all seasons and episodes for a tracked show with on-disk / queued / unaired status."""
+    """Return all seasons and episodes for a tracked show with on-disk / queued / watched / unaired status."""
     show = db.get_show(show_id)
     if not show:
         return {'status': 'error', 'message': f'Show #{show_id} not found'}
@@ -353,15 +353,25 @@ def get_show_episodes_status(show_id: int) -> dict[str, Any]:
         and d.get('episode') is not None
     }
 
+    # Determine watch watermark: explicit last_watched cursor OR earliest episode on disk/queued
+    lw_s = show.get('last_watched_season')
+    lw_e = show.get('last_watched_episode')
+    explicit_cursor = (int(lw_s), int(lw_e)) if (lw_s is not None and lw_e is not None) else None
+    active_eps = on_disk | queued_set
+    earliest_active = min(active_eps) if active_eps else None
+
     seasons_map: dict[int, list[dict[str, Any]]] = {}
     for ep in episodes:
         s_num, e_num = ep['season'], ep['episode']
-        if (s_num, e_num) in on_disk:
+        cur_key = (s_num, e_num)
+        if cur_key in on_disk:
             ep_status = 'downloaded'
-        elif (s_num, e_num) in queued_set:
+        elif cur_key in queued_set:
             ep_status = 'queued'
         elif not ep['aired']:
             ep_status = 'unaired'
+        elif (explicit_cursor and cur_key <= explicit_cursor) or (earliest_active and cur_key < earliest_active):
+            ep_status = 'watched'
         else:
             ep_status = 'missing'
 
@@ -394,6 +404,11 @@ def queue_show_from(show_id: int, start_season: int = 1, start_episode: int = 1)
         return {'status': 'error', 'message': f'Show #{show_id} not found'}
 
     episodes = metadata.get_show_episodes(show['tvmaze_id'])
+    # Mark everything strictly before (start_season, start_episode) as watched
+    prior = [e for e in episodes if (e['season'], e['episode']) < (int(start_season), int(start_episode))]
+    if prior:
+        last_prior = prior[-1]
+        db.update_show_watch_cursor(show['id'], last_prior['season'], last_prior['episode'], force=True)
     aired = [
         e for e in episodes
         if e['aired'] and (e['season'], e['episode']) >= (int(start_season), int(start_episode))
