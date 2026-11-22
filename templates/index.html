@@ -7,10 +7,22 @@
 <div class="shell">
     {% include 'partials/topbar.html' %}
     {% include 'partials/tab_dashboard.html' %}
-    {% include 'partials/tab_library.html' %}
+    {% include 'partials/tab_shows.html' %}
+    {% include 'partials/tab_movies.html' %}
     {% include 'partials/tab_disk.html' %}
     {% include 'partials/tab_activity.html' %}
     {% include 'partials/tab_settings.html' %}
+</div>
+
+<!-- Shared Manual Release Picker Modal -->
+<div id="release-modal" class="modal-backdrop" style="display:none;" onclick="if(event.target===this) closeReleaseModal();">
+    <div class="modal-panel">
+        <div class="modal-header">
+            <span class="section-title" id="release-modal-title" style="margin-bottom:0;">Select Release</span>
+            <button class="btn-clear" onclick="closeReleaseModal()">Close</button>
+        </div>
+        <div id="release-modal-body" class="modal-body"></div>
+    </div>
 </div>
 
 <script src="{{ url_for('static', filename='js/api.js') }}"></script>

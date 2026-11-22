@@ -4,7 +4,7 @@
  * Main UI logic, tab switching, polling loop, DOM rendering, and toast alerts.
  */
 
-const VALID_TABS = ['dashboard', 'library', 'disks', 'activity', 'config'];
+const VALID_TABS = ['dashboard', 'shows', 'movies', 'disks', 'activity', 'config'];
 const REFRESH_MS = 10000;
 
 let shutdownConfirmTimer = null;
@@ -29,7 +29,7 @@ function switchTab(name, updateHash = true) {
     if (btn) btn.classList.add('active');
     if (panel) panel.classList.add('active');
 
-    if (name === 'library') {
+    if (name === 'shows' || name === 'movies') {
         loadLibrary();
     }
 

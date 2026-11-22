@@ -1,6 +1,16 @@
 <!-- ══ DASHBOARD TAB ══════════════════════════════════════ -->
 <div class="tab-panel active" id="panel-dashboard">
 
+    <!-- Search & Add Omnibar -->
+    <div class="tab-header-row">
+        <span class="section-title" style="margin-bottom:0;">Search & Add Media</span>
+    </div>
+    <form class="search-bar-row" onsubmit="event.preventDefault(); searchMedia();">
+        <input type="text" class="form-input search-query-input" id="search-media-query" placeholder="Search for a TV show or movie...">
+        <button type="submit" class="btn-clear" id="btn-search-media">Search</button>
+    </form>
+    <div id="search-results-container" style="margin-bottom:24px;"></div>
+
     <!-- Disk Space Guard Banner -->
     <div id="disk-guard-banner"></div>
 
