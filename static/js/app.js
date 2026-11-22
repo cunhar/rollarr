@@ -403,12 +403,27 @@ function _renderSearchCard(item, idx) {
         </div>`;
 }
 
+function clearSearch() {
+    const input = el('search-media-query');
+    const container = el('search-results-container');
+    const clearBtn = el('btn-clear-search');
+    if (input) input.value = '';
+    if (container) container.innerHTML = '';
+    if (clearBtn) clearBtn.style.display = 'none';
+    _lastSearchResults = [];
+}
+
 function searchMedia() {
     const query = (el('search-media-query').value || '').trim();
     const btn = el('btn-search-media');
+    const clearBtn = el('btn-clear-search');
     const container = el('search-results-container');
-    if (!query) return;
+    if (!query) {
+        clearSearch();
+        return;
+    }
 
+    if (clearBtn) clearBtn.style.display = '';
     if (btn) {
         btn.disabled = true;
         btn.textContent = 'Searching...';
@@ -848,6 +863,7 @@ function focusDashboardSearch() {
 }
 
 window.focusDashboardSearch = focusDashboardSearch;
+window.clearSearch = clearSearch;
 window.searchMedia = searchMedia;
 window.addLibraryItem = addLibraryItem;
 window.queueShowFrom = queueShowFrom;
