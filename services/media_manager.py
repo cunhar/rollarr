@@ -375,7 +375,7 @@ def get_show_episodes_status(show_id: int) -> dict[str, Any]:
         })
 
     seasons = []
-    for s_num in sorted(seasons_map.keys()):
+    for s_num in sorted(seasons_map.keys(), reverse=True):
         eps = seasons_map[s_num]
         seasons.append({
             'season': s_num,
