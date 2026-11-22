@@ -386,29 +386,50 @@ def list_active_downloads() -> list[dict[str, Any]]:
         return [dict(r) for r in rows]
 
 
-def move_download(download_id: int, direction: str) -> bool:
-    """Move a queued download one position 'up' or 'down' in the queue."""
+def move_download(download_id: int, direction: str) -> tuple[bool, int | None]:
+    """
+    Move a 'downloading' or 'queued' download one position 'up' or 'down'.
+    Returns (moved: bool, preempt_job_id: int | None).
+    If a queued item is moved above the currently downloading item (or the
+    downloading item is moved down), returns that downloading job's ID so the
+    worker can preempt and re-queue it cleanly.
+    """
     direction = (direction or '').lower()
     if direction not in ('up', 'down'):
-        return False
+        return False, None
     with _conn() as c:
         rows = c.execute(
-            "SELECT id, COALESCE(queue_order, id) AS ord FROM downloads WHERE status = 'queued' ORDER BY ord ASC, id ASC"
+            """
+            SELECT id, status, COALESCE(queue_order, id) AS ord
+            FROM downloads
+            WHERE status IN ('downloading', 'queued')
+            ORDER BY
+                CASE status WHEN 'downloading' THEN 0 ELSE 1 END ASC,
+                ord ASC,
+                id ASC
+            """
         ).fetchall()
         ids = [r['id'] for r in rows]
+        statuses = {r['id']: r['status'] for r in rows}
         if download_id not in ids:
-            return False
+            return False, None
         idx = ids.index(download_id)
         swap_idx = idx - 1 if direction == 'up' else idx + 1
         if swap_idx < 0 or swap_idx >= len(ids):
-            return False
+            return False, None
 
-        # Normalize unique order values and swap the two adjacent items
-        orders = list(range(1, len(ids) + 1))
-        orders[idx], orders[swap_idx] = orders[swap_idx], orders[idx]
-        for dl_id, new_ord in zip(ids, orders):
+        # Swap positions in the list
+        ids[idx], ids[swap_idx] = ids[swap_idx], ids[idx]
+        for new_ord, dl_id in enumerate(ids, start=1):
             c.execute("UPDATE downloads SET queue_order = ? WHERE id = ?", (new_ord, dl_id))
-        return True
+
+        # Check if a currently downloading job is no longer at position 0
+        preempt_id = None
+        for pos, dl_id in enumerate(ids):
+            if statuses[dl_id] == 'downloading' and pos > 0:
+                preempt_id = dl_id
+                break
+        return True, preempt_id
 
 
 def list_recent_downloads(limit: int = 20) -> list[dict[str, Any]]:

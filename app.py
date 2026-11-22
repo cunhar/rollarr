@@ -176,7 +176,9 @@ def api_downloads_cancel(download_id: int):
 @app.route('/api/downloads/<int:download_id>/move', methods=['POST'])
 def api_downloads_move(download_id: int):
     direction = ((request.json or {}).get('direction') or '').lower()
-    ok = db.move_download(download_id, direction)
+    ok, preempt_id = db.move_download(download_id, direction)
+    if ok and preempt_id:
+        usenet_downloader.preempt_download(preempt_id)
     return jsonify({'status': 'success' if ok else 'error'}), 200 if ok else 400
 
 

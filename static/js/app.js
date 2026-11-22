@@ -70,15 +70,15 @@ function renderStreamCard(st) {
     </div>`;
 }
 
-function renderDownloadCard(d, qIdx, qTotal) {
+function renderDownloadCard(d, mIdx, mTotal) {
     const statusBadge = d.status === 'DOWNLOADING' ? 'badge-green' : (d.status === 'PAUSED' ? 'badge-amber' : 'badge-dim');
     const meta = d.size_mb > 0
         ? (d.size_mb - d.remaining_mb).toFixed(1) + ' / ' + d.size_mb + ' MB'
         : 'Starting...';
-    const isQueued = d.status === 'QUEUED';
-    const reorderBtns = (isQueued && qTotal > 1)
-        ? `<button class="btn-clear" style="padding:2px 6px; font-size:10px;" title="Move Up" ${qIdx === 0 ? 'disabled' : ''} onclick="moveDownload(${d.id}, 'up')">↑</button>
-           <button class="btn-clear" style="padding:2px 6px; font-size:10px;" title="Move Down" ${qIdx === qTotal - 1 ? 'disabled' : ''} onclick="moveDownload(${d.id}, 'down')">↓</button>`
+    const isMovable = mIdx >= 0;
+    const reorderBtns = (isMovable && mTotal > 1)
+        ? `<button class="btn-clear" style="padding:2px 6px; font-size:10px;" title="Move Up" ${mIdx === 0 ? 'disabled' : ''} onclick="moveDownload(${d.id}, 'up')">↑</button>
+           <button class="btn-clear" style="padding:2px 6px; font-size:10px;" title="Move Down" ${mIdx === mTotal - 1 ? 'disabled' : ''} onclick="moveDownload(${d.id}, 'down')">↓</button>`
         : '';
     return `
     <div class="stream-card">
@@ -341,10 +341,10 @@ function updateDownloads(s) {
                     </div>
                 </div>`
             ];
-            const queuedList = s.downloads.filter(d => d.status === 'QUEUED');
+            const movableList = s.downloads.filter(d => d.status === 'DOWNLOADING' || d.status === 'QUEUED' || d.status === 'PAUSED');
             s.downloads.forEach(d => {
-                const qIdx = queuedList.indexOf(d);
-                html.push(renderDownloadCard(d, qIdx, queuedList.length));
+                const mIdx = movableList.indexOf(d);
+                html.push(renderDownloadCard(d, mIdx, movableList.length));
             });
             container.innerHTML = html.join('');
         }

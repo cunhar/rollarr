@@ -271,6 +271,7 @@ _state_lock = threading.Lock()
 _wake_event = threading.Event()
 _paused = False
 _cancelled_ids: set[int] = set()
+_preempted_ids: set[int] = set()
 _log_callback = None
 
 _live_state: dict[str, Any] = {
@@ -314,6 +315,13 @@ def resume():
         _paused = False
     _wake_event.set()
     _activity_log('info', 'Usenet downloader resumed')
+
+
+def preempt_download(download_id: int):
+    """Pause/re-queue an active download so a higher-priority queued item starts immediately."""
+    with _state_lock:
+        _preempted_ids.add(download_id)
+    _wake_event.set()
 
 
 def cancel_download(download_id: int) -> bool:
@@ -593,7 +601,7 @@ def _process_job(job: dict[str, Any]):
                 conn.connect()
                 while True:
                     with _state_lock:
-                        if job_id in _cancelled_ids:
+                        if job_id in _cancelled_ids or job_id in _preempted_ids:
                             return
                         is_p = _paused
                     if is_p:
@@ -663,6 +671,10 @@ def _process_job(job: dict[str, Any]):
             if job_id in _cancelled_ids:
                 _cancelled_ids.discard(job_id)
                 db.update_download(job_id, status='cancelled', error='Cancelled by user')
+                return
+            if job_id in _preempted_ids:
+                _preempted_ids.discard(job_id)
+                db.update_download(job_id, status='queued', progress_pct=0.0, downloaded_bytes=0)
                 return
 
         if total_segments > 0 and missing_segments / total_segments > 0.25:
