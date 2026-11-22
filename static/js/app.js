@@ -394,7 +394,13 @@ function searchMedia() {
                     <div class="media-card-info">
                         <div class="media-card-title">${escapeHtml(item.title)} ${item.year ? `<span class="media-year">(${item.year})</span>` : ''}</div>
                         <div class="media-card-overview">${escapeHtml((item.overview || '').slice(0, 120))}</div>
-                        <button class="btn-clear" onclick="addLibraryItem('${escapeHtml(type)}', ${idx}, this)">Add & Download</button>
+                        <div class="ep-controls-row">
+                            ${type === 'tv' ? `
+                                <label class="ep-mini-label">S<input type="number" class="ep-mini-input" id="add-s-${idx}" value="1" min="1"></label>
+                                <label class="ep-mini-label">E<input type="number" class="ep-mini-input" id="add-e-${idx}" value="1" min="1"></label>
+                            ` : ''}
+                            <button class="btn-clear" onclick="addLibraryItem('${escapeHtml(type)}', ${idx}, this)">Add & Download</button>
+                        </div>
                     </div>
                 </div>
             `).join('');
@@ -418,13 +424,20 @@ function addLibraryItem(type, idx, btnEl) {
         btnEl.disabled = true;
         btnEl.textContent = 'Adding...';
     }
-    Api.addMedia(type, {
+    const payload = {
         id: item.id,
         title: item.title,
         year: item.year,
         imdb_id: item.imdb_id || '',
         poster_url: item.poster_url || ''
-    })
+    };
+    if (type === 'tv') {
+        const sEl = el(`add-s-${idx}`);
+        const eEl = el(`add-e-${idx}`);
+        payload.start_season = parseInt(sEl && sEl.value) || 1;
+        payload.start_episode = parseInt(eEl && eEl.value) || 1;
+    }
+    Api.addMedia(type, payload)
         .then(({ ok, data }) => {
             showToast(data.message || 'Added to library', ok ? 'ok' : 'err');
             if (btnEl) btnEl.textContent = ok ? 'Added ✓' : 'Retry';
@@ -437,6 +450,29 @@ function addLibraryItem(type, idx, btnEl) {
             if (btnEl) {
                 btnEl.disabled = false;
                 btnEl.textContent = 'Add & Download';
+            }
+        });
+}
+
+function queueShowFrom(showId, btnEl) {
+    const sEl = el(`show-s-${showId}`);
+    const eEl = el(`show-e-${showId}`);
+    const s = parseInt(sEl && sEl.value) || 1;
+    const e = parseInt(eEl && eEl.value) || 1;
+    if (btnEl) {
+        btnEl.disabled = true;
+        btnEl.textContent = 'Queueing...';
+    }
+    Api.queueShowFrom(showId, s, e)
+        .then(({ ok, data }) => {
+            showToast(data.message || 'Episodes queued', ok && data.status === 'success' ? 'ok' : 'info');
+            setTimeout(pollAll, 500);
+        })
+        .catch(() => showToast('Failed to queue episodes', 'err'))
+        .finally(() => {
+            if (btnEl) {
+                btnEl.disabled = false;
+                btnEl.textContent = 'Queue';
             }
         });
 }
@@ -466,7 +502,12 @@ function loadLibrary() {
                             ${s.year ? `<span class="media-year">(${s.year})</span>` : ''}
                             <span class="badge badge-green" style="margin-left:8px;">${escapeHtml(s.status || 'active')}</span>
                         </div>
-                        <button class="btn-clear" onclick="deleteLibraryItem('tv', ${s.id})">Remove</button>
+                        <div class="ep-controls-row">
+                            <label class="ep-mini-label">S<input type="number" class="ep-mini-input" id="show-s-${s.id}" value="1" min="1"></label>
+                            <label class="ep-mini-label">E<input type="number" class="ep-mini-input" id="show-e-${s.id}" value="1" min="1"></label>
+                            <button class="btn-clear" onclick="queueShowFrom(${s.id}, this)">Queue</button>
+                            <button class="btn-clear" onclick="deleteLibraryItem('tv', ${s.id})">Remove</button>
+                        </div>
                     </div>
                 `).join('');
             }
@@ -494,6 +535,7 @@ function loadLibrary() {
 
 window.searchMedia = searchMedia;
 window.addLibraryItem = addLibraryItem;
+window.queueShowFrom = queueShowFrom;
 window.deleteLibraryItem = deleteLibraryItem;
 window.loadLibrary = loadLibrary;
 

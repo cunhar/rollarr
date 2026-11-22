@@ -63,6 +63,15 @@ const Api = {
         return { ok: res.ok, data: await res.json() };
     },
 
+    async queueShowFrom(showId, startSeason, startEpisode) {
+        const res = await fetch(`/api/library/tv/${showId}/queue`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ start_season: startSeason, start_episode: startEpisode })
+        });
+        return { ok: res.ok, data: await res.json() };
+    },
+
     async deleteLibraryItem(type, id) {
         const res = await fetch(`/api/library/${type}/${id}`, { method: 'DELETE' });
         return res.ok ? await res.json() : null;

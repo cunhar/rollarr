@@ -228,6 +228,17 @@ def api_library_add():
         return jsonify({'status': 'error', 'message': str(exc)}), 500
 
 
+@app.route('/api/library/tv/<int:show_id>/queue', methods=['POST'])
+def api_library_tv_queue(show_id: int):
+    data = request.json or {}
+    start_s = int(data.get('start_season') or 1)
+    start_e = int(data.get('start_episode') or 1)
+    res = media_manager.queue_show_from(show_id, start_season=start_s, start_episode=start_e)
+    activity_log.log_call(res.get('status', 'info'), res.get('message', 'Queued show episodes'))
+    code = 200 if res.get('status') in ('success', 'warning') else 400
+    return jsonify(res), code
+
+
 @app.route('/api/library/<media_type>/<int:item_id>', methods=['DELETE'])
 def api_library_delete(media_type: str, item_id: int):
     if media_type == 'movie':

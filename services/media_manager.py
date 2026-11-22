@@ -319,6 +319,44 @@ def add_show(tvmaze_id: int, start_season: int = 1, start_episode: int = 1) -> d
     }
 
 
+def queue_show_from(show_id: int, start_season: int = 1, start_episode: int = 1) -> dict[str, Any]:
+    """Queue the next ROLLING_WINDOW aired episodes for an existing tracked show starting at (S, E)."""
+    show = db.get_show(show_id)
+    if not show:
+        return {'status': 'error', 'message': f'Show #{show_id} not found'}
+
+    episodes = metadata.get_show_episodes(show['tvmaze_id'])
+    aired = [
+        e for e in episodes
+        if e['aired'] and (e['season'], e['episode']) >= (int(start_season), int(start_episode))
+    ]
+    window = aired[:get_rolling_window()]
+    if not window:
+        return {
+            'status': 'warning',
+            'message': f"No aired episodes found for '{show['title']}' at or after S{int(start_season):02d}E{int(start_episode):02d}",
+            'queued': [],
+            'skipped': [],
+        }
+
+    queued, skipped = [], []
+    for ep in window:
+        tag = f"S{ep['season']:02d}E{ep['episode']:02d}"
+        ok, _ = queue_episode(show, ep['season'], ep['episode'])
+        if ok:
+            queued.append(tag)
+        else:
+            skipped.append(tag)
+
+    return {
+        'status': 'success' if queued else 'warning',
+        'message': f"{show['title']} from S{int(start_season):02d}E{int(start_episode):02d} — queued: {', '.join(queued) if queued else 'none'}"
+                   + (f" (already present/queued: {', '.join(skipped)})" if skipped else ''),
+        'queued': queued,
+        'skipped': skipped,
+    }
+
+
 def add_movie(
     tmdb_id: int | None = None,
     title: str | None = None,
