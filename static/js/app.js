@@ -597,17 +597,15 @@ function loadLibrary() {
                 showsEl.innerHTML = shows.map(s => `
                     <details class="config-card" data-show-id="${s.id}" ${openIds.has(String(s.id)) ? 'open' : ''} ontoggle="onShowToggle(this, ${s.id})" style="margin-bottom:0;">
                         <summary class="config-card-summary">
-                            <span style="display:flex; align-items:center; gap:10px;">
+                            <span style="display:flex; align-items:center; gap:10px; min-width:0;">
                                 ${s.poster_url ? `<img class="lib-thumb" src="${escapeHtml(s.poster_url)}" alt="">` : `<span class="lib-thumb lib-thumb-placeholder">TV</span>`}
                                 <strong>${escapeHtml(s.title)}</strong>
                                 ${s.year ? `<span class="media-year">(${s.year})</span>` : ''}
                                 <span class="badge badge-green">${escapeHtml(s.status || 'active')}</span>
                             </span>
+                            <button class="btn-clear" onclick="event.preventDefault(); event.stopPropagation(); deleteLibraryItem('tv', ${s.id}, this)">Remove</button>
                         </summary>
                         <div class="config-card-body">
-                            <div style="display:flex; justify-content:flex-end; margin-bottom:10px;">
-                                <button class="btn-clear" onclick="deleteLibraryItem('tv', ${s.id}, this)">Remove Show</button>
-                            </div>
                             <div id="show-episodes-${s.id}"></div>
                         </div>
                     </details>
