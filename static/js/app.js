@@ -495,20 +495,29 @@ function loadLibrary() {
             if (shows.length === 0) {
                 showsEl.innerHTML = '<div class="no-logs">No tracked TV shows yet.</div>';
             } else {
+                const openIds = new Set();
+                showsEl.querySelectorAll('details[data-show-id]').forEach(d => {
+                    if (d.open) openIds.add(d.getAttribute('data-show-id'));
+                });
                 showsEl.innerHTML = shows.map(s => `
-                    <div class="library-row">
-                        <div>
-                            <strong>${escapeHtml(s.title)}</strong>
-                            ${s.year ? `<span class="media-year">(${s.year})</span>` : ''}
-                            <span class="badge badge-green" style="margin-left:8px;">${escapeHtml(s.status || 'active')}</span>
+                    <details class="config-card" data-show-id="${s.id}" ${openIds.has(String(s.id)) ? 'open' : ''} style="margin-bottom:0;">
+                        <summary class="config-card-summary">
+                            <span style="display:flex; align-items:center; gap:8px;">
+                                <strong>${escapeHtml(s.title)}</strong>
+                                ${s.year ? `<span class="media-year">(${s.year})</span>` : ''}
+                                <span class="badge badge-green">${escapeHtml(s.status || 'active')}</span>
+                            </span>
+                        </summary>
+                        <div class="config-card-body" style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:12px;">
+                            <div class="ep-controls-row">
+                                <span style="font-size:11px; color:var(--text-sub); font-family:var(--mono); margin-right:4px;">Start from:</span>
+                                <label class="ep-mini-label">S<input type="number" class="ep-mini-input" id="show-s-${s.id}" value="1" min="1"></label>
+                                <label class="ep-mini-label">E<input type="number" class="ep-mini-input" id="show-e-${s.id}" value="1" min="1"></label>
+                                <button class="btn-clear" onclick="queueShowFrom(${s.id}, this)">Queue Episodes</button>
+                            </div>
+                            <button class="btn-clear" onclick="deleteLibraryItem('tv', ${s.id})">Remove Show</button>
                         </div>
-                        <div class="ep-controls-row">
-                            <label class="ep-mini-label">S<input type="number" class="ep-mini-input" id="show-s-${s.id}" value="1" min="1"></label>
-                            <label class="ep-mini-label">E<input type="number" class="ep-mini-input" id="show-e-${s.id}" value="1" min="1"></label>
-                            <button class="btn-clear" onclick="queueShowFrom(${s.id}, this)">Queue</button>
-                            <button class="btn-clear" onclick="deleteLibraryItem('tv', ${s.id})">Remove</button>
-                        </div>
-                    </div>
+                    </details>
                 `).join('');
             }
         }
