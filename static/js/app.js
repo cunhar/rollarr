@@ -251,6 +251,12 @@ function updateShutdownWatcher(s) {
     }
 }
 
+function _shortTime(ts) {
+    if (!ts) return '—';
+    const parts = String(ts).split(' ');
+    return parts.length > 1 ? parts[1].substring(0, 5) : String(ts).substring(0, 5);
+}
+
 function updateEpisodePoller(s) {
     if (!s) return;
     const cnt = el('ep-count');
@@ -258,37 +264,36 @@ function updateEpisodePoller(s) {
         cnt.textContent = s.episodes_session || 0;
         cnt.className = (s.episodes_session > 0) ? 'green' : '';
     }
-    
-    setText('ep-last-label', 'Last check: ' + (s.last_check || '—'));
-    setText('ep-next-time', 'Scheduled: ' + (s.next_check || '—'));
-    
+
+    setText('ep-scan-meta', `Last scan ${_shortTime(s.last_check)} • Next ${_shortTime(s.next_check)}`);
+
     let pct = 0;
-    let label = 'Next check: —';
-    
+    let label = 'Next scan: —';
+
     if (s.next_check && s.poll_interval) {
         const nextTime = new Date(s.next_check.replace(' ', 'T')).getTime();
         const now = Date.now();
         const diffMs = nextTime - now;
-        
+
         if (diffMs <= 0) {
             pct = 100;
-            label = 'Checking now...';
+            label = 'Scanning now...';
         } else {
             const totalMs = s.poll_interval * 1000;
             const elapsedMs = totalMs - diffMs;
             pct = Math.min(100, Math.max(0, (elapsedMs / totalMs) * 100));
-            
+
             const diffMins = Math.ceil(diffMs / 60000);
             if (diffMins > 60) {
                 const h = Math.floor(diffMins / 60);
                 const m = diffMins % 60;
-                label = `Next check in ~${h}h ${m}m`;
+                label = `Next scan in ~${h}h ${m}m`;
             } else {
-                label = `Next check in ~${diffMins} min`;
+                label = `Next scan in ~${diffMins} min`;
             }
         }
     }
-    
+
     setText('ep-next-label', label);
     const bar = el('ep-bar');
     if (bar) {
@@ -848,7 +853,7 @@ function runAutoGrab() {
         .finally(() => {
             if (btn) {
                 btn.disabled = false;
-                btn.textContent = 'Auto-Grab Now';
+                btn.textContent = 'Grab Wanted';
             }
         });
 }
@@ -985,18 +990,18 @@ function runPoller() {
     const btn = el('btn-run-poller');
     if (btn) {
         btn.disabled = true;
-        btn.textContent = 'Re-checking...';
+        btn.textContent = 'Scanning...';
     }
     Api.runPoller()
         .then(({ ok, data }) => {
-            showToast(data.message || 'Stateless re-check completed', ok ? 'info' : 'err');
+            showToast(data.message || 'Watched scan triggered', ok ? 'info' : 'err');
             setTimeout(pollAll, 1000);
         })
-        .catch(() => showToast('Failed to trigger re-check', 'err'))
+        .catch(() => showToast('Failed to trigger scan', 'err'))
         .finally(() => {
             if (btn) {
                 btn.disabled = false;
-                btn.textContent = 'Re-check Now';
+                btn.textContent = 'Scan Watched';
             }
         });
 }

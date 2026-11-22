@@ -25,35 +25,32 @@
     <div id="calendar-container"></div>
 
     {% if poller_status.enabled %}
-    <!-- Episode Poller stats -->
+    <!-- Automation (Watched Cleanup & Auto-Grab) -->
     <div class="tab-header-row">
-        <span class="section-title" style="margin-bottom:0;">Media Poller</span>
+        <span class="section-title" style="margin-bottom:0;">Automation</span>
         <div style="display:flex; gap:8px;">
-            <button class="btn-clear" id="btn-run-autograb" onclick="runAutoGrab()">Auto-Grab Now</button>
-            <button class="btn-clear" id="btn-run-poller" onclick="runPoller()">Re-check Now</button>
+            <button class="btn-clear" id="btn-run-autograb" onclick="runAutoGrab()">Grab Wanted</button>
+            <button class="btn-clear" id="btn-run-poller" onclick="runPoller()">Scan Watched</button>
         </div>
     </div>
     <div class="idle-section" style="margin-bottom:24px;">
         <div class="idle-header" style="align-items:center;">
             <span class="idle-label">
-                Total items processed:
+                Recycled:
                 <strong id="ep-count" class="{{ 'green' if poller_status.episodes_session > 0 else '' }}" style="font-family:var(--mono); margin-left:4px;">
                     {{ poller_status.episodes_session or 0 }}
                 </strong>
             </span>
-            <span class="idle-count" id="ep-next-label">Calculating next check...</span>
+            <span class="idle-count" id="ep-next-label">Next scan: —</span>
         </div>
-        <div class="idle-track" style="margin-top:12px;">
+        <div class="idle-track">
             <div class="idle-fill" id="ep-bar" style="width: 0%; background: var(--accent);"></div>
         </div>
-        <div class="idle-meta" style="display:flex; justify-content:space-between; margin-bottom: 8px;">
-            <span id="ep-last-label">Last check: {{ poller_status.last_check or '—' }}</span>
-            <span id="ep-next-time">Scheduled: {{ poller_status.next_check or '—' }}</span>
-        </div>
+        <div class="idle-meta" id="ep-scan-meta">Last scan: — • Next: —</div>
     </div>
     {% else %}
     <div class="config-note" style="margin-top:0; margin-bottom:24px;">
-        Episode poller disabled — configure <strong>Plex</strong> or <strong>Jellyfin</strong> in Settings to enable.
+        Automation disabled — configure <strong>Plex</strong> or <strong>Jellyfin</strong> in Config to enable.
     </div>
     {% endif %}
 

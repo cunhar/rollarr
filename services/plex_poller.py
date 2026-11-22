@@ -77,6 +77,7 @@ def get_state() -> dict:
         plex_url=plex_url or 'Not configured',
         jellyfin_url=jf_url or 'Not configured',
         poll_interval=poll_interval,
+        episodes_session=max(poller_state.get('episodes_session') or 0, int(get_config('STATS_MEDIA_PROCESSED', 0) or 0)),
     )
     with _state_lock:
         return dict(poller_state)
