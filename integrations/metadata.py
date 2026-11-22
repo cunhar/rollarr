@@ -139,6 +139,43 @@ def get_tmdb_api_key() -> str:
     return (get_config('TMDB_API_KEY') or '').strip()
 
 
+def search_movies_radarr_proxy(query: str) -> list[dict[str, Any]]:
+    """Keyless full movie search via Radarr's public TMDB metadata proxy (20 results, posters, IMDB & TMDB IDs)."""
+    q = (query or '').strip()
+    if not q:
+        return []
+    try:
+        resp = requests.get(
+            'https://api.radarr.video/v1/search',
+            params={'q': q},
+            timeout=10,
+        )
+        resp.raise_for_status()
+        results = []
+        for m in (resp.json() or [])[:20]:
+            poster = ''
+            for img in (m.get('Images') or []):
+                if (img.get('CoverType') or '').lower() == 'poster' and img.get('Url'):
+                    poster = img['Url'].replace('/t/p/original/', '/t/p/w300/')
+                    break
+            tmdb_id = m.get('TmdbId')
+            imdb_id = m.get('ImdbId') or ''
+            results.append({
+                'type': 'movie',
+                'id': tmdb_id or imdb_id,
+                'tmdb_id': tmdb_id,
+                'imdb_id': imdb_id,
+                'title': m.get('Title') or m.get('OriginalTitle') or '',
+                'year': m.get('Year'),
+                'poster_url': poster,
+                'overview': m.get('Overview') or '',
+            })
+        return results
+    except Exception as exc:
+        logger.warning(f"[Metadata] Public movie search failed for '{q}': {exc}")
+        return []
+
+
 def search_movies_imdb(query: str) -> list[dict[str, Any]]:
     """Keyless fallback movie search using IMDb's public suggestion endpoint."""
     q = (query or '').strip()
@@ -177,13 +214,13 @@ def search_movies_imdb(query: str) -> list[dict[str, Any]]:
 
 
 def search_movies(query: str) -> list[dict[str, Any]]:
-    """Search movies via TMDB if API key is configured, otherwise keyless IMDb search."""
+    """Search movies via TMDB if API key is configured, otherwise keyless Radarr proxy -> IMDb fallback."""
     api_key = get_tmdb_api_key()
     q = (query or '').strip()
     if not q:
         return []
     if not api_key:
-        return search_movies_imdb(q)
+        return search_movies_radarr_proxy(q) or search_movies_imdb(q)
     try:
         resp = requests.get(
             f"{TMDB_BASE}/search/movie",

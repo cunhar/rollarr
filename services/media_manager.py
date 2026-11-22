@@ -464,11 +464,13 @@ def add_movie(
     if not info:
         if not title:
             return {'status': 'error', 'message': 'Could not resolve movie details'}
-        # Derive a stable negative unique key from IMDb ID when no TMDB ID is used
-        clean_imdb = re.sub(r'^tt', '', str(imdb_id or ''))
-        synthetic_id = -int(clean_imdb) if clean_imdb.isdigit() else -abs(hash(f"{title}:{year}")) % (10**9)
+        if tmdb_id and int(tmdb_id) > 0:
+            resolved_id = int(tmdb_id)
+        else:
+            clean_imdb = re.sub(r'^tt', '', str(imdb_id or ''))
+            resolved_id = -int(clean_imdb) if clean_imdb.isdigit() else -abs(hash(f"{title}:{year}")) % (10**9)
         info = {
-            'tmdb_id': synthetic_id,
+            'tmdb_id': resolved_id,
             'imdb_id': imdb_id or '',
             'title': title,
             'year': int(year) if year else None,
