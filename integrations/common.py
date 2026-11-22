@@ -78,7 +78,7 @@ def get_jellyfin_credentials() -> tuple[str, str]:
 def get_jellyfin_headers(api_key: str) -> dict[str, str]:
     """Return standard API request headers for Jellyfin."""
     return {
-        'X-Emby-Token': api_key,
+        'Authorization': f'MediaBrowser Token="{api_key}"',
         'Accept': 'application/json',
     }
 
