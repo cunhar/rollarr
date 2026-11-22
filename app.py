@@ -25,6 +25,7 @@ from services.connection_tester import (
     check_sonarr_status,
     check_radarr_status,
     check_plex_status,
+    check_jellyfin_status,
 )
 
 # Persistent configuration directories
@@ -64,14 +65,16 @@ plex_watcher.start()
 
 def get_service_connections() -> dict:
     """Run connection checks concurrently to reduce dashboard latency."""
-    with concurrent.futures.ThreadPoolExecutor(max_workers=3) as executor:
+    with concurrent.futures.ThreadPoolExecutor(max_workers=4) as executor:
         f_sonarr = executor.submit(check_sonarr_status)
         f_radarr = executor.submit(check_radarr_status)
         f_plex = executor.submit(check_plex_status)
+        f_jellyfin = executor.submit(check_jellyfin_status)
         return {
-            'sonarr': f_sonarr.result(),
-            'radarr': f_radarr.result(),
-            'plex':   f_plex.result(),
+            'sonarr':   f_sonarr.result(),
+            'radarr':   f_radarr.result(),
+            'plex':     f_plex.result(),
+            'jellyfin': f_jellyfin.result(),
         }
 
 
@@ -92,6 +95,7 @@ def index():
         radarr_masked_key=mask_secret(config_store.get_config('RADARR_API_KEY')),
         radarr_status_text=conns['radarr']['status'],
         plex_conn_text=conns['plex']['status'],
+        jellyfin_conn_text=conns['jellyfin']['status'],
         nzbget_url=get_nzbget_url() or "Not Configured",
         nzbget_username=get_nzbget_username() or "Not Configured",
         nzbget_masked_pass=mask_secret(get_nzbget_password()),

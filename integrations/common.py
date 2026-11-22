@@ -67,6 +67,22 @@ def get_plex_credentials() -> tuple[str, str]:
     return plex_url, plex_token
 
 
+def get_jellyfin_credentials() -> tuple[str, str]:
+    """Return (jellyfin_url, jellyfin_api_key) from config, with URL trailing-slash stripped."""
+    from config_store import get_config
+    jf_url = (get_config('JELLYFIN_URL') or '').rstrip('/')
+    jf_key = get_config('JELLYFIN_API_KEY') or ''
+    return jf_url, jf_key
+
+
+def get_jellyfin_headers(api_key: str) -> dict[str, str]:
+    """Return standard API request headers for Jellyfin."""
+    return {
+        'X-Emby-Token': api_key,
+        'Accept': 'application/json',
+    }
+
+
 def make_arr_client(service_name: str, url_fn, headers_fn):
     """
     Factory that returns a request function for an Arr service (Sonarr / Radarr).

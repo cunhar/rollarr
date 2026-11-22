@@ -16,7 +16,7 @@ import datetime
 
 import requests
 from config_store import get_config
-from integrations.common import now_str as _now, get_plex_credentials
+from integrations.common import now_str as _now, get_plex_credentials, get_jellyfin_credentials, get_jellyfin_headers
 
 logger = logging.getLogger(__name__)
 
@@ -83,9 +83,11 @@ def get_state(refresh_live: bool = True):
     global _last_fetch_time
 
     plex_url, plex_token = get_plex_credentials()
+    jf_url, jf_key = get_jellyfin_credentials()
+    has_media_server = bool((plex_url and plex_token) or (jf_url and jf_key))
     shutdown_mode = _get_shutdown_mode()
     dry_run = (shutdown_mode == 'dry_run')
-    enabled = bool(plex_url and plex_token and shutdown_mode != 'disabled')
+    enabled = bool(has_media_server and shutdown_mode != 'disabled')
     idle_needed = int(get_config('PLEX_IDLE_POLLS', 3))
     poll_interval = int(get_config('PLEX_POLL_INTERVAL', 1200))
 
@@ -94,17 +96,18 @@ def get_state(refresh_live: bool = True):
         shutdown_mode=shutdown_mode,
         dry_run=dry_run,
         plex_url=plex_url or 'Not configured',
+        jellyfin_url=jf_url or 'Not configured',
         idle_needed=idle_needed,
         poll_interval=poll_interval,
     )
 
-    if refresh_live and plex_url and plex_token:
+    if refresh_live and has_media_server:
         now_time = time.time()
         if now_time - _last_fetch_time > 5:
             _last_fetch_time = now_time
-            count, streams = _get_active_sessions()
+            count, streams = _get_all_active_sessions()
             has_dl, dl_detail = _has_active_downloads()
-            has_act, act_detail = _has_active_plex_activities()
+            has_act, act_detail = _has_active_media_activities()
             if count is not None:
                 _update_state(
                     status='ok',
@@ -242,6 +245,138 @@ def _get_active_sessions() -> tuple[int | None, list[dict]]:
         return None, []
 
 
+def _is_lan_ip(ip_str: str) -> bool:
+    if not ip_str:
+        return True
+    return ip_str.startswith(('192.168.', '10.', '127.', '::1', 'fc', 'fd', 'fe80:')) or (
+        ip_str.startswith('172.') and 16 <= int(ip_str.split('.')[1]) <= 31
+    )
+
+
+def _get_jellyfin_active_sessions() -> tuple[int | None, list[dict]]:
+    """
+    Query Jellyfin /Sessions for active playback sessions.
+    Returns (count, streams_list) or (None, []) if unreachable/unconfigured.
+    """
+    jf_url, jf_key = get_jellyfin_credentials()
+    if not jf_url or not jf_key:
+        return None, []
+    try:
+        resp = requests.get(
+            f"{jf_url}/Sessions",
+            headers=get_jellyfin_headers(jf_key),
+            timeout=5,
+        )
+        resp.raise_for_status()
+        sessions = resp.json() or []
+        streams = []
+        for sess in sessions:
+            item = sess.get('NowPlayingItem')
+            if not item:
+                continue
+            play_state = sess.get('PlayState') or {}
+            transcode = sess.get('TranscodingInfo') or {}
+
+            user_name = sess.get('UserName') or 'Unknown'
+            client = sess.get('Client') or ''
+            dev_name = sess.get('DeviceName') or ''
+            device_str = f"{client} ({dev_name})" if dev_name and dev_name != client else client or dev_name or 'Unknown Device'
+            player_state = 'paused' if play_state.get('IsPaused') else 'playing'
+
+            itype = item.get('Type', '')
+            if itype == 'Episode':
+                show = item.get('SeriesName', '')
+                s_num = item.get('ParentIndexNumber')
+                e_num = item.get('IndexNumber')
+                ep_title = item.get('Name', '')
+                if s_num is not None and e_num is not None:
+                    title_str = f"{show} S{int(s_num):02d}E{int(e_num):02d}"
+                    if ep_title:
+                        title_str += f" - {ep_title}"
+                else:
+                    title_str = show or ep_title or 'TV Episode'
+            else:
+                movie_title = item.get('Name', '')
+                year = item.get('ProductionYear')
+                title_str = f"{movie_title} ({year})" if year else movie_title or 'Movie'
+
+            pos_ticks = int(play_state.get('PositionTicks') or 0)
+            dur_ticks = int(item.get('RunTimeTicks') or 0)
+            pct = round((pos_ticks / dur_ticks * 100), 1) if dur_ticks > 0 else 0
+            rem_mins = round(max(0, dur_ticks - pos_ticks) / 600_000_000)
+
+            pm = (play_state.get('PlayMethod') or '').lower()
+            if pm == 'transcode':
+                decision = 'TRANSCODE'
+            elif pm == 'directstream':
+                decision = 'DIRECT STREAM'
+            else:
+                decision = 'DIRECT PLAY'
+
+            remote_ep = (sess.get('RemoteEndPoint') or '').split(':')[0]
+            try:
+                loc = 'LAN' if _is_lan_ip(remote_ep) else 'WAN'
+            except Exception:
+                loc = 'LAN'
+
+            bitrate_bps = int(transcode.get('Bitrate') or 0)
+            if not bitrate_bps:
+                for ms in (item.get('MediaStreams') or []):
+                    if ms.get('Type') == 'Video' and ms.get('BitRate'):
+                        bitrate_bps = int(ms.get('BitRate'))
+                        break
+            bw_kbps = bitrate_bps // 1000
+            if bw_kbps >= 1000:
+                bw_str = f"{bw_kbps / 1000:.1f} Mbps"
+            elif bw_kbps > 0:
+                bw_str = f"{bw_kbps} Kbps"
+            else:
+                bw_str = "—"
+
+            streams.append({
+                'user': user_name,
+                'user_thumb': '',
+                'device': f"[Jellyfin] {device_str}",
+                'state': player_state,
+                'title': title_str,
+                'progress_pct': pct,
+                'remaining_mins': rem_mins,
+                'decision': decision,
+                'location': loc,
+                'bandwidth': bw_str,
+            })
+
+        return len(streams), streams
+    except Exception as exc:
+        logger.warning(f"[PlexWatcher] Failed to query Jellyfin sessions: {exc}")
+        return None, []
+
+
+def _get_all_active_sessions() -> tuple[int | None, list[dict]]:
+    """Combine active sessions across Plex and Jellyfin (whichever are configured)."""
+    plex_url, plex_token = get_plex_credentials()
+    jf_url, jf_key = get_jellyfin_credentials()
+    total = 0
+    streams = []
+    any_ok = False
+
+    if plex_url and plex_token:
+        p_cnt, p_streams = _get_active_sessions()
+        if p_cnt is not None:
+            any_ok = True
+            total += p_cnt
+            streams.extend(p_streams)
+
+    if jf_url and jf_key:
+        j_cnt, j_streams = _get_jellyfin_active_sessions()
+        if j_cnt is not None:
+            any_ok = True
+            total += j_cnt
+            streams.extend(j_streams)
+
+    return (total, streams) if any_ok else (None, [])
+
+
 def _has_active_downloads() -> tuple[bool, str]:
     """Check if NZBGet is active (downloading or queued items)."""
     try:
@@ -302,6 +437,42 @@ def _has_active_plex_activities() -> tuple[bool, str]:
     return False, ""
 
 
+def _has_active_jellyfin_activities() -> tuple[bool, str]:
+    """Query Jellyfin /ScheduledTasks for running background jobs (library scans, trickplay, etc.)."""
+    jf_url, jf_key = get_jellyfin_credentials()
+    if not jf_url or not jf_key:
+        return False, ""
+    try:
+        resp = requests.get(
+            f"{jf_url}/ScheduledTasks",
+            headers=get_jellyfin_headers(jf_key),
+            timeout=5,
+        )
+        if resp.status_code != 200:
+            return False, ""
+        tasks = resp.json() or []
+        for task in tasks:
+            if isinstance(task, dict) and task.get('State') == 'Running':
+                name = task.get('Name') or 'Background Task'
+                pct = task.get('CurrentProgressPercentage')
+                suffix = f" ({pct:.0f}%)" if isinstance(pct, (int, float)) else ""
+                return True, f"Jellyfin {name}{suffix}"
+    except Exception as exc:
+        logger.debug(f"[PlexWatcher] Failed checking Jellyfin scheduled tasks: {exc}")
+    return False, ""
+
+
+def _has_active_media_activities() -> tuple[bool, str]:
+    """Check running background activities on both Plex and Jellyfin."""
+    has_plex, plex_detail = _has_active_plex_activities()
+    if has_plex:
+        return True, plex_detail
+    has_jf, jf_detail = _has_active_jellyfin_activities()
+    if has_jf:
+        return True, jf_detail
+    return False, ""
+
+
 # ── SSH shutdown ─────────────────────────────────────────────────────────────
 
 def _find_ssh_key(configured_path: str) -> str | None:
@@ -338,9 +509,9 @@ def _ssh_shutdown(force: bool = False) -> tuple[bool, str]:
     resolved_key_path = _find_ssh_key(ssh_key_path)
 
     if ssh_password:
-        cmd = f'echo "{ssh_password}" | sudo -S docker stop -t 30 plex || true; echo "{ssh_password}" | sudo -S shutdown -h now || sudo poweroff'
+        cmd = f'echo "{ssh_password}" | sudo -S docker stop -t 30 plex jellyfin || true; echo "{ssh_password}" | sudo -S shutdown -h now || sudo poweroff'
     else:
-        cmd = 'sudo docker stop -t 30 plex || true; sudo shutdown -h now || sudo poweroff'
+        cmd = 'sudo docker stop -t 30 plex jellyfin || true; sudo shutdown -h now || sudo poweroff'
 
     if dry_run and not force:
         msg = f"[DRY-RUN] Would SSH {ssh_user}@{ssh_host}:{ssh_port} and run: {cmd}"
@@ -423,10 +594,11 @@ def _watcher_loop():
                 continue
 
             plex_url, plex_token = get_plex_credentials()
+            jf_url, jf_key = get_jellyfin_credentials()
             poll_interval = int(get_config('PLEX_POLL_INTERVAL', 1200))
             idle_needed = int(get_config('PLEX_IDLE_POLLS', 3))
 
-            if not plex_url or not plex_token:
+            if not ((plex_url and plex_token) or (jf_url and jf_key)):
                 _update_state(status='not_configured')
                 time.sleep(10)
                 continue
@@ -436,9 +608,9 @@ def _watcher_loop():
                 datetime.datetime.now() + datetime.timedelta(seconds=poll_interval)
             ).strftime('%Y-%m-%d %H:%M:%S')
 
-            stream_count, active_streams = _get_active_sessions()
+            stream_count, active_streams = _get_all_active_sessions()
             has_dl, dl_detail = _has_active_downloads()
-            has_act, act_detail = _has_active_plex_activities()
+            has_act, act_detail = _has_active_media_activities()
 
             # Build base state shared by all branches
             base = dict(

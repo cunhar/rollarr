@@ -74,6 +74,28 @@
             </div>
         </details>
 
+        <!-- 3b. Jellyfin Connection -->
+        <details class="config-card">
+            <summary class="config-card-summary">
+                <span class="section-title" style="margin-bottom:0;">🪼 Jellyfin Connection</span>
+            </summary>
+            <div class="config-card-body">
+                <div class="form-grid">
+                    <div class="form-group">
+                        <label class="form-label">Jellyfin URL</label>
+                        <input type="text" class="form-input" id="cfg-JELLYFIN_URL" value="{{ cfg.JELLYFIN_URL }}" placeholder="http://jellyfin:8096">
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Jellyfin API Key</label>
+                        <input type="password" class="form-input" id="cfg-JELLYFIN_API_KEY" value="{{ '••••••••' if cfg.JELLYFIN_API_KEY else '' }}" placeholder="Jellyfin API Key">
+                    </div>
+                </div>
+                <div style="margin-top:14px; display:flex; justify-content:flex-end;">
+                    <button type="button" class="btn-clear" id="btn-test-jellyfin" onclick="testConnection('jellyfin')">Test Connection</button>
+                </div>
+            </div>
+        </details>
+
         <!-- 4. Usenet Downloader (NZBGet) -->
         <details class="config-card">
             <summary class="config-card-summary">

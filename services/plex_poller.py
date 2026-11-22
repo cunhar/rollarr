@@ -20,7 +20,7 @@ import datetime
 
 import requests
 
-from integrations.common import now_str as _now, get_plex_credentials
+from integrations.common import now_str as _now, get_plex_credentials, get_jellyfin_credentials, get_jellyfin_headers
 from integrations.sonarr import (
     get_rolling_window,
     find_series_id_by_title,
@@ -83,11 +83,13 @@ def _update_state(**kwargs):
 def get_state() -> dict:
     """Return a thread-safe snapshot of the poller state."""
     plex_url, plex_token = get_plex_credentials()
+    jf_url, jf_key = get_jellyfin_credentials()
     poll_interval = int(get_config('PLEX_WATCH_INTERVAL', 3600))
 
     _update_state(
-        enabled=bool(plex_url and plex_token),
+        enabled=bool((plex_url and plex_token) or (jf_url and jf_key)),
         plex_url=plex_url or 'Not configured',
+        jellyfin_url=jf_url or 'Not configured',
         poll_interval=poll_interval,
     )
     with _state_lock:
@@ -97,9 +99,10 @@ def get_state() -> dict:
 def trigger_now() -> dict:
     """Trigger an immediate stateless re-check cycle."""
     plex_url, plex_token = get_plex_credentials()
+    jf_url, jf_key = get_jellyfin_credentials()
 
-    if not plex_url or not plex_token:
-        return {'status': 'error', 'message': 'Plex is not configured'}
+    if not ((plex_url and plex_token) or (jf_url and jf_key)):
+        return {'status': 'error', 'message': 'Neither Plex nor Jellyfin is configured'}
     
     logger.info("[PlexPoller] Stateless re-check triggered by user")
     _activity_log('info', "Stateless re-check triggered by user")
@@ -209,6 +212,98 @@ def _enrich_metadata(item: dict) -> dict:
     return item
 
 
+# ── Jellyfin API helpers ──────────────────────────────────────────────────────
+
+def _jellyfin_get(path: str, params: dict = None):
+    jf_url, jf_key = get_jellyfin_credentials()
+    if not jf_url or not jf_key:
+        return None
+    try:
+        r = requests.get(
+            f"{jf_url}{path}",
+            headers=get_jellyfin_headers(jf_key),
+            params=params or {},
+            timeout=10,
+        )
+        r.raise_for_status()
+        return r.json()
+    except Exception as exc:
+        logger.warning(f"[PlexPoller] Jellyfin request failed ({path}): {exc}")
+        return None
+
+
+def _fetch_all_watched_from_jellyfin() -> list | None:
+    """
+    Scan all Jellyfin users for watched Movies and TV Episodes (IsPlayed=true).
+    Returns normalized item dicts compatible with _process_episode / _process_movie,
+    or None if Jellyfin is unreachable.
+    """
+    users = _jellyfin_get('/Users')
+    if users is None:
+        return None
+
+    seen_ids = set()
+    watched_items = []
+    for user in users:
+        uid = user.get('Id')
+        if not uid:
+            continue
+        data = _jellyfin_get(f'/Users/{uid}/Items', {
+            'Recursive': 'true',
+            'IncludeItemTypes': 'Movie,Episode',
+            'IsPlayed': 'true',
+            'Fields': 'Path,ProductionYear',
+        })
+        if data is None:
+            continue
+        for item in (data.get('Items') or []):
+            item_id = item.get('Id')
+            if not item_id or item_id in seen_ids:
+                continue
+            seen_ids.add(item_id)
+            jtype = item.get('Type', '')
+            if jtype == 'Movie':
+                watched_items.append({
+                    '_source': 'jellyfin',
+                    'type': 'movie',
+                    'jellyfinId': item_id,
+                    'title': item.get('Name') or '',
+                    'year': item.get('ProductionYear'),
+                })
+            elif jtype == 'Episode':
+                watched_items.append({
+                    '_source': 'jellyfin',
+                    'type': 'episode',
+                    'jellyfinId': item_id,
+                    'grandparentTitle': item.get('SeriesName') or '',
+                    'parentIndex': item.get('ParentIndexNumber'),
+                    'index': item.get('IndexNumber'),
+                    'title': item.get('Name') or '',
+                })
+    return watched_items
+
+
+def _jellyfin_refresh_library() -> bool:
+    """Trigger a Jellyfin library refresh so deleted files are removed from the UI."""
+    jf_url, jf_key = get_jellyfin_credentials()
+    if not jf_url or not jf_key:
+        return False
+    try:
+        r = requests.post(
+            f"{jf_url}/Library/Refresh",
+            headers=get_jellyfin_headers(jf_key),
+            timeout=10,
+        )
+        if r.status_code in (200, 204):
+            logger.info("[PlexPoller] Triggered Jellyfin library refresh")
+            return True
+        logger.warning(f"[PlexPoller] Jellyfin library refresh returned HTTP {r.status_code}")
+        return False
+    except Exception as exc:
+        logger.warning(f"[PlexPoller] Failed to trigger Jellyfin library refresh: {exc}")
+        return False
+
+
 def _plex_delete_item(rating_key):
     """
     Immediately remove an item from the Plex library by its ratingKey.
@@ -286,18 +381,25 @@ def _process_episode(item: dict) -> tuple[str, str]:
 
     ep_file_id = current_ep.get('episodeFileId', 0)
     rating_key = item.get('ratingKey')
+    source = item.get('_source', 'plex')
 
     if not ep_file_id or ep_file_id == 0:
-        # File already missing from disk — remove item directly from Plex library
-        deleted_from_plex = _plex_delete_item(rating_key)
-        plex_note = ", removed from Plex" if deleted_from_plex else ", Plex removal failed"
-        file_action = f"unmonitored (file already absent from disk{plex_note})"
+        # File already missing from disk — remove item from Plex if sourced from Plex
+        if source == 'plex':
+            deleted_from_plex = _plex_delete_item(rating_key)
+            media_note = ", removed from Plex" if deleted_from_plex else ", Plex removal failed"
+        else:
+            media_note = " (from Jellyfin)"
+        file_action = f"unmonitored (file already absent from disk{media_note})"
     elif delete_enabled:
         try:
             delete_episode_file(ep_file_id)
-            deleted_from_plex = _plex_delete_item(rating_key)
-            plex_note = ", removed from Plex" if deleted_from_plex else ", Plex removal failed"
-            file_action = f"unmonitored & file deleted from disk{plex_note}"
+            if source == 'plex':
+                deleted_from_plex = _plex_delete_item(rating_key)
+                media_note = ", removed from Plex" if deleted_from_plex else ", Plex removal failed"
+            else:
+                media_note = " (from Jellyfin)"
+            file_action = f"unmonitored & file deleted from disk{media_note}"
         except Exception as exc:
             logger.warning(f"[PlexPoller] Failed deleting episode file ID {ep_file_id}: {exc}")
             file_action = f"unmonitored (file delete failed: {exc})"
@@ -352,11 +454,15 @@ def _process_movie(item: dict) -> tuple[str, str]:
     else:
         _, action_detail = unmonitor_movie(movie_id)
 
-    # Remove item directly from Plex library so it won't show up on next scan
-    deleted_from_plex = _plex_delete_item(item.get('ratingKey'))
-    plex_note = ", removed from Plex" if deleted_from_plex else ", Plex removal failed"
+    # Remove item directly from Plex library if sourced from Plex
+    source = item.get('_source', 'plex')
+    if source == 'plex':
+        deleted_from_plex = _plex_delete_item(item.get('ratingKey'))
+        media_note = ", removed from Plex" if deleted_from_plex else ", Plex removal failed"
+    else:
+        media_note = " (from Jellyfin)"
 
-    return 'success', f"Movie '{movie_title}' watched — {action_detail} in Radarr{plex_note}"
+    return 'success', f"Movie '{movie_title}' watched — {action_detail} in Radarr{media_note}"
 
 
 # ── Main loop ─────────────────────────────────────────────────────────────────
@@ -364,49 +470,102 @@ def _process_movie(item: dict) -> tuple[str, str]:
 
 def _execute_poll() -> int:
     now_ts = _now()
-    logger.info("[PlexPoller] Scanning Plex library for all watched items (viewCount > 0)...")
-    items = _fetch_all_watched_from_library()
+    plex_url, plex_token = get_plex_credentials()
+    jf_url, jf_key = get_jellyfin_credentials()
+    plex_configured = bool(plex_url and plex_token)
+    jf_configured = bool(jf_url and jf_key)
 
-    if items is None:
-        msg = "Plex library scan failed — Plex server unreachable or invalid token"
-        logger.warning(f"[PlexPoller] {msg}")
+    items = []
+    any_reachable = False
+    scanned_sources = []
+
+    if plex_configured:
+        logger.info("[PlexPoller] Scanning Plex library for all watched items (viewCount > 0)...")
+        plex_items = _fetch_all_watched_from_library()
+        if plex_items is None:
+            msg = "Plex library scan failed — Plex server unreachable or invalid token"
+            logger.warning(f"[PlexPoller] {msg}")
+            _activity_log('warning', msg)
+        else:
+            any_reachable = True
+            scanned_sources.append('Plex')
+            for it in plex_items:
+                it['_source'] = 'plex'
+            items.extend(plex_items)
+
+    if jf_configured:
+        logger.info("[PlexPoller] Scanning Jellyfin library for all watched items (IsPlayed=true)...")
+        jf_items = _fetch_all_watched_from_jellyfin()
+        if jf_items is None:
+            msg = "Jellyfin library scan failed — Jellyfin server unreachable or invalid API key"
+            logger.warning(f"[PlexPoller] {msg}")
+            _activity_log('warning', msg)
+        else:
+            any_reachable = True
+            scanned_sources.append('Jellyfin')
+            items.extend(jf_items)
+
+    if not any_reachable:
+        msg = "Media library scan failed — configured media server(s) unreachable"
         _update_state(status='unreachable', last_check=now_ts, last_error=msg)
-        _activity_log('warning', msg)
         return 0
 
     _update_state(status='ok', last_check=now_ts, last_error=None)
+    source_label = ' & '.join(scanned_sources)
     if not items:
-        msg = "Plex library scanned — 0 items with watched tick mark found"
+        msg = f"{source_label} library scanned — 0 items with watched tick mark found"
         logger.info(f"[PlexPoller] {msg}")
         _activity_log('info', msg)
         return 0
 
-    logger.info(f"[PlexPoller] Found {len(items)} watched item(s) across all libraries.")
-    _activity_log('info', f"Plex library scanned — {len(items)} watched item(s) found, processing...")
+    logger.info(f"[PlexPoller] Found {len(items)} watched item(s) across {source_label}.")
+    _activity_log('info', f"{source_label} library scanned — {len(items)} watched item(s) found, processing...")
     
     items_this_run = 0
+    jellyfin_processed = False
+    seen_media_keys = set()
     rolling_count = int(get_config('STATS_MEDIA_PROCESSED', 0))
+    last_item = None
         
     for item in items:
         try:
             itype = str(item.get('type', '')).lower()
             if itype in ('4', 'episode'):
+                dedup_key = ('episode', (item.get('grandparentTitle') or '').lower().strip(), item.get('parentIndex'), item.get('index'))
+                if dedup_key in seen_media_keys:
+                    if item.get('_source') == 'plex':
+                        _plex_delete_item(item.get('ratingKey'))
+                    continue
+                seen_media_keys.add(dedup_key)
                 status, msg = _process_episode(item)
             elif itype in ('1', 'movie'):
+                dedup_key = ('movie', (item.get('title') or '').lower().strip(), item.get('year'))
+                if dedup_key in seen_media_keys:
+                    if item.get('_source') == 'plex':
+                        _plex_delete_item(item.get('ratingKey'))
+                    continue
+                seen_media_keys.add(dedup_key)
                 status, msg = _process_movie(item)
             else:
                 continue
 
+            if item.get('_source') == 'jellyfin':
+                jellyfin_processed = True
             items_this_run += 1
+            last_item = item
             _activity_log(status, msg, {
                 'title': item.get('title') or item.get('grandparentTitle'),
                 'type':  item.get('type'),
+                'source': item.get('_source', 'plex'),
             })
             # Intentionally don't save every iteration to avoid IO overhead, just keep running tally
             rolling_count += 1
             _update_state(episodes_session=rolling_count, last_episode=msg)
         except Exception as exc:
             _activity_log('error', f"Failed processing watched item: {exc}")
+
+    if jellyfin_processed or (jf_configured and items_this_run > 0):
+        _jellyfin_refresh_library()
 
     if items_this_run > 0:
         save_config({'STATS_MEDIA_PROCESSED': rolling_count})
@@ -415,21 +574,22 @@ def _execute_poll() -> int:
         status='ok',
         episodes_session=rolling_count,
         last_check=datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
-        last_episode=f"{item.get('grandparentTitle', '')} S{item.get('parentIndex')}E{item.get('index')} - {item.get('title', '')}" if items else None
+        last_episode=f"{last_item.get('grandparentTitle', '')} S{last_item.get('parentIndex')}E{last_item.get('index')} - {last_item.get('title', '')}" if last_item else None
     )
     return items_this_run
 
 
 def _poller_loop():
-    logger.info(f"[PlexPoller] Starting stateless media poller loop. Delaying 15s to allow Plex to spin up...")
+    logger.info(f"[PlexPoller] Starting stateless media poller loop. Delaying 15s to allow media servers to spin up...")
     time.sleep(15)
 
     while True:
         try:
             plex_url, plex_token = get_plex_credentials()
+            jf_url, jf_key = get_jellyfin_credentials()
             poll_interval = int(get_config('PLEX_WATCH_INTERVAL', 3600))
 
-            if not plex_url or not plex_token:
+            if not ((plex_url and plex_token) or (jf_url and jf_key)):
                 _update_state(status='not_configured')
                 time.sleep(10)
                 continue

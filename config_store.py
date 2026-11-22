@@ -59,6 +59,8 @@ DEFAULT_CONFIG = {
     'NZBGET_PASSWORD': '',
     'PLEX_URL': 'http://plex:32400',
     'PLEX_TOKEN': '',
+    'JELLYFIN_URL': 'http://jellyfin:8096',
+    'JELLYFIN_API_KEY': '',
     'PLEX_WATCH_INTERVAL': 3600,
     'PLEX_POLL_INTERVAL': 1200,
     'PLEX_IDLE_POLLS': 3,
@@ -121,7 +123,7 @@ def _load_initial_config() -> dict[str, Any]:
     return config
 
 
-SECRET_KEYS = {'SONARR_API_KEY', 'RADARR_API_KEY', 'NZBGET_PASSWORD', 'PLEX_TOKEN', 'SSH_PASSWORD'}
+SECRET_KEYS = {'SONARR_API_KEY', 'RADARR_API_KEY', 'NZBGET_PASSWORD', 'PLEX_TOKEN', 'JELLYFIN_API_KEY', 'SSH_PASSWORD'}
 MASK_SENTINEL = '••••••••'
 
 

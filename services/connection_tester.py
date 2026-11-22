@@ -13,7 +13,7 @@ import requests
 
 import config_store
 from config_store import get_config
-from integrations.common import get_plex_credentials
+from integrations.common import get_plex_credentials, get_jellyfin_credentials, get_jellyfin_headers
 from integrations.sonarr import get_sonarr_url, get_sonarr_api_key
 from integrations.radarr import get_radarr_url, get_radarr_api_key
 from integrations.nzbget import get_nzbget_url, get_nzbget_username, get_nzbget_password
@@ -71,6 +71,23 @@ def _test_plex(data: dict) -> tuple[bool, str]:
         return False, f'Plex connection error: {exc}'
 
 
+def _test_jellyfin(data: dict) -> tuple[bool, str]:
+    url = (data.get('url') or config_store.get_config('JELLYFIN_URL') or '').rstrip('/')
+    api_key = data.get('api_key') or ''
+    if not api_key or api_key == '••••••••':
+        api_key = config_store.get_config('JELLYFIN_API_KEY') or ''
+    if not url or not api_key:
+        return False, 'Jellyfin URL and API Key are required'
+    try:
+        res = requests.get(f"{url}/System/Info", headers=get_jellyfin_headers(api_key), timeout=4)
+        if res.status_code == 200:
+            ver = res.json().get('Version', '')
+            return True, f'Jellyfin connected successfully! (v{ver})' if ver else 'Jellyfin connected successfully!'
+        return False, f'Jellyfin test failed (HTTP {res.status_code})'
+    except Exception as exc:
+        return False, f'Jellyfin connection error: {exc}'
+
+
 def _test_nzbget(data: dict) -> tuple[bool, str]:
     url = (data.get('url') or get_nzbget_url() or '').rstrip('/')
     user = data.get('username') or get_nzbget_username() or 'nzbget'
@@ -121,6 +138,7 @@ CONNECTION_TESTERS: dict[str, callable] = {
     'sonarr': _test_sonarr,
     'radarr': _test_radarr,
     'plex': _test_plex,
+    'jellyfin': _test_jellyfin,
     'nzbget': _test_nzbget,
     'ssh': _test_ssh,
 }
@@ -167,3 +185,10 @@ def check_plex_status() -> dict:
     if not plex_url or not plex_token:
         return {'status': 'Disconnected', 'ok': False}
     return _check_service_status(plex_url, {'X-Plex-Token': plex_token, 'Accept': 'application/json'}, '/identity')
+
+
+def check_jellyfin_status() -> dict:
+    jf_url, jf_key = get_jellyfin_credentials()
+    if not jf_url or not jf_key:
+        return {'status': 'Disconnected', 'ok': False}
+    return _check_service_status(jf_url, get_jellyfin_headers(jf_key), '/System/Info')

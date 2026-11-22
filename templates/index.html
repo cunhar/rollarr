@@ -17,10 +17,11 @@
 <script src="{{ url_for('static', filename='js/tv-nav.js') }}"></script>
 <script>
     updatePillLinks({
-        SONARR_URL: "{{ cfg.SONARR_URL | safe }}",
-        RADARR_URL: "{{ cfg.RADARR_URL | safe }}",
-        PLEX_URL:   "{{ cfg.PLEX_URL | safe }}",
-        NZBGET_URL: "{{ cfg.NZBGET_URL | safe }}"
+        SONARR_URL:   "{{ cfg.SONARR_URL | safe }}",
+        RADARR_URL:   "{{ cfg.RADARR_URL | safe }}",
+        PLEX_URL:     "{{ cfg.PLEX_URL | safe }}",
+        JELLYFIN_URL: "{{ cfg.JELLYFIN_URL | safe }}",
+        NZBGET_URL:   "{{ cfg.NZBGET_URL | safe }}"
     });
 </script>
 </body>

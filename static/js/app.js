@@ -177,7 +177,7 @@ function formatShutdownWatcher(s) {
     }
     
     if (s.stream_count > 0) {
-        const streamStr = s.stream_count === 1 ? '1 active Plex stream' : `${s.stream_count} active Plex streams`;
+        const streamStr = s.stream_count === 1 ? '1 active stream' : `${s.stream_count} active streams`;
         label = `0 of ${idleNeeded} idle polls (Paused)`;
         detail = `Shutdown paused — ${streamStr}`;
     } else if (s.nzbget_active) {
@@ -185,7 +185,7 @@ function formatShutdownWatcher(s) {
         detail = `Shutdown paused — ${s.nzbget_detail || 'NZBGet active'}`;
     } else if (s.plex_activity_active) {
         label = `0 of ${idleNeeded} idle polls (Paused)`;
-        detail = `Shutdown paused — ${s.plex_activity_detail || 'Plex background task running'}`;
+        detail = `Shutdown paused — ${s.plex_activity_detail || 'Media server background task running'}`;
     } else if (idleStreak >= idleNeeded) {
         label = `${idleNeeded} of ${idleNeeded} idle polls`;
         detail = `Shutdown threshold reached — SSH command executed.`;
@@ -295,6 +295,10 @@ function updateConnectionPills(d) {
     if (d.plex) {
         const p = el('pip-plex');
         if (p) p.className = 'conn-pip ' + (d.plex.ok ? 'ok' : (d.plex.status.includes('Error') ? 'warn' : 'err'));
+    }
+    if (d.jellyfin) {
+        const p = el('pip-jellyfin');
+        if (p) p.className = 'conn-pip ' + (d.jellyfin.ok ? 'ok' : (d.jellyfin.status.includes('Error') ? 'warn' : 'err'));
     }
 }
 
@@ -521,6 +525,8 @@ function saveConfiguration() {
         NZBGET_PASSWORD: el('cfg-NZBGET_PASSWORD').value,
         PLEX_URL: el('cfg-PLEX_URL').value,
         PLEX_TOKEN: el('cfg-PLEX_TOKEN').value,
+        JELLYFIN_URL: el('cfg-JELLYFIN_URL').value,
+        JELLYFIN_API_KEY: el('cfg-JELLYFIN_API_KEY').value,
         PLEX_WATCH_INTERVAL: parseInt(el('cfg-PLEX_WATCH_INTERVAL').value) || 3600,
         PLEX_POLL_INTERVAL: parseInt(el('cfg-PLEX_POLL_INTERVAL').value) || 1200,
         PLEX_IDLE_POLLS: parseInt(el('cfg-PLEX_IDLE_POLLS').value) || 3,
@@ -572,6 +578,8 @@ function testConnection(service) {
         params = { url: el('cfg-RADARR_URL').value, api_key: el('cfg-RADARR_API_KEY').value };
     } else if (service === 'plex') {
         params = { url: el('cfg-PLEX_URL').value, token: el('cfg-PLEX_TOKEN').value };
+    } else if (service === 'jellyfin') {
+        params = { url: el('cfg-JELLYFIN_URL').value, api_key: el('cfg-JELLYFIN_API_KEY').value };
     } else if (service === 'nzbget') {
         params = { url: el('cfg-NZBGET_URL').value, username: el('cfg-NZBGET_USERNAME').value, password: el('cfg-NZBGET_PASSWORD').value };
     } else if (service === 'ssh') {
@@ -632,10 +640,11 @@ function buildServiceUrl(configuredUrl) {
 
 function updatePillLinks(urls) {
     const mappings = {
-        sonarr: urls.SONARR_URL || urls.sonarr,
-        radarr: urls.RADARR_URL || urls.radarr,
-        plex:   urls.PLEX_URL || urls.plex,
-        nzbget: urls.NZBGET_URL || urls.nzbget
+        sonarr:   urls.SONARR_URL || urls.sonarr,
+        radarr:   urls.RADARR_URL || urls.radarr,
+        plex:     urls.PLEX_URL || urls.plex,
+        jellyfin: urls.JELLYFIN_URL || urls.jellyfin,
+        nzbget:   urls.NZBGET_URL || urls.nzbget
     };
     for (const [key, rawUrl] of Object.entries(mappings)) {
         const pillEl = el(`pill-${key}`);
