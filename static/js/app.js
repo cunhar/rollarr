@@ -557,7 +557,33 @@ function loadShowEpisodes(showId, forceReload = false) {
     });
 }
 
-function deleteLibraryItem(type, id) {
+function deleteLibraryItem(type, id, btnEl) {
+    if (btnEl && btnEl.dataset.confirming !== '1') {
+        const origText = btnEl.textContent;
+        btnEl.dataset.confirming = '1';
+        btnEl.dataset.origText = origText;
+        btnEl.textContent = '⚠️ Confirm Remove?';
+        btnEl.style.background = 'var(--red-dim)';
+        btnEl.style.borderColor = 'var(--red)';
+        btnEl.style.color = 'var(--red)';
+        btnEl.style.fontWeight = '600';
+        btnEl._confirmTimer = setTimeout(() => {
+            btnEl.dataset.confirming = '';
+            btnEl.textContent = btnEl.dataset.origText || 'Remove';
+            btnEl.style.background = '';
+            btnEl.style.borderColor = '';
+            btnEl.style.color = '';
+            btnEl.style.fontWeight = '';
+        }, 5000);
+        return;
+    }
+    if (btnEl && btnEl._confirmTimer) {
+        clearTimeout(btnEl._confirmTimer);
+    }
+    if (btnEl) {
+        btnEl.disabled = true;
+        btnEl.textContent = 'Removing...';
+    }
     Api.deleteLibraryItem(type, id).then(() => {
         showToast('Removed from tracked library', 'info');
         loadLibrary();
@@ -590,7 +616,7 @@ function loadLibrary() {
                         </summary>
                         <div class="config-card-body">
                             <div style="display:flex; justify-content:flex-end; margin-bottom:10px;">
-                                <button class="btn-clear" onclick="deleteLibraryItem('tv', ${s.id})">Remove Show</button>
+                                <button class="btn-clear" onclick="deleteLibraryItem('tv', ${s.id}, this)">Remove Show</button>
                             </div>
                             <div id="show-episodes-${s.id}"></div>
                         </div>
@@ -618,7 +644,7 @@ function loadLibrary() {
                             ${m.year ? `<span class="media-year">(${m.year})</span>` : ''}
                             <span class="badge ${badgeCls}" style="margin-left:8px;">${escapeHtml(m.status || 'wanted')}</span>
                         </div>
-                        <button class="btn-clear" onclick="deleteLibraryItem('movie', ${m.id})">Remove</button>
+                        <button class="btn-clear" onclick="deleteLibraryItem('movie', ${m.id}, this)">Remove</button>
                     </div>`;
                 }).join('');
             }
