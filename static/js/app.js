@@ -515,7 +515,14 @@ function loadShowEpisodes(showId, forceReload = false) {
     if (!body) return;
     if (!forceReload && body.dataset.loaded === '1') return;
 
-    body.innerHTML = '<div style="font-size:11px; color:var(--text-sub); font-family:var(--mono); padding:6px 0;">Loading seasons & episodes...</div>';
+    const openSeasons = new Set();
+    body.querySelectorAll('details.season-card[data-season]').forEach(d => {
+        if (d.open) openSeasons.add(d.getAttribute('data-season'));
+    });
+
+    if (!forceReload) {
+        body.innerHTML = '<div style="font-size:11px; color:var(--text-sub); font-family:var(--mono); padding:6px 0;">Loading seasons & episodes...</div>';
+    }
     Api.fetchShowEpisodes(showId).then(data => {
         if (!data || data.status !== 'success') {
             body.innerHTML = '<div style="font-size:11px; color:var(--red);">Failed to load episodes.</div>';
@@ -528,7 +535,7 @@ function loadShowEpisodes(showId, forceReload = false) {
             return;
         }
         body.innerHTML = seasons.map(sec => `
-            <details class="season-card">
+            <details class="season-card" data-season="${sec.season}" ${openSeasons.has(String(sec.season)) ? 'open' : ''}>
                 <summary class="season-summary">
                     <span>Season ${sec.season}</span>
                     <span class="badge ${sec.downloaded > 0 ? 'badge-green' : 'badge-dim'}">${sec.downloaded} / ${sec.total} on disk</span>
