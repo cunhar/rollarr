@@ -63,6 +63,20 @@ const Api = {
         return { ok: res.ok, data: await res.json() };
     },
 
+    async fetchShowEpisodes(showId) {
+        const res = await fetch(`/api/library/tv/${showId}/episodes`);
+        return res.ok ? await res.json() : null;
+    },
+
+    async queueSingleEpisode(showId, season, episode) {
+        const res = await fetch(`/api/library/tv/${showId}/episode`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ season, episode })
+        });
+        return { ok: res.ok, data: await res.json() };
+    },
+
     async queueShowFrom(showId, startSeason, startEpisode) {
         const res = await fetch(`/api/library/tv/${showId}/queue`, {
             method: 'POST',

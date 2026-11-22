@@ -228,6 +228,26 @@ def api_library_add():
         return jsonify({'status': 'error', 'message': str(exc)}), 500
 
 
+@app.route('/api/library/tv/<int:show_id>/episodes')
+def api_library_tv_episodes(show_id: int):
+    res = media_manager.get_show_episodes_status(show_id)
+    code = 200 if res.get('status') == 'success' else 404
+    return jsonify(res), code
+
+
+@app.route('/api/library/tv/<int:show_id>/episode', methods=['POST'])
+def api_library_tv_single_episode(show_id: int):
+    show = db.get_show(show_id)
+    if not show:
+        return jsonify({'status': 'error', 'message': 'Show not found'}), 404
+    data = request.json or {}
+    season = int(data.get('season') or 1)
+    episode = int(data.get('episode') or 1)
+    ok, msg = media_manager.queue_episode(show, season, episode)
+    activity_log.log_call('success' if ok else 'warning', msg)
+    return jsonify({'status': 'success' if ok else 'warning', 'message': msg}), 200
+
+
 @app.route('/api/library/tv/<int:show_id>/queue', methods=['POST'])
 def api_library_tv_queue(show_id: int):
     data = request.json or {}

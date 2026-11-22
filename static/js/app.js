@@ -454,11 +454,9 @@ function addLibraryItem(type, idx, btnEl) {
         });
 }
 
-function queueShowFrom(showId, btnEl) {
-    const sEl = el(`show-s-${showId}`);
-    const eEl = el(`show-e-${showId}`);
-    const s = parseInt(sEl && sEl.value) || 1;
-    const e = parseInt(eEl && eEl.value) || 1;
+function queueShowFrom(showId, startSeason, startEpisode, btnEl) {
+    const s = startSeason || parseInt((el(`show-s-${showId}`) || {}).value) || 1;
+    const e = startEpisode || parseInt((el(`show-e-${showId}`) || {}).value) || 1;
     if (btnEl) {
         btnEl.disabled = true;
         btnEl.textContent = 'Queueing...';
@@ -466,15 +464,97 @@ function queueShowFrom(showId, btnEl) {
     Api.queueShowFrom(showId, s, e)
         .then(({ ok, data }) => {
             showToast(data.message || 'Episodes queued', ok && data.status === 'success' ? 'ok' : 'info');
+            loadShowEpisodes(showId, true);
             setTimeout(pollAll, 500);
         })
         .catch(() => showToast('Failed to queue episodes', 'err'))
         .finally(() => {
             if (btnEl) {
                 btnEl.disabled = false;
-                btnEl.textContent = 'Queue';
+                btnEl.textContent = 'Start Here';
             }
         });
+}
+
+function queueSingleEpisode(showId, season, episode, btnEl) {
+    if (btnEl) {
+        btnEl.disabled = true;
+        btnEl.textContent = '...';
+    }
+    Api.queueSingleEpisode(showId, season, episode)
+        .then(({ ok, data }) => {
+            showToast(data.message || 'Episode queued', ok && data.status === 'success' ? 'ok' : 'info');
+            loadShowEpisodes(showId, true);
+            setTimeout(pollAll, 500);
+        })
+        .catch(() => showToast('Failed to queue episode', 'err'))
+        .finally(() => {
+            if (btnEl) {
+                btnEl.disabled = false;
+                btnEl.textContent = 'Get';
+            }
+        });
+}
+
+function onShowToggle(detailsEl, showId) {
+    if (detailsEl.open) {
+        loadShowEpisodes(showId, false);
+    }
+}
+
+function loadShowEpisodes(showId, forceReload = false) {
+    const body = el(`show-episodes-${showId}`);
+    if (!body) return;
+    if (!forceReload && body.dataset.loaded === '1') return;
+
+    body.innerHTML = '<div style="font-size:11px; color:var(--text-sub); font-family:var(--mono); padding:6px 0;">Loading seasons & episodes...</div>';
+    Api.fetchShowEpisodes(showId).then(data => {
+        if (!data || data.status !== 'success') {
+            body.innerHTML = '<div style="font-size:11px; color:var(--red);">Failed to load episodes.</div>';
+            return;
+        }
+        body.dataset.loaded = '1';
+        const seasons = data.seasons || [];
+        if (seasons.length === 0) {
+            body.innerHTML = '<div style="font-size:11px; color:var(--text-sub);">No episodes found on TVMaze.</div>';
+            return;
+        }
+        body.innerHTML = seasons.map(sec => `
+            <details class="season-card">
+                <summary class="season-summary">
+                    <span>Season ${sec.season}</span>
+                    <span class="badge ${sec.downloaded > 0 ? 'badge-green' : 'badge-dim'}">${sec.downloaded} / ${sec.total} on disk</span>
+                </summary>
+                <div class="season-episodes">
+                    ${sec.episodes.map(ep => {
+                        const tag = `S${String(ep.season).padStart(2, '0')}E${String(ep.episode).padStart(2, '0')}`;
+                        const st = ep.status;
+                        const badgeCls = st === 'downloaded' ? 'badge-green'
+                                       : st === 'queued' ? 'badge-blue'
+                                       : st === 'missing' ? 'badge-amber'
+                                       : 'badge-dim';
+                        const badgeTxt = st === 'downloaded' ? 'ON DISK' : st.toUpperCase();
+                        const actions = (st === 'missing')
+                            ? `<button class="btn-clear btn-ep" onclick="queueSingleEpisode(${showId}, ${ep.season}, ${ep.episode}, this)">Get</button>
+                               <button class="btn-clear btn-ep" onclick="queueShowFrom(${showId}, ${ep.season}, ${ep.episode}, this)">Start Here</button>`
+                            : '';
+                        return `
+                        <div class="ep-row">
+                            <div class="ep-row-left">
+                                <span class="ep-tag">${tag}</span>
+                                <span class="ep-title">${escapeHtml(ep.title)}</span>
+                                ${ep.airdate ? `<span class="ep-airdate">${escapeHtml(ep.airdate)}</span>` : ''}
+                            </div>
+                            <div class="ep-row-right">
+                                <span class="badge ${badgeCls}">${badgeTxt}</span>
+                                ${actions}
+                            </div>
+                        </div>`;
+                    }).join('')}
+                </div>
+            </details>
+        `).join('');
+    });
 }
 
 function deleteLibraryItem(type, id) {
@@ -500,7 +580,7 @@ function loadLibrary() {
                     if (d.open) openIds.add(d.getAttribute('data-show-id'));
                 });
                 showsEl.innerHTML = shows.map(s => `
-                    <details class="config-card" data-show-id="${s.id}" ${openIds.has(String(s.id)) ? 'open' : ''} style="margin-bottom:0;">
+                    <details class="config-card" data-show-id="${s.id}" ${openIds.has(String(s.id)) ? 'open' : ''} ontoggle="onShowToggle(this, ${s.id})" style="margin-bottom:0;">
                         <summary class="config-card-summary">
                             <span style="display:flex; align-items:center; gap:8px;">
                                 <strong>${escapeHtml(s.title)}</strong>
@@ -508,17 +588,15 @@ function loadLibrary() {
                                 <span class="badge badge-green">${escapeHtml(s.status || 'active')}</span>
                             </span>
                         </summary>
-                        <div class="config-card-body" style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:12px;">
-                            <div class="ep-controls-row">
-                                <span style="font-size:11px; color:var(--text-sub); font-family:var(--mono); margin-right:4px;">Start from:</span>
-                                <label class="ep-mini-label">S<input type="number" class="ep-mini-input" id="show-s-${s.id}" value="1" min="1"></label>
-                                <label class="ep-mini-label">E<input type="number" class="ep-mini-input" id="show-e-${s.id}" value="1" min="1"></label>
-                                <button class="btn-clear" onclick="queueShowFrom(${s.id}, this)">Queue Episodes</button>
+                        <div class="config-card-body">
+                            <div style="display:flex; justify-content:flex-end; margin-bottom:10px;">
+                                <button class="btn-clear" onclick="deleteLibraryItem('tv', ${s.id})">Remove Show</button>
                             </div>
-                            <button class="btn-clear" onclick="deleteLibraryItem('tv', ${s.id})">Remove Show</button>
+                            <div id="show-episodes-${s.id}"></div>
                         </div>
                     </details>
                 `).join('');
+                openIds.forEach(id => loadShowEpisodes(parseInt(id), true));
             }
         }
 
@@ -551,6 +629,8 @@ function loadLibrary() {
 window.searchMedia = searchMedia;
 window.addLibraryItem = addLibraryItem;
 window.queueShowFrom = queueShowFrom;
+window.queueSingleEpisode = queueSingleEpisode;
+window.onShowToggle = onShowToggle;
 window.deleteLibraryItem = deleteLibraryItem;
 window.loadLibrary = loadLibrary;
 

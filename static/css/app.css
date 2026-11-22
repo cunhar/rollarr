@@ -944,3 +944,72 @@ body {
     font-family: var(--mono);
     font-size: 11px;
 }
+.season-card {
+    border: 1px solid var(--border);
+    background: var(--bg);
+    margin-bottom: 8px;
+}
+.season-summary {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 8px 12px;
+    cursor: pointer;
+    font-family: var(--mono);
+    font-size: 12px;
+    font-weight: 500;
+    color: var(--text);
+    list-style: none;
+}
+.season-summary::-webkit-details-marker { display: none; }
+.season-summary:hover { background: var(--surface-2); }
+.season-episodes {
+    border-top: 1px solid var(--border);
+    padding: 4px 0;
+}
+.ep-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 10px;
+    padding: 6px 12px;
+    border-bottom: 1px solid rgba(255,255,255,0.03);
+    flex-wrap: wrap;
+}
+.ep-row:last-child { border-bottom: none; }
+.ep-row-left {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    min-width: 0;
+    flex: 1;
+}
+.ep-row-right {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    flex-shrink: 0;
+}
+.ep-tag {
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--accent);
+    flex-shrink: 0;
+}
+.ep-title {
+    font-size: 12px;
+    color: var(--text);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.ep-airdate {
+    font-family: var(--mono);
+    font-size: 10px;
+    color: var(--text-sub);
+    flex-shrink: 0;
+}
+.btn-ep {
+    padding: 2px 8px;
+    font-size: 10px;
+}

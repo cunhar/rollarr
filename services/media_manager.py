@@ -319,6 +319,74 @@ def add_show(tvmaze_id: int, start_season: int = 1, start_episode: int = 1) -> d
     }
 
 
+def _scan_show_episodes_on_disk(show_title: str) -> set[tuple[int, int]]:
+    """Return a set of (season, episode) tuples currently present on disk for a show."""
+    found: set[tuple[int, int]] = set()
+    show_dir = _find_show_dir(show_title)
+    if not show_dir:
+        return found
+    ep_pat = re.compile(r'(?:^|[\.\s_\-])S0*(\d{1,2})E0*(\d{1,3})(?:$|[\.\s_\-])', re.I)
+    for _, _, filenames in os.walk(show_dir):
+        for fname in filenames:
+            if os.path.splitext(fname)[1].lower() not in VIDEO_EXTS:
+                continue
+            m = ep_pat.search(fname)
+            if m:
+                found.add((int(m.group(1)), int(m.group(2))))
+    return found
+
+
+def get_show_episodes_status(show_id: int) -> dict[str, Any]:
+    """Return all seasons and episodes for a tracked show with on-disk / queued / unaired status."""
+    show = db.get_show(show_id)
+    if not show:
+        return {'status': 'error', 'message': f'Show #{show_id} not found'}
+
+    episodes = metadata.get_show_episodes(show['tvmaze_id'])
+    on_disk = _scan_show_episodes_on_disk(show['title'])
+    queued_set = {
+        (int(d['season']), int(d['episode']))
+        for d in db.list_active_downloads()
+        if d['media_type'] == 'episode'
+        and clean_title(d['title']) == clean_title(show['title'])
+        and d.get('season') is not None
+        and d.get('episode') is not None
+    }
+
+    seasons_map: dict[int, list[dict[str, Any]]] = {}
+    for ep in episodes:
+        s_num, e_num = ep['season'], ep['episode']
+        if (s_num, e_num) in on_disk:
+            ep_status = 'downloaded'
+        elif (s_num, e_num) in queued_set:
+            ep_status = 'queued'
+        elif not ep['aired']:
+            ep_status = 'unaired'
+        else:
+            ep_status = 'missing'
+
+        seasons_map.setdefault(s_num, []).append({
+            'season': s_num,
+            'episode': e_num,
+            'title': ep['title'],
+            'airdate': ep['airdate'],
+            'aired': ep['aired'],
+            'status': ep_status,
+        })
+
+    seasons = []
+    for s_num in sorted(seasons_map.keys()):
+        eps = seasons_map[s_num]
+        seasons.append({
+            'season': s_num,
+            'total': len(eps),
+            'downloaded': sum(1 for e in eps if e['status'] == 'downloaded'),
+            'episodes': eps,
+        })
+
+    return {'status': 'success', 'show': show, 'seasons': seasons}
+
+
 def queue_show_from(show_id: int, start_season: int = 1, start_episode: int = 1) -> dict[str, Any]:
     """Queue the next ROLLING_WINDOW aired episodes for an existing tracked show starting at (S, E)."""
     show = db.get_show(show_id)
