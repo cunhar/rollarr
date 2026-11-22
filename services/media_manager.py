@@ -67,6 +67,22 @@ def episode_exists_on_disk(show_title: str, season: int, episode: int) -> bool:
     return find_episode_file_on_disk(show_title, season, episode) is not None
 
 
+def _remove_companion_subtitles(video_path: str, base_dir: str):
+    """Remove any sidecar .srt subtitle files sharing the same basename stem."""
+    parent = os.path.dirname(video_path)
+    stem = os.path.splitext(os.path.basename(video_path))[0]
+    if not os.path.isdir(parent):
+        return
+    for fname in os.listdir(parent):
+        if fname.lower().endswith('.srt') and fname.startswith(stem):
+            sub_path = os.path.join(parent, fname)
+            if is_safe_subpath(sub_path, base_dir):
+                try:
+                    os.remove(sub_path)
+                except OSError:
+                    pass
+
+
 def _remove_empty_parents(file_path: str, stop_dir: str):
     """Remove empty parent directories up to (but never including) stop_dir."""
     cur = os.path.dirname(file_path)
@@ -103,6 +119,7 @@ def delete_episode_file(
         return False, f'refused unsafe path outside {tv_root}'
 
     os.remove(target)
+    _remove_companion_subtitles(target, tv_root)
     _remove_empty_parents(target, tv_root)
     logger.info(f"[MediaManager] Deleted episode file: {target}")
     return True, f"deleted {os.path.basename(target)}"
@@ -156,6 +173,7 @@ def delete_movie_file(
         return False, f'refused unsafe path outside {movies_root}'
 
     os.remove(target)
+    _remove_companion_subtitles(target, movies_root)
     _remove_empty_parents(target, movies_root)
     logger.info(f"[MediaManager] Deleted movie file: {target}")
     return True, f"deleted {os.path.basename(target)}"

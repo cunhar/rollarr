@@ -70,15 +70,15 @@ function renderStreamCard(st) {
     </div>`;
 }
 
-function renderDownloadCard(d, mIdx, mTotal) {
+function renderDownloadCard(d, qIdx, qTotal) {
     const statusBadge = d.status === 'DOWNLOADING' ? 'badge-green' : (d.status === 'PAUSED' ? 'badge-amber' : 'badge-dim');
     const meta = d.size_mb > 0
         ? (d.size_mb - d.remaining_mb).toFixed(1) + ' / ' + d.size_mb + ' MB'
         : 'Starting...';
-    const isMovable = mIdx >= 0;
-    const reorderBtns = (isMovable && mTotal > 1)
-        ? `<button class="btn-clear" style="padding:2px 6px; font-size:10px;" title="Move Up" ${mIdx === 0 ? 'disabled' : ''} onclick="moveDownload(${d.id}, 'up')">↑</button>
-           <button class="btn-clear" style="padding:2px 6px; font-size:10px;" title="Move Down" ${mIdx === mTotal - 1 ? 'disabled' : ''} onclick="moveDownload(${d.id}, 'down')">↓</button>`
+    const isQueued = d.status === 'QUEUED';
+    const reorderBtns = (isQueued && qTotal > 1)
+        ? `<button class="btn-clear" style="padding:2px 6px; font-size:10px;" title="Move Up" ${qIdx === 0 ? 'disabled' : ''} onclick="moveDownload(${d.id}, 'up')">↑</button>
+           <button class="btn-clear" style="padding:2px 6px; font-size:10px;" title="Move Down" ${qIdx === qTotal - 1 ? 'disabled' : ''} onclick="moveDownload(${d.id}, 'down')">↓</button>`
         : '';
     return `
     <div class="stream-card">
@@ -341,10 +341,10 @@ function updateDownloads(s) {
                     </div>
                 </div>`
             ];
-            const movableList = s.downloads.filter(d => d.status === 'DOWNLOADING' || d.status === 'QUEUED' || d.status === 'PAUSED');
+            const queuedList = s.downloads.filter(d => d.status === 'QUEUED');
             s.downloads.forEach(d => {
-                const mIdx = movableList.indexOf(d);
-                html.push(renderDownloadCard(d, mIdx, movableList.length));
+                const qIdx = queuedList.indexOf(d);
+                html.push(renderDownloadCard(d, qIdx, queuedList.length));
             });
             container.innerHTML = html.join('');
         }
@@ -1067,6 +1067,8 @@ function saveConfiguration() {
         REJECT_KEYWORDS: el('cfg-REJECT_KEYWORDS').value,
         AUTO_GRAB_INTERVAL_HOURS: parseInt(el('cfg-AUTO_GRAB_INTERVAL_HOURS').value) || 0,
         MIN_FREE_DISK_GB: parseInt(el('cfg-MIN_FREE_DISK_GB').value) || 0,
+        SUBTITLES_ENABLED: el('cfg-SUBTITLES_ENABLED').value === 'true',
+        SUBTITLE_LANGUAGES: el('cfg-SUBTITLE_LANGUAGES').value,
         ROLLING_WINDOW: parseInt(el('cfg-ROLLING_WINDOW').value) || 3,
         DELETE_WATCHED_EPISODES: el('cfg-DELETE_WATCHED_EPISODES').value === 'true',
         PLEX_URL: el('cfg-PLEX_URL').value,

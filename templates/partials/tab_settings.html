@@ -144,6 +144,31 @@
             </div>
         </details>
 
+        <!-- 4b. Subtitle Auto-Download -->
+        <details class="config-card">
+            <summary class="config-card-summary">
+                <span class="section-title" style="margin-bottom:0;">💬 Subtitle Auto-Download</span>
+            </summary>
+            <div class="config-card-body">
+                <div class="form-grid">
+                    <div class="form-group">
+                        <label class="form-label">Auto-Download Subtitles</label>
+                        <select class="form-input" id="cfg-SUBTITLES_ENABLED">
+                            <option value="true" {{ 'selected' if cfg.SUBTITLES_ENABLED else '' }}>Enabled — fetch .srt sidecar files after import</option>
+                            <option value="false" {{ 'selected' if not cfg.SUBTITLES_ENABLED else '' }}>Disabled</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Languages (comma-separated)</label>
+                        <input type="text" class="form-input" id="cfg-SUBTITLE_LANGUAGES" value="{{ cfg.SUBTITLE_LANGUAGES }}" placeholder="en, pt">
+                        <span style="font-size:11px; color:var(--text-muted); font-family:var(--mono); margin-top:4px; display:block;">
+                            Examples: <code>en, pt</code> (pt prefers European Portuguese, falls back to Brazilian), <code>pt-pt</code>, <code>pt-br</code>, <code>es</code>, <code>fr</code>, <code>de</code>.
+                        </span>
+                    </div>
+                </div>
+            </div>
+        </details>
+
         <!-- 5. Plex Connection -->
         <details class="config-card">
             <summary class="config-card-summary">

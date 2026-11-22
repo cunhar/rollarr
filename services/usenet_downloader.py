@@ -271,7 +271,6 @@ _state_lock = threading.Lock()
 _wake_event = threading.Event()
 _paused = False
 _cancelled_ids: set[int] = set()
-_preempted_ids: set[int] = set()
 _log_callback = None
 
 _live_state: dict[str, Any] = {
@@ -315,13 +314,6 @@ def resume():
         _paused = False
     _wake_event.set()
     _activity_log('info', 'Usenet downloader resumed')
-
-
-def preempt_download(download_id: int):
-    """Pause/re-queue an active download so a higher-priority queued item starts immediately."""
-    with _state_lock:
-        _preempted_ids.add(download_id)
-    _wake_event.set()
 
 
 def cancel_download(download_id: int) -> bool:
@@ -601,7 +593,7 @@ def _process_job(job: dict[str, Any]):
                 conn.connect()
                 while True:
                     with _state_lock:
-                        if job_id in _cancelled_ids or job_id in _preempted_ids:
+                        if job_id in _cancelled_ids:
                             return
                         is_p = _paused
                     if is_p:
@@ -672,10 +664,6 @@ def _process_job(job: dict[str, Any]):
                 _cancelled_ids.discard(job_id)
                 db.update_download(job_id, status='cancelled', error='Cancelled by user')
                 return
-            if job_id in _preempted_ids:
-                _preempted_ids.discard(job_id)
-                db.update_download(job_id, status='queued', progress_pct=0.0, downloaded_bytes=0)
-                return
 
         if total_segments > 0 and missing_segments / total_segments > 0.25:
             raise RuntimeError(f"Too many missing articles ({missing_segments}/{total_segments})")
@@ -703,7 +691,30 @@ def _process_job(job: dict[str, Any]):
         if job['media_type'] == 'movie' and job.get('media_id'):
             db.update_movie_status(job['media_id'], 'downloaded', file_path=dest_path)
 
-        _activity_log('success', f"Completed & imported: {os.path.basename(dest_path)}", {'path': dest_path})
+        # Auto-download subtitles (best-effort, never fails the import)
+        sub_note = ''
+        try:
+            from services import subtitle_service
+            imdb_id = None
+            if job['media_type'] == 'episode' and job.get('media_id'):
+                show_rec = db.get_show(int(job['media_id']))
+                imdb_id = show_rec.get('imdb_id') if show_rec else None
+            elif job['media_type'] == 'movie' and job.get('media_id'):
+                mov_rec = db.get_movie(int(job['media_id']))
+                imdb_id = mov_rec.get('imdb_id') if mov_rec else None
+            got_subs = subtitle_service.download_subtitles_for_media(
+                video_path=dest_path,
+                media_type=job['media_type'],
+                imdb_id=imdb_id,
+                season=job.get('season'),
+                episode=job.get('episode'),
+            )
+            if got_subs:
+                sub_note = f" + subs ({', '.join(got_subs)})"
+        except Exception as sub_exc:
+            logger.debug(f"[UsenetDL] Subtitle auto-download error: {sub_exc}")
+
+        _activity_log('success', f"Completed & imported: {os.path.basename(dest_path)}{sub_note}", {'path': dest_path})
         _notify_media_servers()
 
     except Exception as exc:

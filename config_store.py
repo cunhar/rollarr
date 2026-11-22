@@ -67,6 +67,8 @@ DEFAULT_CONFIG = {
     'REJECT_KEYWORDS': 'MULTI',
     'AUTO_GRAB_INTERVAL_HOURS': 6,
     'MIN_FREE_DISK_GB': 15,
+    'SUBTITLES_ENABLED': True,
+    'SUBTITLE_LANGUAGES': 'en, pt',
     'PLEX_URL': 'http://plex:32400',
     'PLEX_TOKEN': '',
     'JELLYFIN_URL': 'http://jellyfin:8096',
