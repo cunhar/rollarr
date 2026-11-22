@@ -527,16 +527,22 @@ function loadLibrary() {
             if (movies.length === 0) {
                 moviesEl.innerHTML = '<div class="no-logs">No tracked movies yet.</div>';
             } else {
-                moviesEl.innerHTML = movies.map(m => `
+                moviesEl.innerHTML = movies.map(m => {
+                    const st = (m.status || 'wanted').toLowerCase();
+                    const badgeCls = st === 'downloaded' ? 'badge-green'
+                                   : st === 'wanted' ? 'badge-amber'
+                                   : st === 'downloading' ? 'badge-blue'
+                                   : 'badge-dim';
+                    return `
                     <div class="library-row">
                         <div>
                             <strong>${escapeHtml(m.title)}</strong>
                             ${m.year ? `<span class="media-year">(${m.year})</span>` : ''}
-                            <span class="badge badge-dim" style="margin-left:8px;">${escapeHtml(m.status || 'wanted')}</span>
+                            <span class="badge ${badgeCls}" style="margin-left:8px;">${escapeHtml(m.status || 'wanted')}</span>
                         </div>
                         <button class="btn-clear" onclick="deleteLibraryItem('movie', ${m.id})">Remove</button>
-                    </div>
-                `).join('');
+                    </div>`;
+                }).join('');
             }
         }
     });
