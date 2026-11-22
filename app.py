@@ -175,16 +175,24 @@ def api_downloads_cancel(download_id: int):
 
 @app.route('/api/search')
 def api_search():
-    media_type = (request.args.get('type') or 'tv').lower()
+    media_type = (request.args.get('type') or 'all').lower()
     query = (request.args.get('q') or '').strip()
     if not query:
-        return jsonify({'results': []}), 200
+        return jsonify({'results': [], 'tv': [], 'movies': []}), 200
 
     if media_type == 'movie':
-        results = metadata.search_movies(query)
-    else:
-        results = metadata.search_tv(query)
-    return jsonify({'results': results}), 200
+        movies = metadata.search_movies(query)
+        return jsonify({'results': movies, 'movies': movies, 'tv': []}), 200
+    if media_type == 'tv':
+        tv = metadata.search_tv(query)
+        return jsonify({'results': tv, 'tv': tv, 'movies': []}), 200
+
+    with concurrent.futures.ThreadPoolExecutor(max_workers=2) as ex:
+        f_movies = ex.submit(metadata.search_movies, query)
+        f_tv = ex.submit(metadata.search_tv, query)
+        movies = f_movies.result()
+        tv = f_tv.result()
+    return jsonify({'movies': movies, 'tv': tv, 'results': movies + tv}), 200
 
 
 @app.route('/api/library')

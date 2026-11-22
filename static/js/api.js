@@ -40,7 +40,7 @@ const Api = {
         return res.ok ? await res.json() : null;
     },
 
-    async searchMedia(type, query) {
+    async searchMedia(query, type = 'all') {
         const params = new URLSearchParams({ type, q: query });
         const res = await fetch(`/api/search?${params.toString()}`);
         return { ok: res.ok, data: await res.json() };

@@ -362,8 +362,24 @@ window.cancelDownload = cancelDownload;
 
 let _lastSearchResults = [];
 
+function _renderSearchCard(item, idx) {
+    const isTv = item.type === 'tv';
+    const btnLabel = isTv ? 'Add Show' : 'Add & Download';
+    const typeBadge = isTv
+        ? '<span class="badge badge-blue" style="margin-left:6px;">TV</span>'
+        : '<span class="badge badge-amber" style="margin-left:6px;">MOVIE</span>';
+    return `
+        <div class="media-card">
+            ${item.poster_url ? `<img class="media-poster" src="${escapeHtml(item.poster_url)}" alt="">` : `<div class="media-poster media-poster-placeholder">?</div>`}
+            <div class="media-card-info">
+                <div class="media-card-title">${escapeHtml(item.title)} ${item.year ? `<span class="media-year">(${item.year})</span>` : ''}${typeBadge}</div>
+                <div class="media-card-overview">${escapeHtml((item.overview || '').slice(0, 120))}</div>
+                <button class="btn-clear" onclick="addLibraryItem('${escapeHtml(item.type)}', ${idx}, this)">${btnLabel}</button>
+            </div>
+        </div>`;
+}
+
 function searchMedia() {
-    const type = el('search-media-type').value;
     const query = (el('search-media-query').value || '').trim();
     const btn = el('btn-search-media');
     const container = el('search-results-container');
@@ -373,32 +389,35 @@ function searchMedia() {
         btn.disabled = true;
         btn.textContent = 'Searching...';
     }
-    container.innerHTML = '<div class="no-logs">Searching...</div>';
+    container.innerHTML = '<div class="no-logs">Searching movies & TV shows...</div>';
 
-    Api.searchMedia(type, query)
+    Api.searchMedia(query, 'all')
         .then(({ ok, data }) => {
             if (!ok) {
                 showToast(data.message || 'Search failed', 'err');
                 container.innerHTML = '';
                 return;
             }
-            const results = data.results || [];
-            _lastSearchResults = results;
-            if (results.length === 0) {
-                container.innerHTML = '<div class="no-logs">No results found.</div>';
+            const movies = (data.movies || []).map(m => ({ ...m, type: 'movie' }));
+            const tv = (data.tv || []).map(t => ({ ...t, type: 'tv' }));
+            _lastSearchResults = [...movies, ...tv];
+
+            if (_lastSearchResults.length === 0) {
+                container.innerHTML = '<div class="no-logs">No movies or TV shows found.</div>';
                 return;
             }
-            const btnLabel = type === 'tv' ? 'Add Show' : 'Add & Download';
-            container.innerHTML = results.map((item, idx) => `
-                <div class="media-card">
-                    ${item.poster_url ? `<img class="media-poster" src="${escapeHtml(item.poster_url)}" alt="">` : `<div class="media-poster media-poster-placeholder">?</div>`}
-                    <div class="media-card-info">
-                        <div class="media-card-title">${escapeHtml(item.title)} ${item.year ? `<span class="media-year">(${item.year})</span>` : ''}</div>
-                        <div class="media-card-overview">${escapeHtml((item.overview || '').slice(0, 120))}</div>
-                        <button class="btn-clear" onclick="addLibraryItem('${escapeHtml(type)}', ${idx}, this)">${btnLabel}</button>
-                    </div>
-                </div>
-            `).join('');
+
+            let html = '';
+            if (movies.length > 0) {
+                html += `<p class="section-title" style="margin:12px 0 10px;">Movies (${movies.length})</p>`;
+                html += `<div class="media-grid">${movies.map((m, i) => _renderSearchCard(m, i)).join('')}</div>`;
+            }
+            if (tv.length > 0) {
+                const offset = movies.length;
+                html += `<p class="section-title" style="margin:20px 0 10px;">TV Shows (${tv.length})</p>`;
+                html += `<div class="media-grid">${tv.map((t, i) => _renderSearchCard(t, offset + i)).join('')}</div>`;
+            }
+            container.innerHTML = html;
         })
         .catch(() => {
             showToast('Search request failed', 'err');
