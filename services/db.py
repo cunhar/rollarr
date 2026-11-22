@@ -221,14 +221,15 @@ def update_movie_status(movie_id: int, status: str, file_path: str | None = None
 
 
 def mark_movie_watched_by_title(title: str, year: int | None = None):
+    """Remove a watched movie from the tracked library automatically."""
     with _conn() as c:
         if year is not None:
             c.execute(
-                "UPDATE movies SET status = 'watched' WHERE LOWER(title) = LOWER(?) AND (year = ? OR year IS NULL)",
+                "DELETE FROM movies WHERE LOWER(title) = LOWER(?) AND (year = ? OR year IS NULL)",
                 (title, int(year)),
             )
         else:
-            c.execute("UPDATE movies SET status = 'watched' WHERE LOWER(title) = LOWER(?)", (title,))
+            c.execute("DELETE FROM movies WHERE LOWER(title) = LOWER(?)", (title,))
 
 
 def delete_movie(movie_id: int) -> bool:
