@@ -838,6 +838,16 @@ function runAutoGrab() {
         });
 }
 
+function focusDashboardSearch() {
+    switchTab('dashboard');
+    const input = el('search-media-query');
+    if (input) {
+        input.focus();
+        input.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }
+}
+
+window.focusDashboardSearch = focusDashboardSearch;
 window.searchMedia = searchMedia;
 window.addLibraryItem = addLibraryItem;
 window.queueShowFrom = queueShowFrom;
