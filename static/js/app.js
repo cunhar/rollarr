@@ -877,6 +877,8 @@ function saveConfiguration() {
         PREFERRED_AUDIO: el('cfg-PREFERRED_AUDIO').value,
         MAX_EPISODE_SIZE_GB: parseInt(el('cfg-MAX_EPISODE_SIZE_GB').value) || 8,
         MAX_MOVIE_SIZE_GB: parseInt(el('cfg-MAX_MOVIE_SIZE_GB').value) || 25,
+        REJECT_DV_WITHOUT_HDR: el('cfg-REJECT_DV_WITHOUT_HDR').value === 'true',
+        REJECT_KEYWORDS: el('cfg-REJECT_KEYWORDS').value,
         ROLLING_WINDOW: parseInt(el('cfg-ROLLING_WINDOW').value) || 3,
         DELETE_WATCHED_EPISODES: el('cfg-DELETE_WATCHED_EPISODES').value === 'true',
         PLEX_URL: el('cfg-PLEX_URL').value,

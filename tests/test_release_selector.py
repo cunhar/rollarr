@@ -56,6 +56,20 @@ class TestReleaseSelector(unittest.TestCase):
         )
         self.assertEqual(ranked2[0]['guid'], 'c')
 
+    def test_dv_without_hdr_and_reject_keywords(self):
+        candidates = [
+            {'title': 'Severance.S02E01.2160p.ATVP.WEB-DL.DV.H.265-A', 'guid': 'dv_only', 'nzb_url': 'u', 'size_bytes': 4 * 1024**3},
+            {'title': 'Severance.S02E01.2160p.ATVP.WEB-DL.DV.HDR10.H.265-B', 'guid': 'dv_hdr', 'nzb_url': 'u', 'size_bytes': 4 * 1024**3},
+            {'title': 'Severance.S02E01.1080p.MULTI.WEB-DL.H.264-C', 'guid': 'multi', 'nzb_url': 'u', 'size_bytes': 2 * 1024**3},
+            {'title': 'Severance.S02E01.1080p.WEB-DL.AV1-D', 'guid': 'av1', 'nzb_url': 'u', 'size_bytes': 2 * 1024**3},
+        ]
+        ranked = select_releases(
+            candidates, 'episode', {'title': 'Severance', 'season': 2, 'episode': 1},
+            preferred_resolution='2160p', max_size_gb=10,
+            reject_dv_without_hdr=True, reject_keywords='MULTI, AV1',
+        )
+        self.assertEqual([r['guid'] for r in ranked], ['dv_hdr'])
+
 
 if __name__ == '__main__':
     unittest.main()

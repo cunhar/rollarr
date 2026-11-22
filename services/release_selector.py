@@ -49,6 +49,8 @@ _RE_CODEC = [
 ]
 
 _RE_PROPER = re.compile(r'\b(proper|repack|rerip|real[\.\s]proper)\b', re.I)
+_RE_DV = re.compile(r'\b(dv|dovi|dolby[\.\s]?v(?:ision)?)\b', re.I)
+_RE_HDR = re.compile(r'\bhdr(?:\b|\d)', re.I)
 
 _RE_JUNK = re.compile(
     r'\b('
@@ -137,6 +139,8 @@ def parse_release(title: str) -> dict[str, Any]:
         'audio': audio,
         'codec': codec,
         'is_proper': bool(_RE_PROPER.search(t)),
+        'has_dv': bool(_RE_DV.search(t)),
+        'has_hdr': bool(_RE_HDR.search(t)),
         'is_junk_tag': bool(_RE_JUNK.search(t)),
         'season': season,
         'episode': episode,
@@ -171,6 +175,8 @@ def is_junk_release(
     expected: dict[str, Any],
     blocklisted_guids: set[str],
     max_size_gb: float,
+    reject_dv_without_hdr: bool = True,
+    reject_keywords: list[str] | None = None,
 ) -> tuple[bool, str]:
     """Return (True, reason) if the candidate should be hard-rejected."""
     guid = candidate.get('guid') or ''
@@ -183,6 +189,14 @@ def is_junk_release(
     if parsed['is_junk_tag']:
         return True, 'junk_tag'
 
+    if reject_dv_without_hdr and parsed.get('has_dv') and not parsed.get('has_hdr'):
+        return True, 'dv_without_hdr'
+
+    rel_title = candidate.get('title') or ''
+    for kw in (reject_keywords or []):
+        if kw and re.search(rf'\b{re.escape(kw)}\b', rel_title, re.I):
+            return True, f'rejected_keyword ({kw})'
+
     size_bytes = int(candidate.get('size_bytes') or 0)
     min_mb = 80 if media_type == 'episode' else 300
     if size_bytes > 0:
@@ -191,7 +205,6 @@ def is_junk_release(
         if max_size_gb > 0 and size_bytes > max_size_gb * (1024 ** 3):
             return True, f'too_large ({size_bytes / (1024**3):.1f} GB)'
 
-    rel_title = candidate.get('title') or ''
     exp_title = expected.get('title') or ''
 
     if media_type == 'episode':
@@ -291,6 +304,8 @@ def select_releases(
     preferred_resolution: str | None = None,
     preferred_audio: str | None = None,
     max_size_gb: float | None = None,
+    reject_dv_without_hdr: bool | None = None,
+    reject_keywords: str | list[str] | None = None,
 ) -> list[dict[str, Any]]:
     """
     Filter out junk/blocklisted releases and return remaining candidates sorted
@@ -303,12 +318,27 @@ def select_releases(
         default_max = 8 if media_type == 'episode' else 25
         max_size_gb = float(get_config(key, default_max))
 
+    if reject_dv_without_hdr is None:
+        reject_dv_without_hdr = bool(get_config('REJECT_DV_WITHOUT_HDR', True))
+
+    if reject_keywords is None:
+        raw_kw = get_config('REJECT_KEYWORDS', 'MULTI') or ''
+        kw_list = [k.strip() for k in str(raw_kw).split(',') if k.strip()]
+    elif isinstance(reject_keywords, str):
+        kw_list = [k.strip() for k in reject_keywords.split(',') if k.strip()]
+    else:
+        kw_list = [str(k).strip() for k in reject_keywords if str(k).strip()]
+
     blocked = blocklisted_guids or set()
     accepted = []
 
     for cand in candidates:
         parsed = parse_release(cand.get('title', ''))
-        junk, reason = is_junk_release(cand, parsed, media_type, expected, blocked, max_size_gb)
+        junk, reason = is_junk_release(
+            cand, parsed, media_type, expected, blocked, max_size_gb,
+            reject_dv_without_hdr=reject_dv_without_hdr,
+            reject_keywords=kw_list,
+        )
         if junk:
             logger.debug(f"[ReleaseSelector] Rejected '{cand.get('title')}' ({reason})")
             continue

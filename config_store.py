@@ -63,6 +63,8 @@ DEFAULT_CONFIG = {
     'PREFERRED_AUDIO': 'any',
     'MAX_EPISODE_SIZE_GB': 8,
     'MAX_MOVIE_SIZE_GB': 25,
+    'REJECT_DV_WITHOUT_HDR': True,
+    'REJECT_KEYWORDS': 'MULTI',
     'PLEX_URL': 'http://plex:32400',
     'PLEX_TOKEN': '',
     'JELLYFIN_URL': 'http://jellyfin:8096',
