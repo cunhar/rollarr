@@ -244,8 +244,9 @@ function updateShutdownWatcher(s) {
         if (!s.active_streams || s.active_streams.length === 0) {
             container.innerHTML = '';
         } else {
-            const html = ['<p class="section-title" style="margin-bottom:12px;">Active Streams</p>'];
+            const html = ['<div class="dash-section"><div class="dash-section-header"><span class="section-title" style="margin-bottom:0;">Active Streams</span></div>'];
             s.active_streams.forEach(st => html.push(renderStreamCard(st)));
+            html.push('</div>');
             container.innerHTML = html.join('');
         }
     }
@@ -338,19 +339,20 @@ function updateDownloads(s) {
                 ? `<button class="btn-clear" onclick="resumeDownloads()">Resume</button>`
                 : `<button class="btn-clear" onclick="pauseDownloads()">Pause</button>`;
             const html = [
-                `<div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
-                    <p class="section-title" style="margin-bottom:0;">Active Downloads</p>
+                `<div class="dash-section"><div class="dash-section-header">
+                    <span class="section-title" style="margin-bottom:0;">Active Downloads</span>
                     <div style="display:flex; align-items:center; gap:10px;">
                         <span style="font-family:var(--mono); font-size:11px; color:var(--green); font-weight:600;">${escapeHtml(s.download_rate)}</span>
                         ${toggleBtn}
                     </div>
                 </div>`
             ];
-            const queuedList = s.downloads.filter(d => d.status === 'QUEUED');
+            const movableList = s.downloads.filter(d => d.status === 'DOWNLOADING' || d.status === 'QUEUED' || d.status === 'PAUSED');
             s.downloads.forEach(d => {
-                const qIdx = queuedList.indexOf(d);
-                html.push(renderDownloadCard(d, qIdx, queuedList.length));
+                const mIdx = movableList.indexOf(d);
+                html.push(renderDownloadCard(d, mIdx, movableList.length));
             });
+            html.push('</div>');
             container.innerHTML = html.join('');
         }
     }
@@ -834,7 +836,7 @@ function loadCalendar() {
                 </div>
             </div>`;
         }).join('');
-        container.innerHTML = `<div style="margin-bottom:24px;"><p class="section-title" style="margin-bottom:10px;">Airing This Week</p><div class="media-list">${rows}</div></div>`;
+        container.innerHTML = `<div class="dash-section"><div class="dash-section-header"><span class="section-title" style="margin-bottom:0;">Airing This Week</span></div><div class="media-list">${rows}</div></div>`;
     });
 }
 

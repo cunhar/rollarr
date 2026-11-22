@@ -1173,3 +1173,17 @@ body {
 .ep-airdate { font-size: 11px; color: var(--text-sub); }
 .media-card-overview { font-size: 12px; color: var(--text-sub); }
 .btn-ep { padding: 3px 9px; font-size: 11px; }
+
+.dash-section {
+    margin-bottom: 24px;
+}
+.dash-section-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 10px;
+    min-height: 26px;
+}
+.dash-section .stream-card:last-child {
+    margin-bottom: 0;
+}

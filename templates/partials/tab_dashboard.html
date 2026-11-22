@@ -2,15 +2,17 @@
 <div class="tab-panel active" id="panel-dashboard">
 
     <!-- Search & Add Omnibar -->
-    <div class="tab-header-row">
-        <span class="section-title" style="margin-bottom:0;">Search & Add Media</span>
+    <div class="dash-section">
+        <div class="dash-section-header">
+            <span class="section-title" style="margin-bottom:0;">Search & Add Media</span>
+        </div>
+        <form class="search-bar-row" style="margin-bottom:0;" onsubmit="event.preventDefault(); searchMedia();">
+            <input type="text" class="form-input search-query-input" id="search-media-query" placeholder="Search for a TV show or movie...">
+            <button type="submit" class="btn-clear" id="btn-search-media">Search</button>
+            <button type="button" class="btn-clear" id="btn-clear-search" style="display:none;" onclick="clearSearch()">Clear</button>
+        </form>
+        <div id="search-results-container"></div>
     </div>
-    <form class="search-bar-row" onsubmit="event.preventDefault(); searchMedia();">
-        <input type="text" class="form-input search-query-input" id="search-media-query" placeholder="Search for a TV show or movie...">
-        <button type="submit" class="btn-clear" id="btn-search-media">Search</button>
-        <button type="button" class="btn-clear" id="btn-clear-search" style="display:none;" onclick="clearSearch()">Clear</button>
-    </form>
-    <div id="search-results-container" style="margin-bottom:24px;"></div>
 
     <!-- Disk Space Guard Banner -->
     <div id="disk-guard-banner"></div>
@@ -26,27 +28,29 @@
 
     {% if poller_status.enabled %}
     <!-- Automation (Watched Cleanup & Auto-Grab) -->
-    <div class="tab-header-row">
-        <span class="section-title" style="margin-bottom:0;">Automation</span>
-        <div style="display:flex; gap:8px;">
-            <button class="btn-clear" id="btn-run-autograb" onclick="runAutoGrab()">Grab Wanted</button>
-            <button class="btn-clear" id="btn-run-poller" onclick="runPoller()">Scan Watched</button>
+    <div class="dash-section">
+        <div class="dash-section-header">
+            <span class="section-title" style="margin-bottom:0;">Automation</span>
+            <div style="display:flex; gap:8px;">
+                <button class="btn-clear" id="btn-run-autograb" onclick="runAutoGrab()">Grab Wanted</button>
+                <button class="btn-clear" id="btn-run-poller" onclick="runPoller()">Scan Watched</button>
+            </div>
         </div>
-    </div>
-    <div class="idle-section" style="margin-bottom:24px;">
-        <div class="idle-header" style="align-items:center;">
-            <span class="idle-label">
-                Recycled:
-                <strong id="ep-count" class="{{ 'green' if poller_status.episodes_session > 0 else '' }}" style="font-family:var(--mono); margin-left:4px;">
-                    {{ poller_status.episodes_session or 0 }}
-                </strong>
-            </span>
-            <span class="idle-count" id="ep-next-label">Next scan: —</span>
+        <div class="idle-section" style="margin-bottom:0;">
+            <div class="idle-header" style="align-items:center;">
+                <span class="idle-label">
+                    Recycled:
+                    <strong id="ep-count" class="{{ 'green' if poller_status.episodes_session > 0 else '' }}" style="font-family:var(--mono); margin-left:4px;">
+                        {{ poller_status.episodes_session or 0 }}
+                    </strong>
+                </span>
+                <span class="idle-count" id="ep-next-label">Next scan: —</span>
+            </div>
+            <div class="idle-track">
+                <div class="idle-fill" id="ep-bar" style="width: 0%; background: var(--accent);"></div>
+            </div>
+            <div class="idle-meta" id="ep-scan-meta">Last scan: — • Next: —</div>
         </div>
-        <div class="idle-track">
-            <div class="idle-fill" id="ep-bar" style="width: 0%; background: var(--accent);"></div>
-        </div>
-        <div class="idle-meta" id="ep-scan-meta">Last scan: — • Next: —</div>
     </div>
     {% else %}
     <div class="config-note" style="margin-top:0; margin-bottom:24px;">
@@ -56,32 +60,34 @@
 
     {% if plex_status.enabled %}
     <!-- Shutdown Watcher -->
-    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
-        <div style="display:flex; align-items:center; gap:10px;">
-            <p class="section-title" style="margin-bottom:0;">Shutdown Watcher</p>
-            {% if plex_status.dry_run %}
-            <span class="badge badge-amber">Dry Run</span>
-            {% endif %}
-        </div>
-        <button class="btn-clear" id="btn-shutdown-now" onclick="triggerShutdownNow()">Shutdown Now</button>
-    </div>
-
-    {% set streak = plex_status.idle_streak or 0 %}
-    {% set needed = plex_status.idle_needed if (plex_status.idle_needed and plex_status.idle_needed > 0) else 3 %}
-    {% set pct_raw = (streak / needed * 100) | round | int %}
-    {% set pct = 100 if pct_raw > 100 else (0 if pct_raw < 0 else pct_raw) %}
-    <div class="idle-section">
-        <div class="idle-header">
-            <span class="idle-label">Idle shutdown threshold</span>
-            <span class="idle-count" id="pw-streak-label">{{ streak }} of {{ needed }} polls</span>
-        </div>
-        <div class="idle-track">
-            <div class="idle-fill" id="pw-bar"
-                style="width: {{ pct }}%;
-                       background: {{ '#e05252' if streak >= needed else ('#e5a00d' if streak > 0 else '#3ecf8e') }};">
+    <div class="dash-section">
+        <div class="dash-section-header">
+            <div style="display:flex; align-items:center; gap:10px;">
+                <span class="section-title" style="margin-bottom:0;">Shutdown Watcher</span>
+                {% if plex_status.dry_run %}
+                <span class="badge badge-amber">Dry Run</span>
+                {% endif %}
             </div>
+            <button class="btn-clear" id="btn-shutdown-now" onclick="triggerShutdownNow()">Shutdown Now</button>
         </div>
-        <div class="idle-meta" id="pw-shutdown-detail"></div>
+
+        {% set streak = plex_status.idle_streak or 0 %}
+        {% set needed = plex_status.idle_needed if (plex_status.idle_needed and plex_status.idle_needed > 0) else 3 %}
+        {% set pct_raw = (streak / needed * 100) | round | int %}
+        {% set pct = 100 if pct_raw > 100 else (0 if pct_raw < 0 else pct_raw) %}
+        <div class="idle-section" style="margin-bottom:0;">
+            <div class="idle-header">
+                <span class="idle-label">Idle shutdown threshold</span>
+                <span class="idle-count" id="pw-streak-label">{{ streak }} of {{ needed }} polls</span>
+            </div>
+            <div class="idle-track">
+                <div class="idle-fill" id="pw-bar"
+                    style="width: {{ pct }}%;
+                           background: {{ '#e05252' if streak >= needed else ('#e5a00d' if streak > 0 else '#3ecf8e') }};">
+                </div>
+            </div>
+            <div class="idle-meta" id="pw-shutdown-detail"></div>
+        </div>
     </div>
     {% endif %}
 
