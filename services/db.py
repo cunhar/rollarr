@@ -202,7 +202,19 @@ def upsert_movie(
 
 def list_movies() -> list[dict[str, Any]]:
     with _conn() as c:
-        rows = c.execute("SELECT * FROM movies ORDER BY added_at DESC").fetchall()
+        rows = c.execute(
+            """
+            SELECT * FROM movies
+            ORDER BY
+                CASE LOWER(COALESCE(status, 'wanted'))
+                    WHEN 'wanted'      THEN 0
+                    WHEN 'downloading' THEN 1
+                    WHEN 'downloaded'  THEN 2
+                    ELSE 3
+                END ASC,
+                title COLLATE NOCASE ASC
+            """
+        ).fetchall()
         return [dict(r) for r in rows]
 
 
