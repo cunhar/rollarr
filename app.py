@@ -173,6 +173,13 @@ def api_downloads_cancel(download_id: int):
     return jsonify({'status': 'success' if ok else 'error'}), 200 if ok else 404
 
 
+@app.route('/api/downloads/<int:download_id>/move', methods=['POST'])
+def api_downloads_move(download_id: int):
+    direction = ((request.json or {}).get('direction') or '').lower()
+    ok = db.move_download(download_id, direction)
+    return jsonify({'status': 'success' if ok else 'error'}), 200 if ok else 400
+
+
 # ── Search & Library Endpoints ───────────────────────────────────────────────
 
 @app.route('/api/search')

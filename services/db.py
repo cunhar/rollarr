@@ -111,12 +111,17 @@ def init_db():
                 failed_at  TEXT NOT NULL
             );
         """)
-        # Lightweight schema migration for episode watch-cursor columns
+        # Lightweight schema migration for episode watch-cursor & queue ordering columns
         cols = {r['name'] for r in c.execute("PRAGMA table_info(shows)").fetchall()}
         if 'last_watched_season' not in cols:
             c.execute("ALTER TABLE shows ADD COLUMN last_watched_season INTEGER")
         if 'last_watched_episode' not in cols:
             c.execute("ALTER TABLE shows ADD COLUMN last_watched_episode INTEGER")
+
+        dl_cols = {r['name'] for r in c.execute("PRAGMA table_info(downloads)").fetchall()}
+        if 'queue_order' not in dl_cols:
+            c.execute("ALTER TABLE downloads ADD COLUMN queue_order INTEGER")
+            c.execute("UPDATE downloads SET queue_order = id WHERE queue_order IS NULL")
     logger.info(f"[DB] Initialized SQLite database at {DB_PATH}")
 
 
@@ -293,18 +298,19 @@ def enqueue_download(
 ) -> dict[str, Any]:
     ts = now_str()
     with _conn() as c:
+        next_ord = c.execute("SELECT COALESCE(MAX(queue_order), 0) + 1 FROM downloads").fetchone()[0]
         cur = c.execute(
             """
             INSERT INTO downloads (
                 media_type, media_id, title, year, season, episode,
                 nzb_title, nzb_url, nzb_guid, status, progress_pct,
-                size_bytes, downloaded_bytes, retry_count, created_at, updated_at
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'queued', 0.0, ?, 0, ?, ?, ?)
+                size_bytes, downloaded_bytes, retry_count, queue_order, created_at, updated_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'queued', 0.0, ?, 0, ?, ?, ?, ?)
             """,
             (
                 media_type, media_id, title, year, season, episode,
                 nzb_title, nzb_url, nzb_guid, int(size_bytes or 0),
-                int(retry_count), ts, ts,
+                int(retry_count), int(next_ord), ts, ts,
             ),
         )
         row = c.execute("SELECT * FROM downloads WHERE id = ?", (cur.lastrowid,)).fetchone()
@@ -332,7 +338,7 @@ def has_active_download(media_type: str, title: str, season: int | None = None, 
 def get_next_queued_download() -> dict[str, Any] | None:
     with _conn() as c:
         row = c.execute(
-            "SELECT * FROM downloads WHERE status = 'queued' ORDER BY id ASC LIMIT 1"
+            "SELECT * FROM downloads WHERE status = 'queued' ORDER BY COALESCE(queue_order, id) ASC, id ASC LIMIT 1"
         ).fetchone()
         return dict(row) if row else None
 
@@ -367,10 +373,42 @@ def list_active_downloads() -> list[dict[str, Any]]:
     placeholders = ','.join('?' for _ in ACTIVE_DOWNLOAD_STATUSES)
     with _conn() as c:
         rows = c.execute(
-            f"SELECT * FROM downloads WHERE status IN ({placeholders}) ORDER BY id ASC",
+            f"""
+            SELECT * FROM downloads
+            WHERE status IN ({placeholders})
+            ORDER BY
+                CASE status WHEN 'queued' THEN 1 ELSE 0 END ASC,
+                COALESCE(queue_order, id) ASC,
+                id ASC
+            """,
             ACTIVE_DOWNLOAD_STATUSES,
         ).fetchall()
         return [dict(r) for r in rows]
+
+
+def move_download(download_id: int, direction: str) -> bool:
+    """Move a queued download one position 'up' or 'down' in the queue."""
+    direction = (direction or '').lower()
+    if direction not in ('up', 'down'):
+        return False
+    with _conn() as c:
+        rows = c.execute(
+            "SELECT id, COALESCE(queue_order, id) AS ord FROM downloads WHERE status = 'queued' ORDER BY ord ASC, id ASC"
+        ).fetchall()
+        ids = [r['id'] for r in rows]
+        if download_id not in ids:
+            return False
+        idx = ids.index(download_id)
+        swap_idx = idx - 1 if direction == 'up' else idx + 1
+        if swap_idx < 0 or swap_idx >= len(ids):
+            return False
+
+        # Normalize unique order values and swap the two adjacent items
+        orders = list(range(1, len(ids) + 1))
+        orders[idx], orders[swap_idx] = orders[swap_idx], orders[idx]
+        for dl_id, new_ord in zip(ids, orders):
+            c.execute("UPDATE downloads SET queue_order = ? WHERE id = ?", (new_ord, dl_id))
+        return True
 
 
 def list_recent_downloads(limit: int = 20) -> list[dict[str, Any]]:

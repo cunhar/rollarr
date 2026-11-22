@@ -70,11 +70,16 @@ function renderStreamCard(st) {
     </div>`;
 }
 
-function renderDownloadCard(d) {
+function renderDownloadCard(d, qIdx, qTotal) {
     const statusBadge = d.status === 'DOWNLOADING' ? 'badge-green' : (d.status === 'PAUSED' ? 'badge-amber' : 'badge-dim');
     const meta = d.size_mb > 0
         ? (d.size_mb - d.remaining_mb).toFixed(1) + ' / ' + d.size_mb + ' MB'
         : 'Starting...';
+    const isQueued = d.status === 'QUEUED';
+    const reorderBtns = (isQueued && qTotal > 1)
+        ? `<button class="btn-clear" style="padding:2px 6px; font-size:10px;" title="Move Up" ${qIdx === 0 ? 'disabled' : ''} onclick="moveDownload(${d.id}, 'up')">↑</button>
+           <button class="btn-clear" style="padding:2px 6px; font-size:10px;" title="Move Down" ${qIdx === qTotal - 1 ? 'disabled' : ''} onclick="moveDownload(${d.id}, 'down')">↓</button>`
+        : '';
     return `
     <div class="stream-card">
         <div class="stream-header">
@@ -85,6 +90,7 @@ function renderDownloadCard(d) {
             <div class="stream-badges">
                 <span class="badge ${statusBadge}">${escapeHtml(d.status)}</span>
                 ${d.category ? `<span class="badge badge-dim">${escapeHtml(d.category)}</span>` : ''}
+                ${reorderBtns}
                 <button class="btn-clear" style="padding:2px 8px; font-size:10px;" onclick="cancelDownload(${d.id})">Cancel</button>
             </div>
         </div>
@@ -335,10 +341,18 @@ function updateDownloads(s) {
                     </div>
                 </div>`
             ];
-            s.downloads.forEach(d => html.push(renderDownloadCard(d)));
+            const queuedList = s.downloads.filter(d => d.status === 'QUEUED');
+            s.downloads.forEach(d => {
+                const qIdx = queuedList.indexOf(d);
+                html.push(renderDownloadCard(d, qIdx, queuedList.length));
+            });
             container.innerHTML = html.join('');
         }
     }
+}
+
+function moveDownload(id, direction) {
+    Api.moveDownload(id, direction).then(() => pollAll());
 }
 
 function pauseDownloads() {
@@ -365,6 +379,7 @@ function cancelDownload(id) {
 window.pauseDownloads = pauseDownloads;
 window.resumeDownloads = resumeDownloads;
 window.cancelDownload = cancelDownload;
+window.moveDownload = moveDownload;
 
 
 // ── Search & Library ─────────────────────────────────────────────────────────

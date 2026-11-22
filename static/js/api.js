@@ -40,6 +40,15 @@ const Api = {
         return res.ok ? await res.json() : null;
     },
 
+    async moveDownload(id, direction) {
+        const res = await fetch(`/api/downloads/${id}/move`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ direction })
+        });
+        return res.ok ? await res.json() : null;
+    },
+
     async searchMedia(query, type = 'all') {
         const params = new URLSearchParams({ type, q: query });
         const res = await fetch(`/api/search?${params.toString()}`);
