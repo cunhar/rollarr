@@ -597,7 +597,8 @@ function loadLibrary() {
                 showsEl.innerHTML = shows.map(s => `
                     <details class="config-card" data-show-id="${s.id}" ${openIds.has(String(s.id)) ? 'open' : ''} ontoggle="onShowToggle(this, ${s.id})" style="margin-bottom:0;">
                         <summary class="config-card-summary">
-                            <span style="display:flex; align-items:center; gap:8px;">
+                            <span style="display:flex; align-items:center; gap:10px;">
+                                ${s.poster_url ? `<img class="lib-thumb" src="${escapeHtml(s.poster_url)}" alt="">` : `<span class="lib-thumb lib-thumb-placeholder">TV</span>`}
                                 <strong>${escapeHtml(s.title)}</strong>
                                 ${s.year ? `<span class="media-year">(${s.year})</span>` : ''}
                                 <span class="badge badge-green">${escapeHtml(s.status || 'active')}</span>
@@ -628,10 +629,11 @@ function loadLibrary() {
                                    : 'badge-dim';
                     return `
                     <div class="library-row">
-                        <div>
+                        <div style="display:flex; align-items:center; gap:10px;">
+                            ${m.poster_url ? `<img class="lib-thumb" src="${escapeHtml(m.poster_url)}" alt="">` : `<span class="lib-thumb lib-thumb-placeholder">🎬</span>`}
                             <strong>${escapeHtml(m.title)}</strong>
                             ${m.year ? `<span class="media-year">(${m.year})</span>` : ''}
-                            <span class="badge ${badgeCls}" style="margin-left:8px;">${escapeHtml(m.status || 'wanted')}</span>
+                            <span class="badge ${badgeCls}">${escapeHtml(m.status || 'wanted')}</span>
                         </div>
                         <button class="btn-clear" onclick="deleteLibraryItem('movie', ${m.id}, this)">Remove</button>
                     </div>`;

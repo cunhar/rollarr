@@ -1013,3 +1013,20 @@ body {
     padding: 2px 8px;
     font-size: 10px;
 }
+.lib-thumb {
+    width: 30px;
+    height: 44px;
+    object-fit: cover;
+    border: 1px solid var(--border-hi);
+    background: var(--surface-2);
+    flex-shrink: 0;
+    border-radius: 2px;
+}
+.lib-thumb-placeholder {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-family: var(--mono);
+    font-size: 10px;
+    color: var(--text-sub);
+}
