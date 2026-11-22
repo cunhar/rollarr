@@ -14,7 +14,7 @@ FROM python:3.11-alpine
 WORKDIR /app
 
 # Usenet post-processing tools: PAR2 repair + RAR/7z/ZIP extraction
-RUN apk add --no-cache par2cmdline unrar 7zip
+RUN apk add --no-cache par2cmdline 7zip
 
 # Copy compiled Python packages from builder (no build tools left in final image)
 COPY --from=builder /install /usr/local
