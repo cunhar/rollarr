@@ -360,6 +360,8 @@ window.cancelDownload = cancelDownload;
 
 // ── Search & Library ─────────────────────────────────────────────────────────
 
+let _lastSearchResults = [];
+
 function searchMedia() {
     const type = el('search-media-type').value;
     const query = (el('search-media-query').value || '').trim();
@@ -381,17 +383,18 @@ function searchMedia() {
                 return;
             }
             const results = data.results || [];
+            _lastSearchResults = results;
             if (results.length === 0) {
                 container.innerHTML = '<div class="no-logs">No results found.</div>';
                 return;
             }
-            container.innerHTML = results.map(item => `
+            container.innerHTML = results.map((item, idx) => `
                 <div class="media-card">
                     ${item.poster_url ? `<img class="media-poster" src="${escapeHtml(item.poster_url)}" alt="">` : `<div class="media-poster media-poster-placeholder">?</div>`}
                     <div class="media-card-info">
                         <div class="media-card-title">${escapeHtml(item.title)} ${item.year ? `<span class="media-year">(${item.year})</span>` : ''}</div>
                         <div class="media-card-overview">${escapeHtml((item.overview || '').slice(0, 120))}</div>
-                        <button class="btn-clear" onclick="addLibraryItem('${escapeHtml(type)}', ${item.id}, this)">Add & Download</button>
+                        <button class="btn-clear" onclick="addLibraryItem('${escapeHtml(type)}', ${idx}, this)">Add & Download</button>
                     </div>
                 </div>
             `).join('');
@@ -408,12 +411,20 @@ function searchMedia() {
         });
 }
 
-function addLibraryItem(type, id, btnEl) {
+function addLibraryItem(type, idx, btnEl) {
+    const item = _lastSearchResults[idx];
+    if (!item) return;
     if (btnEl) {
         btnEl.disabled = true;
         btnEl.textContent = 'Adding...';
     }
-    Api.addMedia(type, id)
+    Api.addMedia(type, {
+        id: item.id,
+        title: item.title,
+        year: item.year,
+        imdb_id: item.imdb_id || '',
+        poster_url: item.poster_url || ''
+    })
         .then(({ ok, data }) => {
             showToast(data.message || 'Added to library', ok ? 'ok' : 'err');
             if (btnEl) btnEl.textContent = ok ? 'Added ✓' : 'Retry';

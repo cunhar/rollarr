@@ -11,6 +11,7 @@ import time
 import datetime
 import logging
 from typing import Any
+from urllib.parse import quote
 
 import requests
 
@@ -138,12 +139,51 @@ def get_tmdb_api_key() -> str:
     return (get_config('TMDB_API_KEY') or '').strip()
 
 
+def search_movies_imdb(query: str) -> list[dict[str, Any]]:
+    """Keyless fallback movie search using IMDb's public suggestion endpoint."""
+    q = (query or '').strip()
+    if not q:
+        return []
+    try:
+        resp = requests.get(
+            f"https://v3.sg.media-imdb.com/suggestion/x/{quote(q)}.json",
+            headers={'User-Agent': 'Mozilla/5.0'},
+            timeout=10,
+        )
+        resp.raise_for_status()
+        results = []
+        for item in (resp.json().get('d') or []):
+            imdb_id = item.get('id') or ''
+            qid = (item.get('qid') or item.get('q') or '').lower()
+            if not imdb_id.startswith('tt'):
+                continue
+            if qid and qid not in ('movie', 'feature', 'tvmovie', 'video'):
+                continue
+            img = item.get('i') or {}
+            results.append({
+                'type': 'movie',
+                'id': imdb_id,
+                'tmdb_id': None,
+                'imdb_id': imdb_id,
+                'title': item.get('l') or '',
+                'year': item.get('y'),
+                'poster_url': img.get('imageUrl') or '',
+                'overview': item.get('s') or '',
+            })
+        return results[:15]
+    except Exception as exc:
+        logger.warning(f"[Metadata] IMDb movie search failed for '{q}': {exc}")
+        return []
+
+
 def search_movies(query: str) -> list[dict[str, Any]]:
-    """Search TMDB for movies matching query."""
+    """Search movies via TMDB if API key is configured, otherwise keyless IMDb search."""
     api_key = get_tmdb_api_key()
     q = (query or '').strip()
-    if not api_key or not q:
+    if not q:
         return []
+    if not api_key:
+        return search_movies_imdb(q)
     try:
         resp = requests.get(
             f"{TMDB_BASE}/search/movie",
@@ -160,6 +200,7 @@ def search_movies(query: str) -> list[dict[str, Any]]:
                 'type': 'movie',
                 'id': m.get('id'),
                 'tmdb_id': m.get('id'),
+                'imdb_id': '',
                 'title': m.get('title') or m.get('original_title') or '',
                 'year': year,
                 'poster_url': poster,
@@ -168,7 +209,7 @@ def search_movies(query: str) -> list[dict[str, Any]]:
         return results
     except Exception as exc:
         logger.warning(f"[Metadata] TMDB movie search failed for '{q}': {exc}")
-        return []
+        return search_movies_imdb(q)
 
 
 def get_movie_details(tmdb_id: int) -> dict[str, Any] | None:

@@ -181,8 +181,6 @@ def api_search():
         return jsonify({'results': []}), 200
 
     if media_type == 'movie':
-        if not metadata.get_tmdb_api_key():
-            return jsonify({'status': 'error', 'message': 'TMDB API Key is required in Config for Movie search', 'results': []}), 400
         results = metadata.search_movies(query)
     else:
         results = metadata.search_tv(query)
@@ -203,12 +201,20 @@ def api_library_add():
     data = request.json or {}
     media_type = (data.get('type') or 'tv').lower()
     item_id = data.get('id')
-    if not item_id:
+    if not item_id and not data.get('title'):
         return jsonify({'status': 'error', 'message': 'Missing media id'}), 400
 
     try:
         if media_type == 'movie':
-            res = media_manager.add_movie(int(item_id))
+            tmdb_id = int(item_id) if str(item_id or '').isdigit() else None
+            imdb_id = data.get('imdb_id') or (str(item_id) if str(item_id or '').startswith('tt') else None)
+            res = media_manager.add_movie(
+                tmdb_id=tmdb_id,
+                title=data.get('title'),
+                year=data.get('year'),
+                imdb_id=imdb_id,
+                poster_url=data.get('poster_url'),
+            )
         else:
             start_s = int(data.get('start_season') or 1)
             start_e = int(data.get('start_episode') or 1)

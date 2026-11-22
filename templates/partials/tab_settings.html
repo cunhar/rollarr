@@ -71,18 +71,18 @@
             </div>
         </details>
 
-        <!-- 3. Metadata (TMDB for Movies; TVMaze needs no key) -->
+        <!-- 3. Metadata (Optional TMDB; keyless IMDb & TVMaze built in) -->
         <details class="config-card">
             <summary class="config-card-summary">
-                <span class="section-title" style="margin-bottom:0;">🎞️ Movie Metadata (TMDB)</span>
+                <span class="section-title" style="margin-bottom:0;">🎞️ Movie Metadata (Optional TMDB)</span>
             </summary>
             <div class="config-card-body">
                 <div class="form-grid">
                     <div class="form-group" style="grid-column: 1 / -1;">
-                        <label class="form-label">TMDB API Key (v3)</label>
-                        <input type="password" class="form-input" id="cfg-TMDB_API_KEY" value="{{ '••••••••' if cfg.TMDB_API_KEY else '' }}" placeholder="Free API key from themoviedb.org">
+                        <label class="form-label">TMDB API Key (Optional)</label>
+                        <input type="password" class="form-input" id="cfg-TMDB_API_KEY" value="{{ '••••••••' if cfg.TMDB_API_KEY else '' }}" placeholder="Optional — leave blank to use keyless IMDb search">
                         <span style="font-size:11px; color:var(--text-muted); font-family:var(--mono); margin-top:4px; display:block;">
-                            Used for searching Movies & resolving IMDB IDs. TV Shows use TVMaze automatically (no API key required).
+                            Leave blank for zero-key Movie search (IMDb) and TV search (TVMaze). Add a TMDB key only if you prefer TMDB descriptions/posters.
                         </span>
                     </div>
                 </div>

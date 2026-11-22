@@ -319,11 +319,31 @@ def add_show(tvmaze_id: int, start_season: int = 1, start_episode: int = 1) -> d
     }
 
 
-def add_movie(tmdb_id: int) -> dict[str, Any]:
-    """Add a movie from TMDB and immediately search & queue it from NZBgeek."""
-    info = metadata.get_movie_details(tmdb_id)
+def add_movie(
+    tmdb_id: int | None = None,
+    title: str | None = None,
+    year: int | None = None,
+    imdb_id: str | None = None,
+    poster_url: str | None = None,
+) -> dict[str, Any]:
+    """Add a movie (via TMDB ID or keyless IMDb metadata) and immediately queue from NZBgeek."""
+    info = None
+    if tmdb_id and int(tmdb_id) > 0:
+        info = metadata.get_movie_details(int(tmdb_id))
+
     if not info:
-        return {'status': 'error', 'message': f'Could not fetch TMDB movie #{tmdb_id} (check TMDB API key)'}
+        if not title:
+            return {'status': 'error', 'message': 'Could not resolve movie details'}
+        # Derive a stable negative unique key from IMDb ID when no TMDB ID is used
+        clean_imdb = re.sub(r'^tt', '', str(imdb_id or ''))
+        synthetic_id = -int(clean_imdb) if clean_imdb.isdigit() else -abs(hash(f"{title}:{year}")) % (10**9)
+        info = {
+            'tmdb_id': synthetic_id,
+            'imdb_id': imdb_id or '',
+            'title': title,
+            'year': int(year) if year else None,
+            'poster_url': poster_url or '',
+        }
 
     movie = db.upsert_movie(
         tmdb_id=info['tmdb_id'],

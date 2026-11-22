@@ -51,11 +51,14 @@ const Api = {
         return res.ok ? await res.json() : null;
     },
 
-    async addMedia(type, id) {
+    async addMedia(type, item) {
+        const payload = (typeof item === 'object' && item !== null)
+            ? { type, ...item }
+            : { type, id: item };
         const res = await fetch('/api/library/add', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ type, id })
+            body: JSON.stringify(payload)
         });
         return { ok: res.ok, data: await res.json() };
     },
