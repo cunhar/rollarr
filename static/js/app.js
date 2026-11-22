@@ -603,7 +603,7 @@ function loadLibrary() {
                                 ${s.year ? `<span class="media-year">(${s.year})</span>` : ''}
                                 <span class="badge badge-green">${escapeHtml(s.status || 'active')}</span>
                             </span>
-                            <button class="btn-clear" onclick="event.preventDefault(); event.stopPropagation(); deleteLibraryItem('tv', ${s.id}, this)">Remove</button>
+                            <button class="btn-clear" style="margin-left:auto; margin-right:12px;" onclick="event.preventDefault(); event.stopPropagation(); deleteLibraryItem('tv', ${s.id}, this)">Remove</button>
                         </summary>
                         <div class="config-card-body">
                             <div id="show-episodes-${s.id}"></div>
