@@ -309,6 +309,15 @@ function updateDownloads(s) {
         pip.className = 'conn-pip ' + (s.enabled ? 'ok' : 'err');
     }
 
+    const banner = el('disk-guard-banner');
+    if (banner) {
+        if (s.disk_guard_paused) {
+            banner.innerHTML = `<div class="disk-guard-alert">⚠️ <strong>Disk Space Guard Active:</strong> ${escapeHtml(s.disk_guard_reason || 'Low disk space — downloads paused')}</div>`;
+        } else {
+            banner.innerHTML = '';
+        }
+    }
+
     const container = el('downloads-container');
     if (container) {
         if (!s.downloads || s.downloads.length === 0) {
@@ -551,6 +560,7 @@ function loadShowEpisodes(showId, forceReload = false) {
                         const badgeTxt = st === 'downloaded' ? 'ON DISK' : st.toUpperCase();
                         const actions = (st === 'missing' || st === 'watched' || st === 'upcoming')
                             ? `<button class="btn-clear btn-ep" onclick="queueSingleEpisode(${showId}, ${ep.season}, ${ep.episode}, this)">Get</button>
+                               <button class="btn-clear btn-ep" onclick="openEpisodePicker(${showId}, ${ep.season}, ${ep.episode})">Pick</button>
                                <button class="btn-clear btn-ep" onclick="queueShowFrom(${showId}, ${ep.season}, ${ep.episode}, this)">Start Here</button>`
                             : '';
                         return `
@@ -659,12 +669,158 @@ function loadLibrary() {
                             ${m.year ? `<span class="media-year">(${m.year})</span>` : ''}
                             <span class="badge ${badgeCls}">${escapeHtml(m.status || 'wanted')}</span>
                         </div>
-                        <button class="btn-clear" onclick="deleteLibraryItem('movie', ${m.id}, this)">Remove</button>
+                        <div class="ep-controls-row">
+                            ${st === 'wanted' ? `<button class="btn-clear" onclick="openMoviePicker(${m.id})">Pick</button>` : ''}
+                            <button class="btn-clear" onclick="deleteLibraryItem('movie', ${m.id}, this)">Remove</button>
+                        </div>
                     </div>`;
                 }).join('');
             }
         }
     });
+}
+
+let _pickerContext = null;
+
+function _renderPickerModal(data) {
+    const body = el('release-modal-body');
+    if (!body) return;
+    if (!data || data.status !== 'success') {
+        body.innerHTML = '<div class="no-logs">Failed to search NZBgeek.</div>';
+        return;
+    }
+    _pickerContext = data;
+    const rels = data.releases || [];
+    if (rels.length === 0) {
+        body.innerHTML = '<div class="no-logs">No matching releases found on NZBgeek.</div>';
+        return;
+    }
+    body.innerHTML = rels.map((r, idx) => `
+        <div class="release-row">
+            <div style="min-width:0; flex:1;">
+                <div class="release-title">${escapeHtml(r.nzb_title)}</div>
+                <div class="release-meta">
+                    <span class="badge badge-blue">${escapeHtml(r.resolution)}</span>
+                    <span class="badge badge-dim">${escapeHtml(r.source)}</span>
+                    <span class="badge badge-dim">${escapeHtml(r.audio)}</span>
+                    <span>${r.size_mb >= 1024 ? (r.size_mb / 1024).toFixed(2) + ' GB' : r.size_mb + ' MB'}</span>
+                    <span>Score: ${r.score}</span>
+                    ${r.grabs ? `<span>Grabs: ${r.grabs}</span>` : ''}
+                    ${r.blocklisted ? '<span class="badge badge-red">BLOCKLISTED</span>' : ''}
+                </div>
+            </div>
+            <button class="btn-clear" onclick="grabPickedRelease(${idx}, this)">Grab</button>
+        </div>
+    `).join('');
+}
+
+function openMoviePicker(movieId) {
+    const modal = el('release-modal');
+    if (!modal) return;
+    setText('release-modal-title', 'Manual Release Search — Movie');
+    el('release-modal-body').innerHTML = '<div class="no-logs">Searching NZBgeek...</div>';
+    modal.style.display = 'flex';
+    Api.fetchMovieReleases(movieId).then(_renderPickerModal);
+}
+
+function openEpisodePicker(showId, season, episode) {
+    const modal = el('release-modal');
+    if (!modal) return;
+    const tag = `S${String(season).padStart(2, '0')}E${String(episode).padStart(2, '0')}`;
+    setText('release-modal-title', `Manual Release Search — ${tag}`);
+    el('release-modal-body').innerHTML = '<div class="no-logs">Searching NZBgeek...</div>';
+    modal.style.display = 'flex';
+    Api.fetchEpisodeReleases(showId, season, episode).then(_renderPickerModal);
+}
+
+function grabPickedRelease(idx, btnEl) {
+    if (!_pickerContext || !_pickerContext.releases[idx]) return;
+    const r = _pickerContext.releases[idx];
+    if (btnEl) {
+        btnEl.disabled = true;
+        btnEl.textContent = 'Queueing...';
+    }
+    Api.grabManualRelease({
+        media_type: _pickerContext.media_type,
+        media_id: _pickerContext.media_id,
+        title: _pickerContext.title,
+        year: _pickerContext.year,
+        season: _pickerContext.season,
+        episode: _pickerContext.episode,
+        nzb_title: r.nzb_title,
+        nzb_url: r.nzb_url,
+        nzb_guid: r.nzb_guid,
+        size_bytes: r.size_bytes
+    }).then(({ ok, data }) => {
+        showToast(data.message || 'Release queued', ok ? 'ok' : 'err');
+        if (ok) {
+            closeReleaseModal();
+            if (_pickerContext.media_type === 'episode') loadShowEpisodes(_pickerContext.media_id, true);
+            else loadLibrary();
+            setTimeout(pollAll, 500);
+        } else if (btnEl) {
+            btnEl.disabled = false;
+            btnEl.textContent = 'Grab';
+        }
+    });
+}
+
+function closeReleaseModal() {
+    const modal = el('release-modal');
+    if (modal) modal.style.display = 'none';
+}
+
+function loadCalendar() {
+    const container = el('calendar-container');
+    if (!container) return;
+    Api.fetchCalendar().then(data => {
+        const items = (data && data.upcoming) || [];
+        if (items.length === 0) {
+            container.innerHTML = '';
+            return;
+        }
+        const rows = items.map(it => {
+            const tag = `S${String(it.season).padStart(2, '0')}E${String(it.episode).padStart(2, '0')}`;
+            const when = it.days_away === 0 ? 'Today' : (it.days_away === 1 ? 'Tomorrow' : `In ${it.days_away}d`);
+            const whenCls = it.days_away === 0 ? 'badge-green' : (it.days_away === 1 ? 'badge-amber' : 'badge-dim');
+            return `
+            <div class="cal-row">
+                <div style="display:flex; align-items:center; gap:10px; min-width:0;">
+                    ${it.poster_url ? `<img class="lib-thumb" src="${escapeHtml(it.poster_url)}" alt="">` : `<span class="lib-thumb lib-thumb-placeholder">TV</span>`}
+                    <div style="min-width:0;">
+                        <div><strong>${escapeHtml(it.show_title)}</strong> <span class="ep-tag">${tag}</span></div>
+                        <div style="font-size:11px; color:var(--text-sub); overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${escapeHtml(it.ep_title)}</div>
+                    </div>
+                </div>
+                <div style="display:flex; align-items:center; gap:8px; flex-shrink:0;">
+                    <span class="ep-airdate">${escapeHtml(it.airdate)}</span>
+                    <span class="badge ${whenCls}">${when}</span>
+                    ${it.on_disk ? '<span class="badge badge-green">ON DISK</span>' : ''}
+                </div>
+            </div>`;
+        }).join('');
+        container.innerHTML = `<div style="margin-bottom:24px;"><p class="section-title" style="margin-bottom:10px;">Airing This Week</p><div class="media-list">${rows}</div></div>`;
+    });
+}
+
+function runAutoGrab() {
+    const btn = el('btn-run-autograb');
+    if (btn) {
+        btn.disabled = true;
+        btn.textContent = 'Scanning...';
+    }
+    Api.runAutoGrab()
+        .then(({ data }) => {
+            showToast((data && data.message) || 'Auto-grab finished', 'info');
+            setTimeout(pollAll, 500);
+        })
+        .catch(() => showToast('Auto-grab failed', 'err'))
+        .finally(() => {
+            if (btn) {
+                btn.disabled = false;
+                btn.textContent = 'Auto-Grab Now';
+            }
+        });
 }
 
 window.searchMedia = searchMedia;
@@ -674,6 +830,11 @@ window.queueSingleEpisode = queueSingleEpisode;
 window.onShowToggle = onShowToggle;
 window.deleteLibraryItem = deleteLibraryItem;
 window.loadLibrary = loadLibrary;
+window.openMoviePicker = openMoviePicker;
+window.openEpisodePicker = openEpisodePicker;
+window.grabPickedRelease = grabPickedRelease;
+window.closeReleaseModal = closeReleaseModal;
+window.runAutoGrab = runAutoGrab;
 
 
 // ── Disk, Activity & Polling ─────────────────────────────────────────────────
@@ -879,6 +1040,8 @@ function saveConfiguration() {
         MAX_MOVIE_SIZE_GB: parseInt(el('cfg-MAX_MOVIE_SIZE_GB').value) || 25,
         REJECT_DV_WITHOUT_HDR: el('cfg-REJECT_DV_WITHOUT_HDR').value === 'true',
         REJECT_KEYWORDS: el('cfg-REJECT_KEYWORDS').value,
+        AUTO_GRAB_INTERVAL_HOURS: parseInt(el('cfg-AUTO_GRAB_INTERVAL_HOURS').value) || 0,
+        MIN_FREE_DISK_GB: parseInt(el('cfg-MIN_FREE_DISK_GB').value) || 0,
         ROLLING_WINDOW: parseInt(el('cfg-ROLLING_WINDOW').value) || 3,
         DELETE_WATCHED_EPISODES: el('cfg-DELETE_WATCHED_EPISODES').value === 'true',
         PLEX_URL: el('cfg-PLEX_URL').value,
@@ -1026,5 +1189,6 @@ window.addEventListener('DOMContentLoaded', () => {
     handleHashChange();
     pollAll();
     loadLibrary();
+    loadCalendar();
     setInterval(pollAll, REFRESH_MS);
 });

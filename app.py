@@ -48,11 +48,13 @@ activity_log.load()
 plex_poller.set_log_callback(activity_log.log_call)
 plex_watcher.set_log_callback(activity_log.log_call)
 usenet_downloader.set_log_callback(activity_log.log_call)
+media_manager.set_autograb_log_callback(activity_log.log_call)
 
 if not os.environ.get('ROLARR_NO_BACKGROUND'):
     plex_poller.start()
     plex_watcher.start()
     usenet_downloader.start()
+    media_manager.start_autograb()
 
 
 # ── Live Service Connection Checks ───────────────────────────────────────────
@@ -277,6 +279,38 @@ def api_library_delete(media_type: str, item_id: int):
     else:
         return jsonify({'status': 'error', 'message': 'Invalid media type'}), 400
     return jsonify({'status': 'success' if ok else 'error'}), 200 if ok else 404
+
+
+# ── Manual Release Picker, Calendar & Auto-Grab Endpoints ────────────────────
+
+@app.route('/api/releases/movie/<int:movie_id>')
+def api_releases_movie(movie_id: int):
+    res = media_manager.search_releases_for_movie(movie_id)
+    return jsonify(res), 200 if res.get('status') == 'success' else 404
+
+
+@app.route('/api/releases/tv/<int:show_id>/<int:season>/<int:episode>')
+def api_releases_episode(show_id: int, season: int, episode: int):
+    res = media_manager.search_releases_for_episode(show_id, season, episode)
+    return jsonify(res), 200 if res.get('status') == 'success' else 404
+
+
+@app.route('/api/releases/grab', methods=['POST'])
+def api_releases_grab():
+    res = media_manager.grab_manual_release(request.json or {})
+    activity_log.log_call(res.get('status', 'info'), res.get('message', 'Manual grab'))
+    return jsonify(res), 200 if res.get('status') == 'success' else 400
+
+
+@app.route('/api/calendar')
+def api_calendar():
+    return jsonify({'upcoming': media_manager.get_airing_this_week(7)}), 200
+
+
+@app.route('/api/autograb-run', methods=['POST'])
+def api_autograb_run():
+    res = media_manager.run_auto_grab()
+    return jsonify(res), 200
 
 
 # ── Activity & Disk Endpoints ────────────────────────────────────────────────

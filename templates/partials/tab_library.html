@@ -26,4 +26,15 @@
         <div class="no-logs">No tracked movies yet.</div>
     </div>
 
+    <!-- Manual Release Picker Modal -->
+    <div id="release-modal" class="modal-backdrop" style="display:none;" onclick="if(event.target===this) closeReleaseModal();">
+        <div class="modal-panel">
+            <div class="modal-header">
+                <span class="section-title" id="release-modal-title" style="margin-bottom:0;">Select Release</span>
+                <button class="btn-clear" onclick="closeReleaseModal()">Close</button>
+            </div>
+            <div id="release-modal-body" class="modal-body"></div>
+        </div>
+    </div>
+
 </div>

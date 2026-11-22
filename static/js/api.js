@@ -91,6 +91,35 @@ const Api = {
         return res.ok ? await res.json() : null;
     },
 
+    async fetchMovieReleases(movieId) {
+        const res = await fetch(`/api/releases/movie/${movieId}`);
+        return res.ok ? await res.json() : null;
+    },
+
+    async fetchEpisodeReleases(showId, season, episode) {
+        const res = await fetch(`/api/releases/tv/${showId}/${season}/${episode}`);
+        return res.ok ? await res.json() : null;
+    },
+
+    async grabManualRelease(payload) {
+        const res = await fetch('/api/releases/grab', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload)
+        });
+        return { ok: res.ok, data: await res.json() };
+    },
+
+    async fetchCalendar() {
+        const res = await fetch('/api/calendar');
+        return res.ok ? await res.json() : null;
+    },
+
+    async runAutoGrab() {
+        const res = await fetch('/api/autograb-run', { method: 'POST' });
+        return { ok: res.ok, data: await res.json() };
+    },
+
     async fetchActivityLogs() {
         const res = await fetch('/api/activity');
         return res.ok ? await res.json() : null;

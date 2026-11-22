@@ -277,6 +277,8 @@ _live_state: dict[str, Any] = {
     'active_job_id': None,
     'download_rate_bps': 0,
     'current_stage': '',
+    'disk_guard_paused': False,
+    'disk_guard_reason': '',
 }
 
 
@@ -346,6 +348,8 @@ def get_status() -> dict[str, Any]:
     with _state_lock:
         rate_bps = _live_state['download_rate_bps'] if not _paused and active_jobs else 0
         is_paused = _paused
+        dg_paused = _live_state['disk_guard_paused']
+        dg_reason = _live_state['disk_guard_reason']
 
     downloads = []
     for job in active_jobs:
@@ -386,6 +390,8 @@ def get_status() -> dict[str, Any]:
         'download_rate': _format_rate(rate_bps),
         'download_rate_bps': rate_bps,
         'download_paused': is_paused,
+        'disk_guard_paused': dg_paused,
+        'disk_guard_reason': dg_reason,
         'downloads': downloads,
     }
 
@@ -720,6 +726,19 @@ def _worker_loop():
                 is_p = _paused
             if is_p or not is_nntp_configured():
                 _wake_event.wait(timeout=5)
+                _wake_event.clear()
+                continue
+
+            from services.disk_service import check_disk_space_guard
+            low_disk, low_reason = check_disk_space_guard()
+            with _state_lock:
+                prev_dg = _live_state['disk_guard_paused']
+                _live_state['disk_guard_paused'] = low_disk
+                _live_state['disk_guard_reason'] = low_reason
+            if low_disk:
+                if not prev_dg:
+                    _activity_log('warning', f"Disk Space Guard paused downloads: {low_reason}")
+                _wake_event.wait(timeout=30)
                 _wake_event.clear()
                 continue
 

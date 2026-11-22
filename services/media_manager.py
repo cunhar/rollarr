@@ -11,6 +11,9 @@ from __future__ import annotations
 
 import os
 import re
+import time
+import datetime
+import threading
 import logging
 from typing import Any
 
@@ -517,3 +520,277 @@ def resolve_or_track_show(show_title: str) -> dict[str, Any] | None:
         poster_url=info.get('poster_url'),
         status='active',
     )
+
+
+# ── Manual Release Search, Airing Calendar & Auto-Grabber ────────────────────
+
+def search_releases_for_episode(show_id: int, season: int, episode: int) -> dict[str, Any]:
+    """Return top ranked NZBgeek candidates for manual selection."""
+    show = db.get_show(show_id)
+    if not show:
+        return {'status': 'error', 'message': 'Show not found', 'releases': []}
+    candidates = nzbgeek.search_episode(
+        show_title=show['title'],
+        season=season,
+        episode=episode,
+        tvdb_id=show.get('tvdb_id'),
+        imdb_id=show.get('imdb_id'),
+    )
+    blocked = db.get_blocklisted_guids()
+    ranked = release_selector.select_releases(
+        candidates=candidates,
+        media_type='episode',
+        expected={'title': show['title'], 'season': season, 'episode': episode},
+        blocklisted_guids=set(),  # show even blocklisted ones with a flag in manual picker
+    )
+    out = []
+    for r in ranked[:15]:
+        out.append({
+            'nzb_title': r['title'],
+            'nzb_url': r['nzb_url'],
+            'nzb_guid': r['guid'],
+            'size_bytes': r.get('size_bytes', 0),
+            'size_mb': round((r.get('size_bytes') or 0) / (1024 * 1024), 1),
+            'resolution': r['parsed']['resolution'],
+            'audio': r['parsed']['audio'],
+            'source': r['parsed']['source'],
+            'score': r['score'],
+            'grabs': r.get('grabs', 0),
+            'blocklisted': r['guid'] in blocked,
+        })
+    return {
+        'status': 'success',
+        'media_type': 'episode',
+        'media_id': show['id'],
+        'title': show['title'],
+        'year': show.get('year'),
+        'season': int(season),
+        'episode': int(episode),
+        'releases': out,
+    }
+
+
+def search_releases_for_movie(movie_id: int) -> dict[str, Any]:
+    """Return top ranked NZBgeek candidates for a tracked movie."""
+    movie = db.get_movie(movie_id)
+    if not movie:
+        return {'status': 'error', 'message': 'Movie not found', 'releases': []}
+    candidates = nzbgeek.search_movie(
+        title=movie['title'],
+        year=movie.get('year'),
+        imdb_id=movie.get('imdb_id'),
+    )
+    blocked = db.get_blocklisted_guids()
+    ranked = release_selector.select_releases(
+        candidates=candidates,
+        media_type='movie',
+        expected={'title': movie['title'], 'year': movie.get('year')},
+        blocklisted_guids=set(),
+    )
+    out = []
+    for r in ranked[:15]:
+        out.append({
+            'nzb_title': r['title'],
+            'nzb_url': r['nzb_url'],
+            'nzb_guid': r['guid'],
+            'size_bytes': r.get('size_bytes', 0),
+            'size_mb': round((r.get('size_bytes') or 0) / (1024 * 1024), 1),
+            'resolution': r['parsed']['resolution'],
+            'audio': r['parsed']['audio'],
+            'source': r['parsed']['source'],
+            'score': r['score'],
+            'grabs': r.get('grabs', 0),
+            'blocklisted': r['guid'] in blocked,
+        })
+    return {
+        'status': 'success',
+        'media_type': 'movie',
+        'media_id': movie['id'],
+        'title': movie['title'],
+        'year': movie.get('year'),
+        'releases': out,
+    }
+
+
+def grab_manual_release(data: dict[str, Any]) -> dict[str, Any]:
+    """Enqueue a specific user-picked release directly into the Usenet downloader."""
+    media_type = data.get('media_type')
+    title = data.get('title')
+    nzb_title = data.get('nzb_title')
+    nzb_url = data.get('nzb_url')
+    nzb_guid = data.get('nzb_guid') or nzb_url or nzb_title
+    if not all([media_type, title, nzb_title, nzb_url]):
+        return {'status': 'error', 'message': 'Missing release parameters'}
+
+    db.enqueue_download(
+        media_type=media_type,
+        media_id=data.get('media_id'),
+        title=title,
+        year=data.get('year'),
+        season=data.get('season'),
+        episode=data.get('episode'),
+        nzb_title=nzb_title,
+        nzb_url=nzb_url,
+        nzb_guid=nzb_guid,
+        size_bytes=int(data.get('size_bytes') or 0),
+        retry_count=0,
+    )
+    if media_type == 'movie' and data.get('media_id'):
+        db.update_movie_status(int(data['media_id']), 'downloading')
+    usenet_downloader.notify_queue()
+    return {'status': 'success', 'message': f"Queued '{nzb_title}'"}
+
+
+def get_airing_this_week(days: int = 7) -> list[dict[str, Any]]:
+    """Return tracked TV show episodes airing between today and today + `days`."""
+    today = datetime.date.today()
+    end = today + datetime.timedelta(days=days)
+    today_str = today.isoformat()
+    end_str = end.isoformat()
+
+    upcoming = []
+    for show in db.list_shows():
+        eps = metadata.get_show_episodes(show['tvmaze_id'])
+        on_disk = _scan_show_episodes_on_disk(show['title'])
+        for ep in eps:
+            ad = ep.get('airdate') or ''
+            if not ad or ad < today_str or ad > end_str:
+                continue
+            try:
+                days_away = (datetime.date.fromisoformat(ad) - today).days
+            except ValueError:
+                days_away = 0
+            upcoming.append({
+                'show_id': show['id'],
+                'show_title': show['title'],
+                'poster_url': show.get('poster_url') or '',
+                'season': ep['season'],
+                'episode': ep['episode'],
+                'ep_title': ep['title'],
+                'airdate': ad,
+                'days_away': days_away,
+                'on_disk': (ep['season'], ep['episode']) in on_disk,
+            })
+
+    upcoming.sort(key=lambda x: (x['airdate'], x['show_title'], x['season'], x['episode']))
+    return upcoming
+
+
+_autograb_log_cb = None
+_autograb_lock = threading.Lock()
+
+
+def set_autograb_log_callback(fn):
+    global _autograb_log_cb
+    _autograb_log_cb = fn
+
+
+def _ag_log(status: str, msg: str):
+    logger.info(f"[AutoGrab] {msg}")
+    if _autograb_log_cb:
+        try:
+            _autograb_log_cb(status, msg)
+        except Exception:
+            pass
+
+
+def run_auto_grab() -> dict[str, Any]:
+    """
+    Periodic auto-grabber:
+      1. Skips if Disk Space Guard is active or NZBgeek/NNTP not configured.
+      2. Searches & queues WANTED movies (released on or before current year).
+      3. For active TV shows (with at least 1 episode on disk or a watch cursor),
+         queues newly aired episodes to keep ROLLING_WINDOW full.
+    """
+    if not _autograb_lock.acquire(blocking=False):
+        return {'status': 'info', 'message': 'Auto-grab already running'}
+
+    try:
+        from services.disk_service import check_disk_space_guard
+        low_disk, low_reason = check_disk_space_guard()
+        if low_disk:
+            _ag_log('warning', f"Auto-grab skipped — {low_reason}")
+            return {'status': 'warning', 'message': f"Skipped: {low_reason}"}
+
+        if not nzbgeek.get_nzbgeek_api_key() or not usenet_downloader.is_nntp_configured():
+            return {'status': 'info', 'message': 'NZBgeek or NNTP not configured'}
+
+        cur_year = datetime.date.today().year
+        queued_items: list[str] = []
+
+        # 1. Check WANTED movies
+        for m in db.list_movies():
+            if (m.get('status') or '').lower() != 'wanted':
+                continue
+            if m.get('year') and int(m['year']) > cur_year:
+                continue
+            if db.has_active_download('movie', m['title']):
+                continue
+            ok, _ = queue_movie(m)
+            if ok:
+                queued_items.append(f"Movie: {m['title']}")
+
+        # 2. Check active TV shows for newly aired episodes within rolling window
+        window_size = get_rolling_window()
+        for show in db.list_shows():
+            on_disk = _scan_show_episodes_on_disk(show['title'])
+            lw_s, lw_e = show.get('last_watched_season'), show.get('last_watched_episode')
+            explicit_cursor = (int(lw_s), int(lw_e)) if (lw_s is not None and lw_e is not None) else None
+
+            # Only auto-grab shows the user has actually started (on disk or watch cursor set)
+            if not on_disk and not explicit_cursor:
+                continue
+
+            queued_set = {
+                (int(d['season']), int(d['episode']))
+                for d in db.list_active_downloads()
+                if d['media_type'] == 'episode'
+                and clean_title(d['title']) == clean_title(show['title'])
+                and d.get('season') is not None and d.get('episode') is not None
+            }
+            active_eps = on_disk | queued_set
+            needed = window_size - len(active_eps)
+            if needed <= 0:
+                continue
+
+            watermark = max(active_eps) if active_eps else explicit_cursor
+            eps = metadata.get_show_episodes(show['tvmaze_id'], force_refresh=True)
+            candidates = [
+                e for e in eps
+                if e['aired'] and (e['season'], e['episode']) > watermark
+            ][:needed]
+            for ep in candidates:
+                ok, _ = queue_episode(show, ep['season'], ep['episode'])
+                if ok:
+                    queued_items.append(f"{show['title']} S{ep['season']:02d}E{ep['episode']:02d}")
+
+        if queued_items:
+            msg = f"Auto-grab queued {len(queued_items)} item(s): {', '.join(queued_items)}"
+            _ag_log('success', msg)
+        else:
+            msg = "Auto-grab completed — nothing new to queue"
+            logger.info(f"[AutoGrab] {msg}")
+        return {'status': 'success', 'message': msg, 'queued': queued_items}
+    finally:
+        _autograb_lock.release()
+
+
+def _autograb_loop():
+    logger.info("[AutoGrab] Background thread started (initial delay 90s).")
+    time.sleep(90)
+    while True:
+        try:
+            hours = int(get_config('AUTO_GRAB_INTERVAL_HOURS', 6) or 0)
+            if hours <= 0:
+                time.sleep(60)
+                continue
+            run_auto_grab()
+            time.sleep(max(1, hours) * 3600)
+        except Exception as exc:
+            logger.error(f"[AutoGrab] Loop error: {exc}")
+            time.sleep(300)
+
+
+def start_autograb():
+    t = threading.Thread(target=_autograb_loop, name='rolarr-autograb', daemon=True)
+    t.start()

@@ -1,17 +1,26 @@
 <!-- ══ DASHBOARD TAB ══════════════════════════════════════ -->
 <div class="tab-panel active" id="panel-dashboard">
 
+    <!-- Disk Space Guard Banner -->
+    <div id="disk-guard-banner"></div>
+
     <!-- Built-in Usenet Active Downloads Container -->
     <div id="downloads-container"></div>
 
     <!-- Active Streams List Container (Top of Dashboard) -->
     <div id="pw-streams-container"></div>
 
+    <!-- Airing This Week Calendar -->
+    <div id="calendar-container"></div>
+
     {% if poller_status.enabled %}
     <!-- Episode Poller stats -->
     <div class="tab-header-row">
         <span class="section-title" style="margin-bottom:0;">Media Poller</span>
-        <button class="btn-clear" id="btn-run-poller" onclick="runPoller()">Re-check Now</button>
+        <div style="display:flex; gap:8px;">
+            <button class="btn-clear" id="btn-run-autograb" onclick="runAutoGrab()">Auto-Grab Now</button>
+            <button class="btn-clear" id="btn-run-poller" onclick="runPoller()">Re-check Now</button>
+        </div>
     </div>
     <div class="idle-section" style="margin-bottom:24px;">
         <div class="idle-header" style="align-items:center;">

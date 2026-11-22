@@ -65,6 +65,8 @@ DEFAULT_CONFIG = {
     'MAX_MOVIE_SIZE_GB': 25,
     'REJECT_DV_WITHOUT_HDR': True,
     'REJECT_KEYWORDS': 'MULTI',
+    'AUTO_GRAB_INTERVAL_HOURS': 6,
+    'MIN_FREE_DISK_GB': 15,
     'PLEX_URL': 'http://plex:32400',
     'PLEX_TOKEN': '',
     'JELLYFIN_URL': 'http://jellyfin:8096',

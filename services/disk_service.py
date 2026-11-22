@@ -99,3 +99,19 @@ def get_disk_space_summary() -> dict:
             'movies':    _check_local_disk('PATH_MOVIES', '/movies', 'Movies Directory'),
         }
     }
+
+
+def check_disk_space_guard() -> tuple[bool, str]:
+    """
+    Return (is_low: bool, reason: str) if any mounted media/downloads path has
+    less free space than MIN_FREE_DISK_GB (0 disables guard).
+    """
+    min_gb = float(get_config('MIN_FREE_DISK_GB', 15) or 0)
+    if min_gb <= 0:
+        return False, ''
+    min_bytes = min_gb * (1024 ** 3)
+    summary = get_disk_space_summary()['disks']
+    for key, d in summary.items():
+        if d.get('exists') and d.get('total_bytes', 0) > 0 and d.get('free_bytes', 0) < min_bytes:
+            return True, f"Low disk space on {d['label']} ({d['free_formatted']} free < {min_gb:.0f} GB guard)"
+    return False, ''

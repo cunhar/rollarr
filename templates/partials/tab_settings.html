@@ -219,6 +219,20 @@
                             Frequency in seconds to scan Plex / Jellyfin for newly watched media.
                         </span>
                     </div>
+                    <div class="form-group">
+                        <label class="form-label">Auto-Grab Interval (Hours, 0 = Off)</label>
+                        <input type="number" class="form-input" id="cfg-AUTO_GRAB_INTERVAL_HOURS" value="{{ cfg.AUTO_GRAB_INTERVAL_HOURS }}" min="0" max="168">
+                        <span style="font-size:11px; color:var(--text-muted); font-family:var(--mono); margin-top:4px; display:block;">
+                            Periodically searches NZBgeek for WANTED movies and newly aired episodes.
+                        </span>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Disk Space Guard (Min Free GB, 0 = Off)</label>
+                        <input type="number" class="form-input" id="cfg-MIN_FREE_DISK_GB" value="{{ cfg.MIN_FREE_DISK_GB }}" min="0" max="500">
+                        <span style="font-size:11px; color:var(--text-muted); font-family:var(--mono); margin-top:4px; display:block;">
+                            Automatically pauses downloads & auto-grab if free space drops below this limit.
+                        </span>
+                    </div>
                 </div>
             </div>
         </details>
