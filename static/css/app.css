@@ -2,20 +2,20 @@
 
 :root {
     color-scheme: dark;
-    --bg:          #0c0c0e;
-    --surface:     #111114;
-    --surface-2:   #18181c;
-    --border:      #242428;
-    --border-hi:   #38383f;
-    --text:        #e8e8ec;
-    --text-sub:    #666672;
-    --text-muted:  #3a3a42;
-    --accent:      #5b6af0;
-    --accent-dim:  rgba(91,106,240,.12);
-    --green:       #3ecf8e;
-    --amber:       #e5a00d;
-    --red:         #e05252;
-    --red-dim:     rgba(224,82,82,.12);
+    --bg:          #0d1017;
+    --surface:     #161b26;
+    --surface-2:   #1f2636;
+    --border:      #2b3447;
+    --border-hi:   #43506b;
+    --text:        #f3f5f9;
+    --text-sub:    #a3acc2;
+    --text-muted:  #828ca6;
+    --accent:      #6c7bff;
+    --accent-dim:  rgba(108,123,255,.16);
+    --green:       #43d997;
+    --amber:       #f2b329;
+    --red:         #f06060;
+    --red-dim:     rgba(240,96,96,.16);
     --font:        'Inter', system-ui, sans-serif;
     --mono:        'JetBrains Mono', 'Fira Code', monospace;
 }
@@ -48,8 +48,8 @@ body {
     background: var(--bg);
     color: var(--text);
     min-height: 100vh;
-    font-size: 13px;
-    line-height: 1.5;
+    font-size: 14px;
+    line-height: 1.55;
 }
 
 /* ── Layout ─────────────────────────────────────────── */
@@ -1106,3 +1106,70 @@ body {
     font-size: 10px;
     color: var(--text-sub);
 }
+
+/* ── Readability & Visual Hierarchy Polish ──────────── */
+.config-card,
+.stream-card,
+.idle-section,
+.stat-cell,
+.media-card,
+.library-row,
+.cal-row,
+.season-card,
+.release-row,
+.modal-panel,
+.disk-guard-alert {
+    border-radius: 6px;
+}
+
+.btn-clear {
+    background: var(--surface-2);
+    color: var(--text);
+    border-color: var(--border-hi);
+    border-radius: 5px;
+    font-size: 12px;
+    font-weight: 500;
+}
+.btn-clear:hover:not(:disabled) {
+    background: var(--accent-dim);
+    border-color: var(--accent);
+    color: #fff;
+}
+
+.form-input {
+    background: var(--bg);
+    border-color: var(--border-hi);
+    border-radius: 5px;
+    font-size: 13px;
+    color: var(--text);
+}
+.form-input::placeholder {
+    color: var(--text-muted);
+}
+
+.section-title {
+    color: var(--text-sub);
+    font-size: 12px;
+    font-weight: 600;
+    letter-spacing: .6px;
+}
+
+.tab-btn {
+    font-size: 13px;
+    color: var(--text-sub);
+}
+.tab-btn.active {
+    color: var(--text);
+}
+
+.conn-pill {
+    background: var(--surface);
+    border-radius: 999px;
+    font-size: 12px;
+}
+
+.ep-title { font-size: 13px; }
+.ep-tag { font-size: 12px; }
+.ep-airdate { font-size: 11px; color: var(--text-sub); }
+.media-card-overview { font-size: 12px; color: var(--text-sub); }
+.btn-ep { padding: 3px 9px; font-size: 11px; }
