@@ -1354,12 +1354,27 @@ function onPlayerBackdropClick(e) {
     }
 }
 
+function _enterPlayerFullscreen() {
+    const modal = el('player-modal');
+    if (!modal) return;
+    if (!document.fullscreenElement && !document.webkitFullscreenElement) {
+        const req = modal.requestFullscreen || modal.webkitRequestFullscreen || modal.msRequestFullscreen;
+        if (req) {
+            try {
+                const p = req.call(modal);
+                if (p && p.catch) p.catch(() => {});
+            } catch (_) {}
+        }
+    }
+}
+
 function openPlayer(mediaType, mediaId, season = null, episode = null) {
     const modal = el('player-modal');
     const video = el('rolarr-video');
     if (!modal || !video) return;
 
     modal.style.display = 'flex';
+    _enterPlayerFullscreen();
     wakePlayerOsd();
     setText('player-title', 'Loading media...');
     setText('player-subtitle', '');
@@ -1600,10 +1615,16 @@ function onPlayerSubtitleChange(subId) {
 function togglePlayerFullscreen() {
     const modal = el('player-modal');
     if (!modal) return;
-    if (!document.fullscreenElement) {
-        if (modal.requestFullscreen) modal.requestFullscreen().catch(() => {});
+    if (!document.fullscreenElement && !document.webkitFullscreenElement) {
+        _enterPlayerFullscreen();
     } else {
-        if (document.exitFullscreen) document.exitFullscreen().catch(() => {});
+        const exit = document.exitFullscreen || document.webkitExitFullscreen || document.msExitFullscreen;
+        if (exit) {
+            try {
+                const p = exit.call(document);
+                if (p && p.catch) p.catch(() => {});
+            } catch (_) {}
+        }
     }
 }
 
