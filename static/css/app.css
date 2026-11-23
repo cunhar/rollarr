@@ -1070,130 +1070,162 @@ body {
     .kv-key { min-width: 120px; }
 }
 
-/* Desktop & 1080p TVs (1200px+) */
-@media (min-width: 1200px) {
+/* Desktop & Smart TV (900px+) */
+@media (min-width: 900px) {
     .shell {
-        max-width: 1400px;
-        padding: 44px 36px 64px;
+        max-width: 92vw;
+        padding: 40px 32px 64px;
     }
-    body { font-size: 16px; }
-    .topbar { gap: 20px; }
+    body { font-size: 17px; }
+    .topbar { gap: 18px; }
     .brand { flex-shrink: 0; }
     .conn-pills { flex-wrap: nowrap; gap: 10px; }
-    .brand-name { font-size: 24px; }
-    .brand-sub { font-size: 12px; }
-    .conn-pill { padding: 8px 16px; font-size: 13px; gap: 8px; white-space: nowrap; }
-    .conn-pip { width: 9px; height: 9px; }
-    .tab-btn { padding: 15px 24px; font-size: 15px; }
-    .section-title { font-size: 14px; letter-spacing: .8px; }
-    .dash-section { margin-bottom: 28px; }
-    .dash-section-header { margin-bottom: 12px; min-height: 36px; }
-    .stat-cell { padding: 22px; }
-    .stat-value { font-size: 32px; }
-    .stat-value.timestamp { font-size: 17px; }
-    .stat-label { font-size: 13px; }
-    .stat-meta, .stat-sub { font-size: 13px; }
-    .idle-section { padding: 18px 22px; }
-    .idle-label { font-size: 13px; }
-    .idle-count { font-size: 15px; }
-    .idle-meta { font-size: 15px; }
-    .idle-track { height: 6px; }
-    .form-input { font-size: 15px; padding: 11px 16px; }
-    .form-label { font-size: 13px; }
-    .form-hint { font-size: 13px; }
-    .btn-clear { font-size: 14px; padding: 9px 18px; }
-    .btn-sm, .btn-ep { font-size: 12px; padding: 5px 12px; }
-    .badge { font-size: 12px; padding: 4px 10px; }
-    .config-card-summary { padding: 16px 20px; font-size: 16px; }
-    .config-card-body { padding: 20px; }
-    .stream-card { padding: 18px 22px; gap: 10px; }
-    .stream-user-name { font-size: 17px; }
-    .stream-title { font-size: 16px; }
-    .stream-device, .download-nzb-name { font-size: 13px; }
-    .stream-progress-meta { font-size: 13px; }
-    .stream-progress-track { height: 6px; }
-    .stream-bw, .dl-rate { font-size: 14px; }
-    .media-grid { grid-template-columns: repeat(auto-fill, minmax(340px, 1fr)); gap: 14px; }
-    .media-poster { width: 76px; height: 114px; }
-    .media-card-title { font-size: 16px; }
-    .media-year { font-size: 13px; }
-    .media-card-overview { font-size: 13px; }
-    .library-row, .cal-row { padding: 12px 18px; font-size: 16px; }
-    .cal-sub { font-size: 13px; }
-    .lib-thumb { width: 38px; height: 54px; }
-    .season-summary { padding: 12px 16px; font-size: 15px; }
-    .ep-row { padding: 9px 16px; }
-    .ep-tag { font-size: 14px; }
-    .ep-title { font-size: 15px; }
-    .ep-airdate { font-size: 13px; }
-    .release-title { font-size: 14px; }
-    .release-meta { font-size: 13px; }
-    .log-entry, .log-msg { font-size: 14px; }
-    .log-ts { font-size: 12px; }
-    .toast-container { top: 28px; right: 28px; gap: 12px; }
-    .toast { font-size: 15px; padding: 15px 22px; max-width: 480px; border-left-width: 5px; }
+    .brand-name { font-size: 26px; }
+    .brand-sub { font-size: 13px; }
+    .conn-pill { padding: 9px 18px; font-size: 14px; gap: 8px; white-space: nowrap; }
+    .conn-pip { width: 10px; height: 10px; }
+    .tab-btn { padding: 15px 24px; font-size: 16px; }
+    .section-title { font-size: 15px; letter-spacing: .8px; }
+    .config-card-summary { padding: 16px 22px; font-size: 19px; }
+    .library-row, .cal-row { padding: 14px 20px; font-size: 19px; }
+    .lib-thumb { width: 42px; height: 60px; }
+    .season-summary { padding: 13px 18px; font-size: 17px; }
+    .ep-row { padding: 11px 18px; }
+    .ep-tag { font-size: 16px; }
+    .ep-title { font-size: 17px; }
+    .ep-airdate { font-size: 14px; }
+    .btn-clear { font-size: 15px; padding: 10px 20px; }
+    .btn-sm, .btn-ep { font-size: 14px; padding: 6px 14px; }
+    .badge { font-size: 13px; padding: 5px 11px; }
+}
+
+/* 1080p TVs & Desktop Displays (1200px+) */
+@media (min-width: 1200px) {
+    .shell {
+        max-width: min(92vw, 1680px);
+        padding: 44px 40px 72px;
+    }
+    body { font-size: 19px; }
+    .topbar { gap: 20px; padding-bottom: 28px; }
+    .brand { flex-shrink: 0; }
+    .conn-pills { flex-wrap: nowrap; gap: 12px; }
+    .brand-name { font-size: 32px; }
+    .brand-sub { font-size: 15px; }
+    .conn-pill { padding: 10px 22px; font-size: 16px; gap: 10px; white-space: nowrap; }
+    .conn-pip { width: 11px; height: 11px; }
+    .tab-btn { padding: 18px 30px; font-size: 18px; border-bottom-width: 3px; }
+    .section-title { font-size: 17px; letter-spacing: 1px; }
+    .dash-section { margin-bottom: 32px; }
+    .dash-section-header { margin-bottom: 14px; min-height: 40px; }
+    .stat-cell { padding: 26px; gap: 10px; }
+    .stat-value { font-size: 40px; }
+    .stat-value.timestamp { font-size: 19px; }
+    .stat-label { font-size: 15px; }
+    .stat-meta, .stat-sub { font-size: 15px; }
+    .idle-section { padding: 22px 26px; }
+    .idle-label { font-size: 16px; }
+    .idle-count { font-size: 18px; }
+    .idle-meta { font-size: 17px; }
+    .idle-track { height: 8px; }
+    .form-input { font-size: 18px; padding: 14px 20px; }
+    .form-label { font-size: 15px; }
+    .form-hint { font-size: 14px; }
+    .btn-clear { font-size: 16px; padding: 11px 22px; }
+    .btn-sm, .btn-ep { font-size: 15px; padding: 7px 16px; }
+    .badge { font-size: 14px; padding: 5px 12px; }
+    .config-card-summary { padding: 18px 24px; font-size: 22px; }
+    .config-card-summary::after { font-size: 18px; }
+    .config-card-body { padding: 22px 24px; }
+    .stream-card { padding: 20px 26px; gap: 12px; }
+    .stream-user-name { font-size: 22px; }
+    .stream-title { font-size: 20px; }
+    .stream-device, .download-nzb-name { font-size: 16px; }
+    .stream-progress-meta { font-size: 15px; }
+    .stream-progress-track { height: 7px; }
+    .stream-bw, .dl-rate { font-size: 16px; }
+    .media-grid { grid-template-columns: repeat(auto-fill, minmax(380px, 1fr)); gap: 16px; }
+    .media-poster { width: 88px; height: 132px; }
+    .media-card-title { font-size: 19px; }
+    .media-year { font-size: 16px; }
+    .media-card-overview { font-size: 15px; }
+    .library-row, .cal-row { padding: 16px 24px; font-size: 22px; }
+    .cal-sub { font-size: 16px; }
+    .lib-thumb { width: 48px; height: 68px; }
+    .season-summary { padding: 15px 22px; font-size: 19px; }
+    .ep-row { padding: 12px 22px; gap: 14px; }
+    .ep-tag { font-size: 17px; }
+    .ep-title { font-size: 19px; }
+    .ep-airdate { font-size: 15px; }
+    .modal-panel { max-width: 1020px; }
+    .release-title { font-size: 16px; }
+    .release-meta { font-size: 14px; }
+    .log-entry, .log-msg { font-size: 16px; }
+    .log-ts { font-size: 14px; }
+    .toast-container { top: 32px; right: 32px; gap: 14px; }
+    .toast { font-size: 17px; padding: 16px 26px; max-width: 540px; border-left-width: 5px; }
 }
 
 /* 4K Ultra-HD & Big Screen TVs (1600px+) */
 @media (min-width: 1600px) {
     .shell {
-        max-width: 1760px;
-        padding: 56px 48px 80px;
+        max-width: min(92vw, 1920px);
+        padding: 52px 48px 84px;
     }
-    body { font-size: 19px; }
-    .brand-name { font-size: 30px; }
-    .brand-sub { font-size: 14px; }
-    .conn-pill { padding: 10px 20px; font-size: 15px; gap: 10px; border-width: 1.5px; }
-    .conn-pip { width: 11px; height: 11px; }
-    .tab-btn { padding: 18px 32px; font-size: 18px; border-bottom-width: 3px; }
-    .section-title { font-size: 16px; letter-spacing: 1px; }
-    .dash-section { margin-bottom: 34px; }
-    .dash-section-header { margin-bottom: 14px; min-height: 42px; }
-    .stat-cell { padding: 28px; gap: 10px; }
-    .stat-value { font-size: 42px; }
-    .stat-value.timestamp { font-size: 20px; }
-    .stat-label { font-size: 15px; }
-    .stat-meta, .stat-sub { font-size: 15px; }
-    .stream-card { padding: 22px 28px; gap: 12px; border-width: 1.5px; }
-    .stream-user-name { font-size: 21px; }
-    .stream-device, .download-nzb-name { font-size: 15px; }
-    .stream-title { font-size: 20px; }
-    .stream-progress-meta { font-size: 15px; }
-    .stream-progress-track { height: 7px; }
-    .stream-bw, .dl-rate { font-size: 16px; }
-    .form-input { font-size: 18px; padding: 14px 20px; border-width: 1.5px; }
-    .form-label { font-size: 15px; }
-    .form-hint { font-size: 14px; }
-    .idle-section { padding: 22px 28px; border-width: 1.5px; }
-    .idle-label { font-size: 15px; }
-    .idle-count { font-size: 17px; }
-    .idle-meta { font-size: 16px; }
-    .idle-track { height: 8px; }
-    .btn-clear { font-size: 16px; padding: 11px 22px; border-width: 1.5px; }
-    .btn-sm, .btn-ep { font-size: 14px; padding: 6px 14px; }
-    .badge { font-size: 13px; padding: 5px 12px; }
-    .config-card-summary { padding: 20px 26px; font-size: 19px; }
-    .config-card-body { padding: 24px 26px; }
-    .media-grid { grid-template-columns: repeat(auto-fill, minmax(400px, 1fr)); gap: 18px; }
-    .media-poster { width: 90px; height: 134px; }
-    .media-card-title { font-size: 19px; }
-    .media-year { font-size: 15px; }
-    .media-card-overview { font-size: 15px; }
-    .library-row, .cal-row { padding: 15px 22px; font-size: 19px; }
-    .cal-sub { font-size: 15px; }
-    .lib-thumb { width: 44px; height: 64px; }
-    .season-summary { padding: 14px 20px; font-size: 17px; }
-    .ep-row { padding: 11px 20px; }
-    .ep-tag { font-size: 16px; }
-    .ep-title { font-size: 17px; }
-    .ep-airdate { font-size: 14px; }
-    .modal-panel { max-width: 1040px; }
-    .release-title { font-size: 16px; }
-    .release-meta { font-size: 14px; }
-    .log-entry, .log-msg { font-size: 16px; }
-    .log-ts { font-size: 14px; }
+    body { font-size: 21px; }
+    .brand-name { font-size: 36px; }
+    .brand-sub { font-size: 16px; }
+    .conn-pill { padding: 12px 24px; font-size: 18px; gap: 10px; border-width: 1.5px; }
+    .conn-pip { width: 12px; height: 12px; }
+    .tab-btn { padding: 20px 36px; font-size: 20px; border-bottom-width: 3px; }
+    .section-title { font-size: 19px; letter-spacing: 1.1px; }
+    .dash-section { margin-bottom: 36px; }
+    .dash-section-header { margin-bottom: 16px; min-height: 46px; }
+    .stat-cell { padding: 30px; gap: 12px; }
+    .stat-value { font-size: 46px; }
+    .stat-value.timestamp { font-size: 22px; }
+    .stat-label { font-size: 17px; }
+    .stat-meta, .stat-sub { font-size: 17px; }
+    .stream-card { padding: 24px 30px; gap: 14px; border-width: 1.5px; }
+    .stream-user-name { font-size: 25px; }
+    .stream-device, .download-nzb-name { font-size: 18px; }
+    .stream-title { font-size: 23px; }
+    .stream-progress-meta { font-size: 17px; }
+    .stream-progress-track { height: 8px; }
+    .stream-bw, .dl-rate { font-size: 18px; }
+    .form-input { font-size: 20px; padding: 16px 22px; border-width: 1.5px; }
+    .form-label { font-size: 17px; }
+    .form-hint { font-size: 16px; }
+    .idle-section { padding: 24px 30px; border-width: 1.5px; }
+    .idle-label { font-size: 18px; }
+    .idle-count { font-size: 20px; }
+    .idle-meta { font-size: 19px; }
+    .idle-track { height: 9px; }
+    .btn-clear { font-size: 18px; padding: 12px 26px; border-width: 1.5px; }
+    .btn-sm, .btn-ep { font-size: 16px; padding: 8px 18px; }
+    .badge { font-size: 15px; padding: 6px 14px; }
+    .config-card-summary { padding: 22px 28px; font-size: 25px; }
+    .config-card-summary::after { font-size: 20px; }
+    .config-card-body { padding: 26px 28px; }
+    .media-grid { grid-template-columns: repeat(auto-fill, minmax(440px, 1fr)); gap: 20px; }
+    .media-poster { width: 100px; height: 150px; }
+    .media-card-title { font-size: 22px; }
+    .media-year { font-size: 18px; }
+    .media-card-overview { font-size: 17px; }
+    .library-row, .cal-row { padding: 18px 28px; font-size: 25px; }
+    .cal-sub { font-size: 18px; }
+    .lib-thumb { width: 56px; height: 80px; }
+    .season-summary { padding: 18px 24px; font-size: 21px; }
+    .ep-row { padding: 14px 24px; gap: 16px; }
+    .ep-tag { font-size: 19px; }
+    .ep-title { font-size: 21px; }
+    .ep-airdate { font-size: 17px; }
+    .modal-panel { max-width: 1180px; }
+    .release-title { font-size: 18px; }
+    .release-meta { font-size: 16px; }
+    .log-entry, .log-msg { font-size: 18px; }
+    .log-ts { font-size: 16px; }
     .toast-container { top: 36px; right: 36px; gap: 14px; }
-    .toast { font-size: 18px; padding: 18px 28px; max-width: 580px; border-left-width: 6px; }
+    .toast { font-size: 19px; padding: 18px 28px; max-width: 600px; border-left-width: 6px; }
     ::-webkit-scrollbar { width: 12px; height: 12px; }
     ::-webkit-scrollbar-thumb { border-radius: 6px; border-width: 2px; }
 }
