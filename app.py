@@ -352,6 +352,7 @@ def api_player_stream(media_type: str, media_id: int):
     episode = request.args.get('episode', type=int)
     start_sec = request.args.get('start', default=0.0, type=float)
     audio_idx = request.args.get('audio', default=0, type=int)
+    force_transcode = request.args.get('transcode', default='0') in ('1', 'true')
     return player_service.stream_media_response(
         media_type=media_type,
         media_id=media_id,
@@ -359,6 +360,7 @@ def api_player_stream(media_type: str, media_id: int):
         episode=episode,
         start_sec=start_sec,
         audio_idx=audio_idx,
+        force_transcode=force_transcode,
     )
 
 

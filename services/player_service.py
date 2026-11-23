@@ -457,16 +457,32 @@ def _stream_ffmpeg_remux(
     start_sec: float = 0.0,
     audio_idx: int = 0,
     video_codec: str = 'h264',
+    force_transcode: bool = False,
 ) -> Response:
     """
-    On-the-fly FFmpeg direct-stream remuxer:
-      - Copies H.264/HEVC video bitstream untouched (-c:v copy, ~0% CPU, preserves 4K HDR)
+    On-the-fly FFmpeg direct-stream remuxer / transcoder:
+      - When force_transcode=False and codec is H.264/HEVC: copies video bitstream (-c:v copy)
+        and writes Apple/LG webOS compliant 'hvc1' tag for HEVC so hardware decoders initialize
+      - When force_transcode=True (or unsupported codec): transcodes video to universal 1080p H.264
+        (libx264 -preset superfast) for Smart TV browsers whose <video> element rejects HEVC in fMP4
       - Transcodes audio to universal 192kbps stereo AAC (-c:a aac -ac 2)
-      - Outputs fragmented MP4 (fMP4) directly to HTTP response pipe for LG webOS TV browser
+      - Outputs fragmented MP4 (fMP4) directly to HTTP response pipe
     """
-    v_codec_args = ['-c:v', 'copy'] if video_codec in COPYABLE_VIDEO_CODECS else [
-        '-c:v', 'libx264', '-preset', 'ultrafast', '-crf', '22', '-pix_fmt', 'yuv420p'
-    ]
+    is_hevc = video_codec in {'hevc', 'h265', 'hev1', 'hvc1'}
+    if not force_transcode and video_codec in COPYABLE_VIDEO_CODECS:
+        v_codec_args = ['-c:v', 'copy']
+        if is_hevc:
+            v_codec_args.extend(['-tag:v', 'hvc1'])
+    else:
+        v_codec_args = [
+            '-c:v', 'libx264',
+            '-preset', 'superfast',
+            '-crf', '22',
+            '-pix_fmt', 'yuv420p',
+            '-vf', 'scale=min(1920\\,iw):-2',
+            '-profile:v', 'high',
+            '-level', '4.1',
+        ]
 
     cmd = ['ffmpeg', '-hide_banner', '-loglevel', 'error']
     if start_sec > 0.5:
@@ -522,6 +538,7 @@ def stream_media_response(
     episode: int | None = None,
     start_sec: float = 0.0,
     audio_idx: int = 0,
+    force_transcode: bool = False,
 ) -> Response:
     """Entry point for GET /api/player/stream/<media_type>/<media_id>."""
     file_path, _, err = resolve_media_file(media_type, media_id, season, episode)
@@ -531,15 +548,16 @@ def stream_media_response(
     probe = probe_media_file(file_path)
 
     # Fast Path 1: Native MP4 + AAC with default audio track and no FFmpeg seek offset
-    if (probe['can_direct_play'] and start_sec <= 0.5 and audio_idx == 0) or not has_ffmpeg():
+    if (not force_transcode and probe['can_direct_play'] and start_sec <= 0.5 and audio_idx == 0) or not has_ffmpeg():
         return _stream_file_range(file_path, mime_type='video/mp4')
 
-    # Fast Path 2: Zero-CPU video copy + AAC audio remux to fragmented MP4
+    # Fast Path 2: Zero-CPU video copy (-tag:v hvc1 for HEVC) or H.264 compatibility transcode + AAC audio
     return _stream_ffmpeg_remux(
         file_path=file_path,
         start_sec=start_sec,
         audio_idx=audio_idx,
         video_codec=probe['video_codec'],
+        force_transcode=force_transcode,
     )
 
 

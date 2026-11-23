@@ -1270,6 +1270,19 @@ let _playerCtx = null;
 let _playerHeartbeatTimer = null;
 let _playerOsdTimer = null;
 let _playerScrubbing = false;
+let _videoWatchdogTimer = null;
+
+function _browserSupportsHevcMp4() {
+    const ua = navigator.userAgent || '';
+    // LG webOS TV built-in browser often plays AAC audio while silently dropping HEVC fMP4 video frames
+    if (/Web0S|webOS|LG Browser|SmartTV|NetCast/i.test(ua)) {
+        return false;
+    }
+    const v = document.createElement('video');
+    if (!v || !v.canPlayType) return false;
+    const res = v.canPlayType('video/mp4; codecs="hvc1.1.6.L120.90"') || v.canPlayType('video/mp4; codecs="hev1.1.6.L120.90"');
+    return res === 'probably';
+}
 
 function _fmtTime(totalSec) {
     const s = Math.max(0, Math.floor(Number(totalSec) || 0));
@@ -1286,7 +1299,7 @@ function _currentPlaybackPosition() {
     if (!_playerCtx) return 0;
     const video = el('rolarr-video');
     const vTime = video ? (Number(video.currentTime) || 0) : 0;
-    return (_playerCtx.stream_mode === 'remux')
+    return (_playerCtx.stream_mode === 'remux' || _playerCtx.stream_mode === 'transcode' || _playerCtx.force_transcode)
         ? (_playerCtx.base_offset_sec + vTime)
         : vTime;
 }
@@ -1304,6 +1317,7 @@ function _buildStreamUrl(ctx, startSec, audioIdx) {
     if (ctx.episode !== null && ctx.episode !== undefined) params.set('episode', ctx.episode);
     if (startSec > 0.5) params.set('start', Math.floor(startSec));
     if (audioIdx > 0) params.set('audio', audioIdx);
+    if (ctx.force_transcode) params.set('transcode', '1');
     const qs = params.toString() ? `?${params.toString()}` : '';
     return `/api/player/stream/${ctx.media_type}/${ctx.media_id}${qs}`;
 }
@@ -1358,6 +1372,10 @@ function openPlayer(mediaType, mediaId, season = null, episode = null) {
                 return;
             }
 
+            const vCodec = (data.video_codec || 'h264').toLowerCase();
+            const isHevc = ['hevc', 'h265', 'hev1', 'hvc1'].includes(vCodec);
+            const needTranscode = isHevc && !_browserSupportsHevcMp4();
+
             _playerCtx = {
                 media_type: data.media_type,
                 media_id: data.media_id,
@@ -1366,7 +1384,9 @@ function openPlayer(mediaType, mediaId, season = null, episode = null) {
                 title: data.title,
                 filename: data.filename,
                 duration_sec: Number(data.duration_sec) || 0,
-                stream_mode: data.stream_mode || 'remux',
+                stream_mode: needTranscode ? 'transcode' : (data.stream_mode || 'remux'),
+                force_transcode: needTranscode,
+                video_codec: vCodec,
                 base_offset_sec: Number(data.resume_position_sec) || 0,
                 audio_idx: 0,
                 subtitles: data.subtitles || [],
@@ -1374,18 +1394,9 @@ function openPlayer(mediaType, mediaId, season = null, episode = null) {
             };
 
             setText('player-title', data.title);
-            setText('player-subtitle', `${data.filename} · ${(data.video_codec || 'h264').toUpperCase()}`);
+            setText('player-subtitle', `${data.filename} · ${vCodec.toUpperCase()}`);
 
-            const badge = el('player-mode-badge');
-            if (badge) {
-                if (_playerCtx.stream_mode === 'direct') {
-                    badge.textContent = 'DIRECT PLAY';
-                    badge.className = 'badge badge-green player-badge';
-                } else {
-                    badge.textContent = 'DIRECT STREAM';
-                    badge.className = 'badge badge-blue player-badge';
-                }
-            }
+            _updatePlayerModeBadge();
 
             const nextBtn = el('btn-player-next');
             if (nextBtn) {
@@ -1448,13 +1459,33 @@ function openPlayer(mediaType, mediaId, season = null, episode = null) {
         });
 }
 
+function _updatePlayerModeBadge() {
+    const badge = el('player-mode-badge');
+    if (!badge || !_playerCtx) return;
+    if (_playerCtx.force_transcode || _playerCtx.stream_mode === 'transcode') {
+        badge.textContent = 'H.264 TRANSCODE';
+        badge.className = 'badge badge-amber player-badge';
+    } else if (_playerCtx.stream_mode === 'direct') {
+        badge.textContent = 'DIRECT PLAY';
+        badge.className = 'badge badge-green player-badge';
+    } else {
+        badge.textContent = 'DIRECT STREAM';
+        badge.className = 'badge badge-blue player-badge';
+    }
+}
+
 function _startVideoStream(startSec, audioIdx) {
     if (!_playerCtx) return;
     const video = el('rolarr-video');
     if (!video) return;
 
+    if (_videoWatchdogTimer) {
+        clearTimeout(_videoWatchdogTimer);
+        _videoWatchdogTimer = null;
+    }
+
     _playerCtx.audio_idx = Number(audioIdx) || 0;
-    if (_playerCtx.stream_mode === 'direct' && _playerCtx.audio_idx === 0) {
+    if (!_playerCtx.force_transcode && _playerCtx.stream_mode === 'direct' && _playerCtx.audio_idx === 0) {
         _playerCtx.base_offset_sec = 0;
         video.src = _buildStreamUrl(_playerCtx, 0, 0);
         video.load();
@@ -1466,13 +1497,29 @@ function _startVideoStream(startSec, audioIdx) {
             video.addEventListener('loadedmetadata', onLoaded);
         }
     } else {
-        _playerCtx.stream_mode = 'remux';
+        if (!_playerCtx.force_transcode) _playerCtx.stream_mode = 'remux';
         _playerCtx.base_offset_sec = Math.max(0, Number(startSec) || 0);
         video.src = _buildStreamUrl(_playerCtx, _playerCtx.base_offset_sec, _playerCtx.audio_idx);
         video.load();
     }
 
+    _updatePlayerModeBadge();
     video.play().catch(() => {});
+
+    // Watchdog: if audio is playing (currentTime > 0.5) but videoWidth === 0 (black screen on TV), auto-fallback to H.264 transcode
+    if (!_playerCtx.force_transcode) {
+        _videoWatchdogTimer = setTimeout(() => {
+            if (!_playerCtx || _playerCtx.force_transcode) return;
+            if (video.videoWidth === 0 && (video.currentTime > 0.3 || !video.paused)) {
+                const resumeAt = _currentPlaybackPosition();
+                _playerCtx.force_transcode = true;
+                _playerCtx.stream_mode = 'transcode';
+                showToast('Switching to H.264 TV compatibility mode...', 'info');
+                _startVideoStream(resumeAt, _playerCtx.audio_idx);
+            }
+        }, 2800);
+    }
+
     setTimeout(() => {
         const subSel = el('player-sub-select');
         if (subSel) onPlayerSubtitleChange(subSel.value);
@@ -1589,6 +1636,10 @@ function closePlayer() {
     if (_playerOsdTimer) {
         clearTimeout(_playerOsdTimer);
         _playerOsdTimer = null;
+    }
+    if (_videoWatchdogTimer) {
+        clearTimeout(_videoWatchdogTimer);
+        _videoWatchdogTimer = null;
     }
     if (_playerCtx) {
         const showIdToReload = _playerCtx.media_type === 'episode' ? _playerCtx.media_id : null;
