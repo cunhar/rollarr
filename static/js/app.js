@@ -16,6 +16,7 @@ function setText(id, val) { const e = el(id); if (e) e.textContent = val; }
 const SVG_ICONS = {
     play: '<svg class="ui-icon" viewBox="0 0 24 24" fill="currentColor"><polygon points="6 3 20 12 6 21 6 3"/></svg>',
     pause: '<svg class="ui-icon" viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="4" width="4" height="16" rx="1"/><rect x="14" y="4" width="4" height="16" rx="1"/></svg>',
+    trash: '<svg class="ui-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></svg>',
 };
 
 function escapeHtml(str) {
@@ -647,17 +648,17 @@ function loadShowEpisodes(showId, forceReload = false) {
 
 function deleteLibraryItem(type, id, btnEl) {
     if (btnEl && btnEl.dataset.confirming !== '1') {
-        const origText = btnEl.textContent;
+        const origHtml = btnEl.innerHTML;
         btnEl.dataset.confirming = '1';
-        btnEl.dataset.origText = origText;
-        btnEl.textContent = 'Confirm Remove?';
+        btnEl.dataset.origHtml = origHtml;
+        btnEl.innerHTML = `${SVG_ICONS.trash}<span>Confirm?</span>`;
         btnEl.style.background = 'var(--red-dim)';
         btnEl.style.borderColor = 'var(--red)';
         btnEl.style.color = 'var(--red)';
         btnEl.style.fontWeight = '600';
         btnEl._confirmTimer = setTimeout(() => {
             btnEl.dataset.confirming = '';
-            btnEl.textContent = btnEl.dataset.origText || 'Remove';
+            btnEl.innerHTML = btnEl.dataset.origHtml || SVG_ICONS.trash;
             btnEl.style.background = '';
             btnEl.style.borderColor = '';
             btnEl.style.color = '';
@@ -670,7 +671,6 @@ function deleteLibraryItem(type, id, btnEl) {
     }
     if (btnEl) {
         btnEl.disabled = true;
-        btnEl.textContent = 'Removing...';
     }
     Api.deleteLibraryItem(type, id).then(() => {
         showToast('Removed from tracked library', 'info');
@@ -693,7 +693,12 @@ function loadLibrary() {
                 showsEl.querySelectorAll('details[data-show-id]').forEach(d => {
                     if (d.open) openIds.add(d.getAttribute('data-show-id'));
                 });
-                showsEl.innerHTML = shows.map(s => `
+                showsEl.innerHTML = shows.map(s => {
+                    const nxt = s.next_available;
+                    const playNextBtn = nxt
+                        ? `<button type="button" class="btn-clear btn-play" onclick="event.preventDefault(); event.stopPropagation(); openPlayer('episode', ${s.id}, ${nxt.season}, ${nxt.episode})">${SVG_ICONS.play}<span>${nxt.resume_pct > 0 ? `Resume ${nxt.tag} (${nxt.resume_pct}%)` : `Play ${nxt.tag}`}</span></button>`
+                        : '';
+                    return `
                     <details class="config-card" data-show-id="${s.id}" ${openIds.has(String(s.id)) ? 'open' : ''} ontoggle="onShowToggle(this, ${s.id})" style="margin-bottom:0;">
                         <summary class="config-card-summary">
                             <span style="display:flex; align-items:center; gap:10px; min-width:0;">
@@ -702,13 +707,17 @@ function loadLibrary() {
                                 ${s.year ? `<span class="media-year">(${s.year})</span>` : ''}
                                 <span class="badge badge-green">${escapeHtml(s.status || 'active')}</span>
                             </span>
-                            <button class="btn-clear" style="margin-left:auto; margin-right:12px;" onclick="event.preventDefault(); event.stopPropagation(); deleteLibraryItem('tv', ${s.id}, this)">Remove</button>
+                            <span class="ep-controls-row" style="margin-left:auto; margin-right:12px;">
+                                ${playNextBtn}
+                                <button type="button" class="btn-clear btn-icon-trash" title="Remove Show" onclick="event.preventDefault(); event.stopPropagation(); deleteLibraryItem('tv', ${s.id}, this)">${SVG_ICONS.trash}</button>
+                            </span>
                         </summary>
                         <div class="config-card-body">
                             <div id="show-episodes-${s.id}"></div>
                         </div>
                     </details>
-                `).join('');
+                `;
+                }).join('');
                 openIds.forEach(id => loadShowEpisodes(parseInt(id), true));
             }
         }
@@ -739,7 +748,7 @@ function loadLibrary() {
                         <div class="ep-controls-row">
                             ${isPlayable ? `<button class="btn-clear btn-play" onclick="openPlayer('movie', ${m.id})">${SVG_ICONS.play}<span>${playLabel}</span></button>` : ''}
                             ${st === 'wanted' && !isPlayable ? `<button class="btn-clear" onclick="openMoviePicker(${m.id})">Pick</button>` : ''}
-                            <button class="btn-clear" onclick="deleteLibraryItem('movie', ${m.id}, this)">Remove</button>
+                            <button type="button" class="btn-clear btn-icon-trash" title="Remove Movie" onclick="deleteLibraryItem('movie', ${m.id}, this)">${SVG_ICONS.trash}</button>
                         </div>
                     </div>`;
                 }).join('');

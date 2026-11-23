@@ -1005,6 +1005,15 @@ body {
     border-color: var(--green);
     color: #0d1017;
 }
+.btn-icon-trash {
+    padding: 6px 10px;
+    color: var(--text-sub);
+}
+.btn-icon-trash:hover:not(:disabled) {
+    background: var(--red-dim);
+    border-color: var(--red);
+    color: var(--red);
+}
 
 /* ── Full-Screen TV & Web Media Player Overlay ──────── */
 .player-overlay {

@@ -228,8 +228,12 @@ def api_library():
         (m.get('title') or '').lower(),
     ))
 
+    shows = db.list_shows()
+    for s in shows:
+        s['next_available'] = media_manager.get_next_available_episode_for_show(s)
+
     return jsonify({
-        'shows': db.list_shows(),
+        'shows': shows,
         'movies': movies,
         'recent_downloads': db.list_recent_downloads(15),
     }), 200
