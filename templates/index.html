@@ -73,7 +73,7 @@
                     </button>
                 </div>
                 <div class="player-buttons-right">
-                    <label class="player-select-wrap" id="player-audio-wrap" style="display:none;">
+                    <label class="player-select-wrap" id="player-audio-wrap">
                         <svg class="ui-icon player-select-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14"/></svg>
                         <select class="form-input player-select" id="player-audio-select" onchange="onPlayerAudioChange(this.value)"></select>
                     </label>
@@ -93,9 +93,9 @@
     </div>
 </div>
 
-<script src="{{ url_for('static', filename='js/api.js') }}?v=20261123f"></script>
-<script src="{{ url_for('static', filename='js/app.js') }}?v=20261123f"></script>
-<script src="{{ url_for('static', filename='js/tv-nav.js') }}?v=20261123f"></script>
+<script src="{{ url_for('static', filename='js/api.js') }}?v=20261123g"></script>
+<script src="{{ url_for('static', filename='js/app.js') }}?v=20261123g"></script>
+<script src="{{ url_for('static', filename='js/tv-nav.js') }}?v=20261123g"></script>
 <script>
     updatePillLinks({
         PLEX_URL:     "{{ cfg.PLEX_URL | safe }}",

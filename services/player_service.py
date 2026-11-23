@@ -56,6 +56,34 @@ LANG_NAMES = {
     'deu': 'German',
     'it': 'Italian',
     'ita': 'Italian',
+    'nl': 'Dutch',
+    'dut': 'Dutch',
+    'nld': 'Dutch',
+    'pl': 'Polish',
+    'pol': 'Polish',
+    'ru': 'Russian',
+    'rus': 'Russian',
+    'ja': 'Japanese',
+    'jpn': 'Japanese',
+    'ko': 'Korean',
+    'kor': 'Korean',
+    'zh': 'Chinese',
+    'chi': 'Chinese',
+    'zho': 'Chinese',
+    'ar': 'Arabic',
+    'ara': 'Arabic',
+    'tr': 'Turkish',
+    'tur': 'Turkish',
+    'sv': 'Swedish',
+    'swe': 'Swedish',
+    'no': 'Norwegian',
+    'nor': 'Norwegian',
+    'da': 'Danish',
+    'dan': 'Danish',
+    'fi': 'Finnish',
+    'fin': 'Finnish',
+    'hi': 'Hindi',
+    'hin': 'Hindi',
     'und': 'Default',
 }
 
@@ -132,6 +160,19 @@ def resolve_media_file(
 
 # ── FFprobe Media Inspection ─────────────────────────────────────────────────
 
+def _parse_tag_duration(dur_str: str | None) -> float:
+    """Parse Matroska tag DURATION like '00:54:14.160000000' into seconds."""
+    if not dur_str:
+        return 0.0
+    m = re.match(r'^(\d+):(\d{2}):(\d{2}(?:\.\d+)?)', str(dur_str).strip())
+    if not m:
+        return 0.0
+    try:
+        return int(m.group(1)) * 3600 + int(m.group(2)) * 60 + float(m.group(3))
+    except (ValueError, TypeError):
+        return 0.0
+
+
 def probe_media_file(file_path: str) -> dict[str, Any]:
     """
     Inspect container, duration, video codec, audio streams, and embedded text subtitle streams.
@@ -186,6 +227,8 @@ def probe_media_file(file_path: str) -> dict[str, Any]:
                         duration_sec = float(st['duration'])
                     except (ValueError, TypeError):
                         pass
+                if not duration_sec:
+                    duration_sec = _parse_tag_duration(tags.get('DURATION') or tags.get('duration'))
 
             elif ctype == 'audio':
                 ch = int(st.get('channels') or 2)
@@ -496,6 +539,8 @@ def _stream_ffmpeg_remux(
         '-ac', '2',
         '-b:a', '192k',
         '-sn',
+        '-avoid_negative_ts', 'make_zero',
+        '-reset_timestamps', '1',
         '-movflags', 'frag_keyframe+empty_moov+default_base_moof',
         '-f', 'mp4',
         'pipe:1',

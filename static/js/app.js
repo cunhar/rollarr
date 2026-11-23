@@ -1268,6 +1268,7 @@ function updatePillLinks(urls) {
 
 let _playerCtx = null;
 let _playerHeartbeatTimer = null;
+let _playerUiTickTimer = null;
 let _playerOsdTimer = null;
 let _playerScrubbing = false;
 let _videoWatchdogTimer = null;
@@ -1299,9 +1300,27 @@ function _currentPlaybackPosition() {
     if (!_playerCtx) return 0;
     const video = el('rolarr-video');
     const vTime = video ? (Number(video.currentTime) || 0) : 0;
-    return (_playerCtx.stream_mode === 'remux' || _playerCtx.stream_mode === 'transcode' || _playerCtx.force_transcode)
-        ? (_playerCtx.base_offset_sec + vTime)
-        : vTime;
+    if (_playerCtx.stream_mode === 'remux' || _playerCtx.stream_mode === 'transcode' || _playerCtx.force_transcode) {
+        const startOffset = Number(_playerCtx.base_offset_sec) || 0;
+        return startOffset + vTime;
+    }
+    return vTime;
+}
+
+function _refreshPlayerTimelineUi() {
+    if (!_playerCtx || _playerScrubbing) return;
+    const pos = _currentPlaybackPosition();
+    const dur = _currentPlaybackDuration();
+    setText('player-time-cur', _fmtTime(pos));
+    setText('player-time-dur', _fmtTime(dur));
+    const seekbar = el('player-seekbar');
+    if (seekbar) {
+        if (dur > 0) {
+            seekbar.value = Math.min(1000, Math.max(0, Math.round((pos / dur) * 1000)));
+        } else {
+            seekbar.value = 0;
+        }
+    }
 }
 
 function _currentPlaybackDuration() {
@@ -1423,17 +1442,18 @@ function openPlayer(mediaType, mediaId, season = null, episode = null) {
                 }
             }
 
-            // Populate audio selector
+            // Populate audio language/track selector (always visible so user can inspect or switch audio language)
             const audioWrap = el('player-audio-wrap');
             const audioSel = el('player-audio-select');
             const aTracks = data.audio_tracks || [];
             if (audioWrap && audioSel) {
-                if (aTracks.length > 1) {
-                    audioWrap.style.display = '';
+                audioWrap.style.display = '';
+                if (aTracks.length > 0) {
                     audioSel.innerHTML = aTracks.map(a => `<option value="${a.index}">${escapeHtml(a.label)}</option>`).join('');
+                    audioSel.disabled = aTracks.length <= 1;
                 } else {
-                    audioWrap.style.display = 'none';
-                    audioSel.innerHTML = '';
+                    audioSel.innerHTML = '<option value="0">Default Audio</option>';
+                    audioSel.disabled = true;
                 }
             }
 
@@ -1460,10 +1480,17 @@ function openPlayer(mediaType, mediaId, season = null, episode = null) {
                 setTimeout(() => onPlayerSubtitleChange(defaultSubId), 200);
             }
 
+            setText('player-time-cur', _fmtTime(_playerCtx.base_offset_sec));
+            setText('player-time-dur', _fmtTime(_playerCtx.duration_sec));
+            _refreshPlayerTimelineUi();
+
             _startVideoStream(_playerCtx.base_offset_sec, 0);
 
             if (_playerHeartbeatTimer) clearInterval(_playerHeartbeatTimer);
             _playerHeartbeatTimer = setInterval(_sendCurrentHeartbeat, 10000);
+
+            if (_playerUiTickTimer) clearInterval(_playerUiTickTimer);
+            _playerUiTickTimer = setInterval(_refreshPlayerTimelineUi, 500);
 
             const playBtn = el('btn-player-play');
             if (playBtn) playBtn.focus();
@@ -1597,6 +1624,9 @@ function onPlayerSeekCommit(sliderVal) {
 function onPlayerAudioChange(audioIdx) {
     if (!_playerCtx) return;
     const curPos = _currentPlaybackPosition();
+    const sel = el('player-audio-select');
+    const label = (sel && sel.options[sel.selectedIndex]) ? sel.options[sel.selectedIndex].text : `Track ${Number(audioIdx) + 1}`;
+    showToast(`Switching audio to ${label}...`, 'info');
     _startVideoStream(curPos, Number(audioIdx) || 0);
 }
 
@@ -1653,6 +1683,10 @@ function closePlayer() {
     if (_playerHeartbeatTimer) {
         clearInterval(_playerHeartbeatTimer);
         _playerHeartbeatTimer = null;
+    }
+    if (_playerUiTickTimer) {
+        clearInterval(_playerUiTickTimer);
+        _playerUiTickTimer = null;
     }
     if (_playerOsdTimer) {
         clearTimeout(_playerOsdTimer);
@@ -1767,15 +1801,15 @@ function _initPlayerEvents() {
     });
 
     video.addEventListener('timeupdate', () => {
-        if (!_playerCtx || _playerScrubbing) return;
-        const pos = _currentPlaybackPosition();
-        const dur = _currentPlaybackDuration();
-        setText('player-time-cur', _fmtTime(pos));
-        setText('player-time-dur', _fmtTime(dur));
-        const seekbar = el('player-seekbar');
-        if (seekbar && dur > 0) {
-            seekbar.value = Math.min(1000, Math.max(0, Math.round((pos / dur) * 1000)));
-        }
+        _refreshPlayerTimelineUi();
+    });
+
+    video.addEventListener('loadedmetadata', () => {
+        _refreshPlayerTimelineUi();
+    });
+
+    video.addEventListener('durationchange', () => {
+        _refreshPlayerTimelineUi();
     });
 
     video.addEventListener('ended', () => {
