@@ -246,9 +246,9 @@ def list_movies() -> list[dict[str, Any]]:
             SELECT * FROM movies
             ORDER BY
                 CASE LOWER(COALESCE(status, 'wanted'))
-                    WHEN 'wanted'      THEN 0
+                    WHEN 'downloaded'  THEN 0
                     WHEN 'downloading' THEN 1
-                    WHEN 'downloaded'  THEN 2
+                    WHEN 'wanted'      THEN 2
                     ELSE 3
                 END ASC,
                 title COLLATE NOCASE ASC

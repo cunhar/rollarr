@@ -222,6 +222,12 @@ def api_library():
         m['duration_sec'] = res_dur
         m['resume_pct'] = round(min(99.0, res_pos / res_dur * 100.0)) if (res_dur > 0 and res_pos > 15) else 0
 
+    status_rank = {'downloaded': 0, 'downloading': 1, 'wanted': 2}
+    movies.sort(key=lambda m: (
+        status_rank.get((m.get('status') or 'wanted').lower(), 3),
+        (m.get('title') or '').lower(),
+    ))
+
     return jsonify({
         'shows': db.list_shows(),
         'movies': movies,
