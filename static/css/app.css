@@ -1187,3 +1187,19 @@ body {
 .dash-section .stream-card:last-child {
     margin-bottom: 0;
 }
+
+/* ── Desktop & Smart TV 10-Foot Scale-Up ────────────── */
+@media (min-width: 769px) {
+    body {
+        zoom: 1.22;
+    }
+    .shell {
+        max-width: 1080px;
+        padding: 36px 24px 48px;
+    }
+}
+@media (min-width: 1400px) {
+    body {
+        zoom: 1.35;
+    }
+}
