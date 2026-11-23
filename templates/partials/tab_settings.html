@@ -81,7 +81,7 @@
                     <div class="form-group" style="grid-column: 1 / -1;">
                         <label class="form-label">TMDB API Key (Optional)</label>
                         <input type="password" class="form-input" id="cfg-TMDB_API_KEY" value="{{ '••••••••' if cfg.TMDB_API_KEY else '' }}" placeholder="Optional — leave blank to use keyless IMDb search">
-                        <span style="font-size:11px; color:var(--text-muted); font-family:var(--mono); margin-top:4px; display:block;">
+                        <span class="form-hint">
                             Leave blank for zero-key Movie search (IMDb) and TV search (TVMaze). Add a TMDB key only if you prefer TMDB descriptions/posters.
                         </span>
                     </div>
@@ -138,7 +138,7 @@
                         <input type="text" class="form-input" id="cfg-REJECT_KEYWORDS" value="{{ cfg.REJECT_KEYWORDS }}" placeholder="MULTI, AV1, TrueHD">
                     </div>
                 </div>
-                <span style="font-size:11px; color:var(--text-muted); font-family:var(--mono); margin-top:10px; display:block;">
+                <span class="form-hint" style="margin-top:10px;">
                     Junk filter always blocks CAM, TS, TELESYNC, SCREENER, HARDCODED, 3D, SAMPLE, passworded NZBs, and automatically retries the next-best release on failure.
                 </span>
             </div>
@@ -161,7 +161,7 @@
                     <div class="form-group">
                         <label class="form-label">Languages (comma-separated)</label>
                         <input type="text" class="form-input" id="cfg-SUBTITLE_LANGUAGES" value="{{ cfg.SUBTITLE_LANGUAGES }}" placeholder="en, pt">
-                        <span style="font-size:11px; color:var(--text-muted); font-family:var(--mono); margin-top:4px; display:block;">
+                        <span class="form-hint">
                             Examples: <code>en, pt</code> (pt prefers European Portuguese, falls back to Brazilian), <code>pt-pt</code>, <code>pt-br</code>, <code>es</code>, <code>fr</code>, <code>de</code>.
                         </span>
                     </div>
@@ -226,35 +226,35 @@
                             <option value="true" {{ 'selected' if cfg.DELETE_WATCHED_EPISODES else '' }}>Enabled — delete file from disk after watching</option>
                             <option value="false" {{ 'selected' if not cfg.DELETE_WATCHED_EPISODES else '' }}>Disabled — keep file on disk</option>
                         </select>
-                        <span style="font-size:11px; color:var(--text-muted); font-family:var(--mono); margin-top:4px; display:block;">
+                        <span class="form-hint">
                             Automatically deletes watched TV episodes and movies directly from disk when detected in Plex / Jellyfin.
                         </span>
                     </div>
                     <div class="form-group">
                         <label class="form-label">Rolling Window (Episodes)</label>
                         <input type="number" class="form-input" id="cfg-ROLLING_WINDOW" value="{{ cfg.ROLLING_WINDOW }}" min="1" max="50">
-                        <span style="font-size:11px; color:var(--text-muted); font-family:var(--mono); margin-top:4px; display:block;">
+                        <span class="form-hint">
                             Number of upcoming episodes to search and download ahead automatically.
                         </span>
                     </div>
                     <div class="form-group">
                         <label class="form-label">Media Scan Interval (Seconds)</label>
                         <input type="number" class="form-input" id="cfg-PLEX_WATCH_INTERVAL" value="{{ cfg.PLEX_WATCH_INTERVAL }}">
-                        <span style="font-size:11px; color:var(--text-muted); font-family:var(--mono); margin-top:4px; display:block;">
+                        <span class="form-hint">
                             Frequency in seconds to scan Plex / Jellyfin for newly watched media.
                         </span>
                     </div>
                     <div class="form-group">
                         <label class="form-label">Auto-Grab Interval (Hours, 0 = Off)</label>
                         <input type="number" class="form-input" id="cfg-AUTO_GRAB_INTERVAL_HOURS" value="{{ cfg.AUTO_GRAB_INTERVAL_HOURS }}" min="0" max="168">
-                        <span style="font-size:11px; color:var(--text-muted); font-family:var(--mono); margin-top:4px; display:block;">
+                        <span class="form-hint">
                             Periodically searches NZBgeek for WANTED movies and newly aired episodes.
                         </span>
                     </div>
                     <div class="form-group">
                         <label class="form-label">Disk Space Guard (Min Free GB, 0 = Off)</label>
                         <input type="number" class="form-input" id="cfg-MIN_FREE_DISK_GB" value="{{ cfg.MIN_FREE_DISK_GB }}" min="0" max="500">
-                        <span style="font-size:11px; color:var(--text-muted); font-family:var(--mono); margin-top:4px; display:block;">
+                        <span class="form-hint">
                             Automatically pauses downloads & auto-grab if free space drops below this limit.
                         </span>
                     </div>

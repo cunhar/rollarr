@@ -20,11 +20,11 @@
                 <div class="idle-fill" style="width: {{ d.used_pct }}%; background: {{ '#e05252' if d.status == 'critical' else ('#e5a00d' if d.status == 'warning' else '#3ecf8e') }};"></div>
             </div>
             
-            <div style="display:flex; justify-content:space-between; font-size:11px; font-family:var(--mono); color:var(--text-sub);">
+            <div class="stat-sub">
                 <span>Used: {{ d.used_formatted }} ({{ d.used_pct }}%)</span>
                 <span>Total: {{ d.total_formatted }}</span>
             </div>
-            <div style="margin-top:8px; font-size:11px; font-family:var(--mono); color:var(--text-sub); display:flex; justify-content:space-between; align-items:center;">
+            <div class="stat-sub" style="margin-top:8px;">
                 <span>Path: <code>{{ d.configured_path }}</code></span>
                 <span style="opacity:0.7;">{{ d.source }}</span>
             </div>

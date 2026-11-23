@@ -54,7 +54,7 @@ function renderStreamCard(st) {
             <div class="stream-badges">
                 <span class="badge ${decBadge}">${escapeHtml(st.decision)}</span>
                 <span class="badge badge-dim">${escapeHtml(st.location)}</span>
-                <span style="font-family:var(--mono); font-size:10px; color:var(--text-sub);">${escapeHtml(st.bandwidth)}</span>
+                <span class="stream-bw">${escapeHtml(st.bandwidth)}</span>
             </div>
         </div>
         <div class="stream-title">${escapeHtml(st.title)}</div>
@@ -70,30 +70,30 @@ function renderStreamCard(st) {
     </div>`;
 }
 
-function renderDownloadCard(d, qIdx, qTotal) {
+function renderDownloadCard(d, mIdx, mTotal) {
     const statusBadge = d.status === 'DOWNLOADING' ? 'badge-green' : (d.status === 'PAUSED' ? 'badge-amber' : 'badge-dim');
     const meta = d.size_mb > 0
         ? (d.size_mb - d.remaining_mb).toFixed(1) + ' / ' + d.size_mb + ' MB'
         : 'Starting...';
-    const isQueued = d.status === 'QUEUED';
-    const reorderBtns = (isQueued && qTotal > 1)
-        ? `<button class="btn-clear" style="padding:2px 6px; font-size:10px;" title="Move Up" ${qIdx === 0 ? 'disabled' : ''} onclick="moveDownload(${d.id}, 'up')">↑</button>
-           <button class="btn-clear" style="padding:2px 6px; font-size:10px;" title="Move Down" ${qIdx === qTotal - 1 ? 'disabled' : ''} onclick="moveDownload(${d.id}, 'down')">↓</button>`
+    const isMovable = mIdx >= 0;
+    const reorderBtns = (isMovable && mTotal > 1)
+        ? `<button class="btn-clear btn-sm" title="Move Up" ${mIdx === 0 ? 'disabled' : ''} onclick="moveDownload(${d.id}, 'up')">↑</button>
+           <button class="btn-clear btn-sm" title="Move Down" ${mIdx === mTotal - 1 ? 'disabled' : ''} onclick="moveDownload(${d.id}, 'down')">↓</button>`
         : '';
     return `
     <div class="stream-card">
         <div class="stream-header">
             <div class="stream-user">
-                <span class="stream-user-name" style="word-break:break-all;">${escapeHtml(d.media_label || d.name)}</span>
-                <span class="stream-device" style="word-break:break-all;">${escapeHtml(d.name)}</span>
+                <span class="stream-user-name">${escapeHtml(d.media_label || d.name)}</span>
             </div>
             <div class="stream-badges">
                 <span class="badge ${statusBadge}">${escapeHtml(d.status)}</span>
                 ${d.category ? `<span class="badge badge-dim">${escapeHtml(d.category)}</span>` : ''}
                 ${reorderBtns}
-                <button class="btn-clear" style="padding:2px 8px; font-size:10px;" onclick="cancelDownload(${d.id})">Cancel</button>
+                <button class="btn-clear btn-sm" onclick="cancelDownload(${d.id})">Cancel</button>
             </div>
         </div>
+        <div class="download-nzb-name" title="${escapeHtml(d.name)}">${escapeHtml(d.name)}</div>
         <div class="stream-progress-wrap">
             <div class="stream-progress-meta">
                 <span>${meta}</span>
@@ -121,11 +121,11 @@ function renderDiskSpaceCell(d) {
             <div class="idle-fill" style="width: ${d.used_pct}%; background: ${fillColor};"></div>
         </div>
         
-        <div style="display:flex; justify-content:space-between; font-size:11px; font-family:var(--mono); color:var(--text-sub);">
+        <div class="stat-sub">
             <span>Used: ${escapeHtml(d.used_formatted)} (${d.used_pct}%)</span>
             <span>Total: ${escapeHtml(d.total_formatted)}</span>
         </div>
-        <div style="margin-top:8px; font-size:11px; font-family:var(--mono); color:var(--text-sub); display:flex; justify-content:space-between; align-items:center;">
+        <div class="stat-sub" style="margin-top:8px;">
             <span>Path: <code>${escapeHtml(d.configured_path)}</code></span>
             <span style="opacity:0.7;">${escapeHtml(d.source)}</span>
         </div>
@@ -342,7 +342,7 @@ function updateDownloads(s) {
                 `<div class="dash-section"><div class="dash-section-header">
                     <span class="section-title" style="margin-bottom:0;">Active Downloads</span>
                     <div style="display:flex; align-items:center; gap:10px;">
-                        <span style="font-family:var(--mono); font-size:11px; color:var(--green); font-weight:600;">${escapeHtml(s.download_rate)}</span>
+                        <span class="dl-rate">${escapeHtml(s.download_rate)}</span>
                         ${toggleBtn}
                     </div>
                 </div>`
@@ -826,7 +826,7 @@ function loadCalendar() {
                     ${it.poster_url ? `<img class="lib-thumb" src="${escapeHtml(it.poster_url)}" alt="">` : `<span class="lib-thumb lib-thumb-placeholder">TV</span>`}
                     <div style="min-width:0;">
                         <div><strong>${escapeHtml(it.show_title)}</strong> <span class="ep-tag">${tag}</span></div>
-                        <div style="font-size:11px; color:var(--text-sub); overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${escapeHtml(it.ep_title)}</div>
+                        <div class="cal-sub">${escapeHtml(it.ep_title)}</div>
                     </div>
                 </div>
                 <div style="display:flex; align-items:center; gap:8px; flex-shrink:0;">
