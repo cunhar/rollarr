@@ -1350,10 +1350,11 @@ function _buildStreamUrl(ctx, startSec, audioIdx) {
     return `/api/player/stream/${ctx.media_type}/${ctx.media_id}${qs}`;
 }
 
-function _buildSubtitleUrl(ctx, subId) {
+function _buildSubtitleUrl(ctx, subId, offsetSec = 0) {
     const params = new URLSearchParams();
     if (ctx.season !== null && ctx.season !== undefined) params.set('season', ctx.season);
     if (ctx.episode !== null && ctx.episode !== undefined) params.set('episode', ctx.episode);
+    if (offsetSec > 0.5) params.set('offset', Math.floor(offsetSec));
     const qs = params.toString() ? `?${params.toString()}` : '';
     return `/api/player/subtitles/${ctx.media_type}/${ctx.media_id}/${encodeURIComponent(subId)}.vtt${qs}`;
 }
@@ -1466,9 +1467,8 @@ function openPlayer(mediaType, mediaId, season = null, episode = null) {
                 }
             }
 
-            // Populate subtitles selector & <track> elements
+            // Populate subtitles selector
             const subSel = el('player-sub-select');
-            video.querySelectorAll('track').forEach(t => t.remove());
             if (subSel) {
                 const subs = _playerCtx.subtitles;
                 let opts = '<option value="off">Subtitles Off</option>';
@@ -1476,17 +1476,9 @@ function openPlayer(mediaType, mediaId, season = null, episode = null) {
                 subs.forEach((s, idx) => {
                     if (idx === 0) defaultSubId = s.id;
                     opts += `<option value="${escapeHtml(s.id)}" ${idx === 0 ? 'selected' : ''}>${escapeHtml(s.label)}</option>`;
-                    const trk = document.createElement('track');
-                    trk.kind = 'subtitles';
-                    trk.label = s.label;
-                    trk.srclang = s.lang || 'en';
-                    trk.src = _buildSubtitleUrl(_playerCtx, s.id);
-                    trk.dataset.subId = s.id;
-                    if (idx === 0) trk.default = true;
-                    video.appendChild(trk);
                 });
                 subSel.innerHTML = opts;
-                setTimeout(() => onPlayerSubtitleChange(defaultSubId), 200);
+                _playerCtx.active_sub_id = defaultSubId;
             }
 
             setText('player-time-cur', _fmtTime(_playerCtx.base_offset_sec));
@@ -1573,8 +1565,9 @@ function _startVideoStream(startSec, audioIdx) {
 
     setTimeout(() => {
         const subSel = el('player-sub-select');
-        if (subSel) onPlayerSubtitleChange(subSel.value);
-    }, 350);
+        const activeId = (subSel && subSel.value) ? subSel.value : (_playerCtx ? _playerCtx.active_sub_id : 'off');
+        onPlayerSubtitleChange(activeId || 'off');
+    }, 250);
 }
 
 function togglePlayerPlay() {
@@ -1641,14 +1634,38 @@ function onPlayerAudioChange(audioIdx) {
 
 function onPlayerSubtitleChange(subId) {
     const video = el('rolarr-video');
-    if (!video) return;
-    const tracks = video.textTracks;
-    const domTracks = Array.from(video.querySelectorAll('track'));
-    for (let i = 0; i < tracks.length; i++) {
-        const domTrk = domTracks[i];
-        const id = domTrk ? domTrk.dataset.subId : '';
-        tracks[i].mode = (subId !== 'off' && id === subId) ? 'showing' : 'disabled';
+    if (!video || !_playerCtx) return;
+    _playerCtx.active_sub_id = subId || 'off';
+
+    // Remove all previous <track> elements so only one active track exists at a time (prevents overlapping cues!)
+    video.querySelectorAll('track').forEach(t => t.remove());
+    for (let i = 0; i < video.textTracks.length; i++) {
+        video.textTracks[i].mode = 'disabled';
     }
+
+    if (!subId || subId === 'off') return;
+
+    const subMeta = (_playerCtx.subtitles || []).find(s => s.id === subId);
+    if (!subMeta) return;
+
+    const offsetSec = (_playerCtx.stream_mode === 'remux' || _playerCtx.stream_mode === 'transcode' || _playerCtx.force_transcode)
+        ? (_playerCtx.base_offset_sec || 0)
+        : 0;
+
+    const trk = document.createElement('track');
+    trk.kind = 'subtitles';
+    trk.label = subMeta.label;
+    trk.srclang = subMeta.lang || 'en';
+    trk.src = _buildSubtitleUrl(_playerCtx, subMeta.id, offsetSec);
+    trk.default = true;
+    video.appendChild(trk);
+
+    if (trk.track) {
+        trk.track.mode = 'showing';
+    }
+    trk.addEventListener('load', () => {
+        if (trk.track) trk.track.mode = 'showing';
+    });
 }
 
 function togglePlayerFullscreen() {

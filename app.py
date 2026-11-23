@@ -378,7 +378,10 @@ def api_player_stream(media_type: str, media_id: int):
 def api_player_subtitles(media_type: str, media_id: int, sub_id: str):
     season = request.args.get('season', type=int)
     episode = request.args.get('episode', type=int)
-    vtt_text, err = player_service.get_subtitle_vtt(media_type, media_id, sub_id, season=season, episode=episode)
+    offset_sec = request.args.get('offset', default=0.0, type=float)
+    vtt_text, err = player_service.get_subtitle_vtt(
+        media_type, media_id, sub_id, season=season, episode=episode, offset_sec=offset_sec
+    )
     if err or vtt_text is None:
         return Response(err or 'Subtitle not found', status=404, mimetype='text/plain')
     return Response(vtt_text, status=200, mimetype='text/vtt; charset=utf-8')

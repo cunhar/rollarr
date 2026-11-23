@@ -250,6 +250,7 @@ def probe_media_file(file_path: str) -> dict[str, Any]:
             elif ctype == 'subtitle' and cname in TEXT_SUBTITLE_CODECS:
                 lang_label = LANG_NAMES.get(lang, lang.upper())
                 sub_label = f"{lang_label} ({title})" if title else f"{lang_label} (Embedded)"
+                is_forced = 'forced' in title.lower() or bool((st.get('disposition') or {}).get('forced'))
                 embedded_subs.append({
                     'id': f"emb_{sub_ord}",
                     'sub_index': sub_ord,
@@ -258,8 +259,16 @@ def probe_media_file(file_path: str) -> dict[str, Any]:
                     'lang': lang,
                     'label': sub_label,
                     'source': 'embedded',
+                    'forced': is_forced,
                 })
                 sub_ord += 1
+
+        # Sort embedded subtitles so full (non-forced) English/Portuguese tracks come before Forced/other tracks
+        embedded_subs.sort(key=lambda s: (
+            1 if s.get('forced') else 0,
+            0 if s.get('lang') in ('en', 'eng', 'pt', 'por', 'pob') else 1,
+            s.get('sub_index', 0),
+        ))
 
         if not audio_tracks:
             audio_tracks = default_info['audio_tracks']
@@ -318,15 +327,70 @@ def discover_subtitles(file_path: str, embedded_subs: list[dict[str, Any]] | Non
     return subs
 
 
-def srt_to_vtt(srt_content: str) -> str:
-    """Convert SubRip (.srt) text content into valid HTML5 WebVTT (.vtt)."""
+def _clean_subtitle_text(text: str) -> str:
+    """
+    Clean common subtitle artifacts before serving to HTML5 <track>:
+      1. Fix double-encoded UTF-8 (cp1252/latin-1 mojibake from OpenSubtitles, e.g. 'â™ª' -> '♪', 'â€¦' -> '…')
+      2. Strip ASS/SSA override tags like {\\an8}, {\\pos(...)}, {\\i1} that HTML5 WebVTT renders as literal text
+    """
+    if not text:
+        return ''
+
+    # 1. Repair line-by-line or chunk mojibake where UTF-8 bytes were decoded as Windows-1252 / Latin-1
+    if 'â' in text or 'Ã' in text or 'Î' in text or 'Ð' in text:
+        repaired_lines = []
+        for line in text.split('\n'):
+            if any(ch in line for ch in ('â', 'Ã', 'Î', 'Ð')):
+                try:
+                    line = line.encode('cp1252').decode('utf-8')
+                except (UnicodeEncodeError, UnicodeDecodeError):
+                    try:
+                        line = line.encode('latin-1').decode('utf-8')
+                    except (UnicodeEncodeError, UnicodeDecodeError):
+                        pass
+            repaired_lines.append(line)
+        text = '\n'.join(repaired_lines)
+
+    # 2. Strip ASS/SSA curly-brace style/alignment tags like {\an8}, {\fad(200,200)}, etc.
+    text = re.sub(r'\{\\[^}]*\}', '', text)
+    return text
+
+
+def srt_to_vtt(srt_content: str, offset_sec: float = 0.0) -> str:
+    """Convert SubRip (.srt) or WebVTT text content into clean HTML5 WebVTT (.vtt), optionally shifted by offset_sec."""
     text = (srt_content or '').lstrip('\ufeff').replace('\r\n', '\n').replace('\r', '\n')
-    # Replace comma decimal separator in SRT timestamps: 00:01:23,456 --> 00:01:25,789
-    text = re.sub(
-        r'(\d{2}:\d{2}:\d{2}),(\d{3})\s*-->\s*(\d{2}:\d{2}:\d{2}),(\d{3})',
-        r'\1.\2 --> \3.\4',
-        text,
+    text = re.sub(r'^WEBVTT[^\n]*\n+', '', text).strip()
+    text = _clean_subtitle_text(text)
+
+    def _fmt_vtt_ts(total_ms: int) -> str:
+        if total_ms < 0:
+            total_ms = 0
+        hrs = total_ms // 3_600_000
+        rem = total_ms % 3_600_000
+        mins = rem // 60_000
+        rem = rem % 60_000
+        secs = rem // 1000
+        ms = rem % 1000
+        return f"{hrs:02d}:{mins:02d}:{secs:02d}.{ms:03d}"
+
+    def _parse_ts_ms(h: str | None, m: str, s: str, ms: str) -> int:
+        hh = int(h) if h else 0
+        return ((hh * 3600 + int(m) * 60 + int(s)) * 1000) + int(ms)
+
+    offset_ms = int(round(max(0.0, float(offset_sec or 0.0)) * 1000))
+
+    ts_pat = re.compile(
+        r'(?:(\d{1,2}):)?(\d{2}):(\d{2})[,\.](\d{3})\s*-->\s*(?:(\d{1,2}):)?(\d{2}):(\d{2})[,\.](\d{3})'
     )
+
+    def _replace_ts(m: re.Match) -> str:
+        start_ms = _parse_ts_ms(m.group(1), m.group(2), m.group(3), m.group(4)) - offset_ms
+        end_ms = _parse_ts_ms(m.group(5), m.group(6), m.group(7), m.group(8)) - offset_ms
+        if end_ms <= 0:
+            return "00:00:00.000 --> 00:00:00.001"
+        return f"{_fmt_vtt_ts(start_ms)} --> {_fmt_vtt_ts(end_ms)}"
+
+    text = ts_pat.sub(_replace_ts, text)
     return "WEBVTT\n\n" + text.strip() + "\n"
 
 
@@ -336,6 +400,7 @@ def get_subtitle_vtt(
     sub_id: str,
     season: int | None = None,
     episode: int | None = None,
+    offset_sec: float = 0.0,
 ) -> tuple[str | None, str | None]:
     """Return (vtt_string, error_message) for a sidecar or embedded subtitle track."""
     file_path, _, err = resolve_media_file(media_type, media_id, season, episode)
@@ -353,27 +418,49 @@ def get_subtitle_vtt(
         try:
             srt_text = raw_bytes.decode('utf-8')
         except UnicodeDecodeError:
-            srt_text = raw_bytes.decode('latin-1', errors='replace')
-        return srt_to_vtt(srt_text), None
+            try:
+                srt_text = raw_bytes.decode('cp1252')
+            except UnicodeDecodeError:
+                srt_text = raw_bytes.decode('latin-1', errors='replace')
+        return srt_to_vtt(srt_text, offset_sec=offset_sec), None
 
     elif sub_id.startswith('emb_') and has_ffmpeg():
         try:
             sub_idx = int(sub_id.split('_', 1)[1])
         except (ValueError, IndexError):
             return None, 'Invalid embedded subtitle index'
-        try:
-            cmd = [
-                'ffmpeg', '-v', 'error',
-                '-i', file_path,
-                '-map', f'0:s:{sub_idx}',
-                '-f', 'webvtt', 'pipe:1',
-            ]
-            proc = subprocess.run(cmd, capture_output=True, text=True, encoding='utf-8', errors='replace', timeout=25)
-            if proc.returncode == 0 and proc.stdout.strip().startswith('WEBVTT'):
-                return proc.stdout, None
-            return None, 'Failed extracting embedded subtitle track'
-        except Exception as exc:
-            return None, f'Subtitle extraction error: {exc}'
+
+        cache_vtt = f"{os.path.splitext(file_path)[0]}._emb_{sub_idx}.vtt"
+        raw_vtt = None
+        if os.path.isfile(cache_vtt) and os.path.getsize(cache_vtt) > 20:
+            try:
+                with open(cache_vtt, 'r', encoding='utf-8', errors='replace') as fh:
+                    raw_vtt = fh.read()
+            except Exception:
+                raw_vtt = None
+
+        if not raw_vtt:
+            try:
+                cmd = [
+                    'ffmpeg', '-v', 'error',
+                    '-i', file_path,
+                    '-map', f'0:s:{sub_idx}',
+                    '-f', 'webvtt', 'pipe:1',
+                ]
+                proc = subprocess.run(cmd, capture_output=True, text=True, encoding='utf-8', errors='replace', timeout=120)
+                if proc.returncode == 0 and proc.stdout.strip().startswith('WEBVTT'):
+                    raw_vtt = proc.stdout
+                    try:
+                        with open(cache_vtt, 'w', encoding='utf-8') as fh:
+                            fh.write(raw_vtt)
+                    except Exception:
+                        pass
+                else:
+                    return None, 'Failed extracting embedded subtitle track'
+            except Exception as exc:
+                return None, f'Subtitle extraction error: {exc}'
+
+        return srt_to_vtt(raw_vtt, offset_sec=offset_sec), None
 
     return None, 'Unsupported subtitle track'
 
@@ -527,9 +614,9 @@ def _stream_ffmpeg_remux(
             '-level', '4.1',
         ]
 
-    cmd = ['ffmpeg', '-hide_banner', '-loglevel', 'error']
+    cmd = ['ffmpeg', '-hide_banner', '-loglevel', 'error', '-fflags', '+genpts']
     if start_sec > 0.5:
-        cmd.extend(['-ss', f"{start_sec:.2f}"])
+        cmd.extend(['-ss', f"{start_sec:.2f}", '-noaccurate_seek'])
     cmd.extend([
         '-i', file_path,
         '-map', '0:v:0',
@@ -538,9 +625,9 @@ def _stream_ffmpeg_remux(
         '-c:a', 'aac',
         '-ac', '2',
         '-b:a', '192k',
+        '-af', 'aresample=async=1:first_pts=0',
         '-sn',
         '-avoid_negative_ts', 'make_zero',
-        '-reset_timestamps', '1',
         '-movflags', 'frag_keyframe+empty_moov+default_base_moof',
         '-f', 'mp4',
         'pipe:1',
