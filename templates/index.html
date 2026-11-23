@@ -37,9 +37,11 @@
                 <div class="player-subtitle" id="player-subtitle"></div>
             </div>
             <div class="player-top-actions">
-                <span class="badge badge-blue" id="player-mode-badge">DIRECT STREAM</span>
-                <button type="button" class="btn-clear player-btn" id="btn-player-watched" onclick="markCurrentPlayingWatched()">✓ Mark Watched</button>
-                <button type="button" class="btn-clear player-btn player-close-btn" id="btn-player-close" onclick="closePlayer()">✕ Close</button>
+                <span class="badge badge-blue player-badge" id="player-mode-badge">DIRECT STREAM</span>
+                <button type="button" class="btn-clear player-btn player-close-btn" id="btn-player-close" onclick="closePlayer()">
+                    <svg class="ui-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                    <span>Close</span>
+                </button>
             </div>
         </div>
 
@@ -53,32 +55,47 @@
             </div>
             <div class="player-buttons-row">
                 <div class="player-buttons-left">
-                    <button type="button" class="btn-clear player-btn player-btn-primary" id="btn-player-play" onclick="togglePlayerPlay()">⏸ Pause</button>
-                    <button type="button" class="btn-clear player-btn" onclick="seekPlayerRelative(-15)">⏪ -15s</button>
-                    <button type="button" class="btn-clear player-btn" onclick="seekPlayerRelative(30)">+30s ⏩</button>
-                    <button type="button" class="btn-clear player-btn player-btn-next" id="btn-player-next" style="display:none;" onclick="playNextEpisodeFromOsd()">⏭ Next Ep</button>
+                    <button type="button" class="btn-clear player-btn player-btn-primary" id="btn-player-play" onclick="togglePlayerPlay()">
+                        <svg class="ui-icon" viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="4" width="4" height="16" rx="1"/><rect x="14" y="4" width="4" height="16" rx="1"/></svg>
+                        <span>Pause</span>
+                    </button>
+                    <button type="button" class="btn-clear player-btn" onclick="seekPlayerRelative(-15)">
+                        <svg class="ui-icon" viewBox="0 0 24 24" fill="currentColor"><path d="M11 18V6l-8.5 6 8.5 6zm.5-6l8.5 6V6l-8.5 6z"/></svg>
+                        <span>-15s</span>
+                    </button>
+                    <button type="button" class="btn-clear player-btn" onclick="seekPlayerRelative(30)">
+                        <span>+30s</span>
+                        <svg class="ui-icon" viewBox="0 0 24 24" fill="currentColor"><path d="M4 18l8.5-6L4 6v12zm9-12v12l8.5-6L13 6z"/></svg>
+                    </button>
+                    <button type="button" class="btn-clear player-btn player-btn-next" id="btn-player-next" style="display:none;" onclick="playNextEpisodeFromOsd()">
+                        <svg class="ui-icon" viewBox="0 0 24 24" fill="currentColor"><path d="M6 18l8.5-6L6 6v12zM16 6v12h2V6h-2z"/></svg>
+                        <span id="btn-player-next-label">Next</span>
+                    </button>
                 </div>
                 <div class="player-buttons-right">
                     <label class="player-select-wrap" id="player-audio-wrap" style="display:none;">
-                        <span class="player-select-label">🔊 Audio</span>
+                        <svg class="ui-icon player-select-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14"/></svg>
                         <select class="form-input player-select" id="player-audio-select" onchange="onPlayerAudioChange(this.value)"></select>
                     </label>
                     <label class="player-select-wrap" id="player-sub-wrap">
-                        <span class="player-select-label">💬 CC</span>
+                        <svg class="ui-icon player-select-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="M7 15h4M13 15h4M7 11h2M11 11h6"/></svg>
                         <select class="form-input player-select" id="player-sub-select" onchange="onPlayerSubtitleChange(this.value)">
                             <option value="off">Subtitles Off</option>
                         </select>
                     </label>
-                    <button type="button" class="btn-clear player-btn" onclick="togglePlayerFullscreen()">⛶ Fullscreen</button>
+                    <button type="button" class="btn-clear player-btn" onclick="togglePlayerFullscreen()">
+                        <svg class="ui-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3"/></svg>
+                        <span>Fullscreen</span>
+                    </button>
                 </div>
             </div>
         </div>
     </div>
 </div>
 
-<script src="{{ url_for('static', filename='js/api.js') }}?v=20261123c"></script>
-<script src="{{ url_for('static', filename='js/app.js') }}?v=20261123c"></script>
-<script src="{{ url_for('static', filename='js/tv-nav.js') }}?v=20261123c"></script>
+<script src="{{ url_for('static', filename='js/api.js') }}?v=20261123d"></script>
+<script src="{{ url_for('static', filename='js/app.js') }}?v=20261123d"></script>
+<script src="{{ url_for('static', filename='js/tv-nav.js') }}?v=20261123d"></script>
 <script>
     updatePillLinks({
         PLEX_URL:     "{{ cfg.PLEX_URL | safe }}",

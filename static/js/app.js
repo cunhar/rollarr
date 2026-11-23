@@ -13,6 +13,11 @@ let isConfirmingShutdown = false;
 function el(id) { return document.getElementById(id); }
 function setText(id, val) { const e = el(id); if (e) e.textContent = val; }
 
+const SVG_ICONS = {
+    play: '<svg class="ui-icon" viewBox="0 0 24 24" fill="currentColor"><polygon points="6 3 20 12 6 21 6 3"/></svg>',
+    pause: '<svg class="ui-icon" viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="4" width="4" height="16" rx="1"/><rect x="14" y="4" width="4" height="16" rx="1"/></svg>',
+};
+
 function escapeHtml(str) {
     if (!str) return '';
     return String(str).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
@@ -613,10 +618,9 @@ function loadShowEpisodes(showId, forceReload = false) {
                         let actions = '';
                         if (st === 'downloaded') {
                             const playLabel = (ep.resume_pct && ep.resume_pct > 0)
-                                ? `▶ Resume (${ep.resume_pct}%)`
-                                : '▶ Play';
-                            actions = `<button class="btn-clear btn-ep btn-play" onclick="openPlayer('episode', ${showId}, ${ep.season}, ${ep.episode})">${playLabel}</button>
-                               <button class="btn-clear btn-ep" title="Mark watched & recycle" onclick="markItemWatchedFromList('episode', ${showId}, ${ep.season}, ${ep.episode}, this)">✓ Watched</button>`;
+                                ? `Resume (${ep.resume_pct}%)`
+                                : 'Play';
+                            actions = `<button class="btn-clear btn-ep btn-play" onclick="openPlayer('episode', ${showId}, ${ep.season}, ${ep.episode})">${SVG_ICONS.play}<span>${playLabel}</span></button>`;
                         } else if (st === 'missing' || st === 'watched' || st === 'upcoming') {
                             actions = `<button class="btn-clear btn-ep" onclick="queueSingleEpisode(${showId}, ${ep.season}, ${ep.episode}, this)">Get</button>
                                <button class="btn-clear btn-ep" onclick="openEpisodePicker(${showId}, ${ep.season}, ${ep.episode})">Pick</button>
@@ -646,7 +650,7 @@ function deleteLibraryItem(type, id, btnEl) {
         const origText = btnEl.textContent;
         btnEl.dataset.confirming = '1';
         btnEl.dataset.origText = origText;
-        btnEl.textContent = '⚠️ Confirm Remove?';
+        btnEl.textContent = 'Confirm Remove?';
         btnEl.style.background = 'var(--red-dim)';
         btnEl.style.borderColor = 'var(--red)';
         btnEl.style.color = 'var(--red)';
@@ -722,19 +726,18 @@ function loadLibrary() {
                                    : st === 'downloading' ? 'badge-blue'
                                    : 'badge-dim';
                     const playLabel = (m.resume_pct && m.resume_pct > 0)
-                        ? `▶ Resume (${m.resume_pct}%)`
-                        : '▶ Play';
+                        ? `Resume (${m.resume_pct}%)`
+                        : 'Play';
                     return `
                     <div class="library-row">
                         <div style="display:flex; align-items:center; gap:10px;">
-                            ${m.poster_url ? `<img class="lib-thumb" src="${escapeHtml(m.poster_url)}" alt="">` : `<span class="lib-thumb lib-thumb-placeholder">🎬</span>`}
+                            ${m.poster_url ? `<img class="lib-thumb" src="${escapeHtml(m.poster_url)}" alt="">` : `<span class="lib-thumb lib-thumb-placeholder">MOV</span>`}
                             <strong>${escapeHtml(m.title)}</strong>
                             ${m.year ? `<span class="media-year">(${m.year})</span>` : ''}
                             <span class="badge ${badgeCls}">${escapeHtml(isPlayable ? 'on disk' : (m.status || 'wanted'))}</span>
                         </div>
                         <div class="ep-controls-row">
-                            ${isPlayable ? `<button class="btn-clear btn-play" onclick="openPlayer('movie', ${m.id})">${playLabel}</button>
-                                            <button class="btn-clear" title="Mark watched & recycle" onclick="markItemWatchedFromList('movie', ${m.id}, null, null, this)">✓ Watched</button>` : ''}
+                            ${isPlayable ? `<button class="btn-clear btn-play" onclick="openPlayer('movie', ${m.id})">${SVG_ICONS.play}<span>${playLabel}</span></button>` : ''}
                             ${st === 'wanted' && !isPlayable ? `<button class="btn-clear" onclick="openMoviePicker(${m.id})">Pick</button>` : ''}
                             <button class="btn-clear" onclick="deleteLibraryItem('movie', ${m.id}, this)">Remove</button>
                         </div>
@@ -1059,7 +1062,7 @@ function triggerShutdownNow() {
 
     if (!isConfirmingShutdown) {
         isConfirmingShutdown = true;
-        btn.textContent = '⚠️ Confirm Shutdown?';
+        btn.textContent = 'Confirm Shutdown?';
         btn.style.background = 'var(--red-dim)';
         btn.style.borderColor = 'var(--red)';
         btn.style.color = 'var(--red)';
@@ -1377,10 +1380,10 @@ function openPlayer(mediaType, mediaId, season = null, episode = null) {
             if (badge) {
                 if (_playerCtx.stream_mode === 'direct') {
                     badge.textContent = 'DIRECT PLAY';
-                    badge.className = 'badge badge-green';
+                    badge.className = 'badge badge-green player-badge';
                 } else {
                     badge.textContent = 'DIRECT STREAM';
-                    badge.className = 'badge badge-blue';
+                    badge.className = 'badge badge-blue player-badge';
                 }
             }
 
@@ -1388,7 +1391,7 @@ function openPlayer(mediaType, mediaId, season = null, episode = null) {
             if (nextBtn) {
                 if (_playerCtx.next_episode) {
                     nextBtn.style.display = '';
-                    nextBtn.textContent = `⏭ Next (${_playerCtx.next_episode.tag})`;
+                    setText('btn-player-next-label', `Next (${_playerCtx.next_episode.tag})`);
                 } else {
                     nextBtn.style.display = 'none';
                 }
@@ -1679,12 +1682,14 @@ function _initPlayerEvents() {
     if (!video) return;
 
     video.addEventListener('play', () => {
-        setText('btn-player-play', '⏸ Pause');
+        const btn = el('btn-player-play');
+        if (btn) btn.innerHTML = `${SVG_ICONS.pause}<span>Pause</span>`;
         wakePlayerOsd();
     });
 
     video.addEventListener('pause', () => {
-        setText('btn-player-play', '▶ Play');
+        const btn = el('btn-player-play');
+        if (btn) btn.innerHTML = `${SVG_ICONS.play}<span>Play</span>`;
         const modal = el('player-modal');
         if (modal) modal.classList.remove('osd-hidden');
     });

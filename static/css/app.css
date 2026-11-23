@@ -961,6 +961,10 @@ body {
     border-radius: 6px;
 }
 .btn-clear {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
     background: var(--surface-2);
     color: var(--text);
     border-color: var(--border-hi);
@@ -968,6 +972,7 @@ body {
     font-size: 12px;
     font-weight: 500;
     padding: 6px 13px;
+    white-space: nowrap;
 }
 .btn-clear:hover:not(:disabled) {
     background: var(--accent-dim);
@@ -979,8 +984,15 @@ body {
     cursor: default;
 }
 .btn-sm, .btn-ep {
-    padding: 4px 10px;
+    padding: 5px 11px;
     font-size: 11px;
+}
+.ui-icon {
+    width: 14px;
+    height: 14px;
+    flex-shrink: 0;
+    display: inline-block;
+    vertical-align: middle;
 }
 .btn-play {
     background: rgba(67, 217, 151, 0.14);
@@ -1036,11 +1048,11 @@ body {
     top: 0;
     left: 0;
     right: 0;
-    padding: 20px 28px 36px;
+    padding: 22px 32px 40px;
     background: linear-gradient(to bottom, rgba(0,0,0,0.88) 0%, rgba(0,0,0,0.45) 65%, transparent 100%);
     display: flex;
     justify-content: space-between;
-    align-items: flex-start;
+    align-items: center;
     gap: 16px;
     transition: opacity 0.25s ease;
     z-index: 10;
@@ -1050,11 +1062,11 @@ body {
     bottom: 0;
     left: 0;
     right: 0;
-    padding: 36px 28px 24px;
+    padding: 40px 32px 26px;
     background: linear-gradient(to top, rgba(0,0,0,0.92) 0%, rgba(0,0,0,0.55) 68%, transparent 100%);
     display: flex;
     flex-direction: column;
-    gap: 14px;
+    gap: 16px;
     transition: opacity 0.25s ease;
     z-index: 10;
 }
@@ -1070,39 +1082,39 @@ body {
     min-width: 0;
 }
 .player-title {
-    font-size: clamp(16px, 1.8vw, 30px);
+    font-size: clamp(18px, 1.8vw, 30px);
     font-weight: 600;
     color: #fff;
     text-shadow: 0 2px 8px rgba(0,0,0,0.8);
 }
 .player-subtitle {
     font-family: var(--mono);
-    font-size: clamp(11px, 1vw, 17px);
+    font-size: clamp(12px, 1vw, 16px);
     color: var(--text-sub);
     margin-top: 3px;
 }
 .player-top-actions {
     display: flex;
     align-items: center;
-    gap: 10px;
+    gap: 12px;
     flex-shrink: 0;
 }
 .player-timeline-row {
     display: flex;
     align-items: center;
-    gap: 14px;
+    gap: 16px;
 }
 .player-time {
     font-family: var(--mono);
-    font-size: clamp(12px, 1.1vw, 20px);
+    font-size: clamp(13px, 1.1vw, 18px);
     color: #fff;
-    min-width: 68px;
+    min-width: 64px;
     text-align: center;
 }
 .player-seekbar {
     flex: 1;
     accent-color: var(--accent);
-    height: 8px;
+    height: 6px;
     cursor: pointer;
 }
 .player-buttons-row {
@@ -1119,46 +1131,81 @@ body {
     gap: 10px;
     flex-wrap: wrap;
 }
+.player-btn,
+.player-badge,
+.player-select-wrap {
+    height: 42px;
+    box-sizing: border-box;
+    border-radius: 6px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+}
 .player-btn {
-    background: rgba(22, 27, 38, 0.88);
-    border-color: var(--border-hi);
+    background: rgba(22, 27, 38, 0.92);
+    border: 1px solid var(--border-hi);
     color: #fff;
-    padding: 8px 16px;
+    padding: 0 18px;
+    gap: 8px;
+    font-size: 13px;
+    font-weight: 600;
+    letter-spacing: 0.4px;
+}
+.player-btn .ui-icon,
+.player-select-icon {
+    width: 16px;
+    height: 16px;
+}
+.player-badge {
+    padding: 0 14px;
+    font-size: 12px;
+    letter-spacing: 0.8px;
 }
 .player-btn-primary {
     background: var(--accent);
     border-color: var(--accent);
     color: #fff;
-    font-weight: 600;
+    min-width: 112px;
+}
+.player-btn-primary:hover:not(:disabled) {
+    background: #7f8cff;
+    border-color: #7f8cff;
 }
 .player-btn-next {
-    background: rgba(67, 217, 151, 0.2);
+    background: rgba(67, 217, 151, 0.16);
     border-color: var(--green);
     color: var(--green);
-    font-weight: 600;
+}
+.player-btn-next:hover:not(:disabled) {
+    background: var(--green);
+    border-color: var(--green);
+    color: #0d1017;
 }
 .player-select-wrap {
-    display: inline-flex;
-    align-items: center;
-    gap: 6px;
-    background: rgba(22, 27, 38, 0.88);
+    gap: 8px;
+    background: rgba(22, 27, 38, 0.92);
     border: 1px solid var(--border-hi);
-    border-radius: 5px;
-    padding: 4px 10px;
+    padding: 0 14px;
 }
-.player-select-label {
-    font-size: 12px;
-    font-family: var(--mono);
+.player-select-icon {
     color: var(--text-sub);
-    white-space: nowrap;
 }
 .player-select {
     width: auto;
-    min-width: 140px;
-    border: none;
-    background: transparent;
-    padding: 4px 6px;
-    font-size: 13px;
+    min-width: 160px;
+    height: 100%;
+    border: none !important;
+    background: transparent !important;
+    padding: 0 4px !important;
+    font-size: 13px !important;
+    font-family: var(--font);
+    font-weight: 500;
+    color: #fff;
+    cursor: pointer;
+}
+.player-select option {
+    background: var(--surface);
+    color: var(--text);
 }
 .form-input {
     background: var(--bg);
@@ -1311,6 +1358,11 @@ body {
     .btn-clear { font-size: 16px; padding: 11px 22px; }
     .btn-sm, .btn-ep { font-size: 15px; padding: 7px 16px; }
     .badge { font-size: 14px; padding: 5px 12px; }
+    .player-btn, .player-badge, .player-select-wrap { height: 48px; }
+    .player-btn { font-size: 15px; padding: 0 22px; }
+    .player-btn .ui-icon, .player-select-icon { width: 18px; height: 18px; }
+    .player-badge { font-size: 13px; padding: 0 16px; }
+    .player-select { font-size: 15px !important; min-width: 190px; }
     .config-card-summary { padding: 18px 24px; font-size: 22px; }
     .config-card-summary::after { font-size: 18px; }
     .config-card-body { padding: 22px 24px; }
@@ -1381,6 +1433,11 @@ body {
     .btn-clear { font-size: 18px; padding: 12px 26px; border-width: 1.5px; }
     .btn-sm, .btn-ep { font-size: 16px; padding: 8px 18px; }
     .badge { font-size: 15px; padding: 6px 14px; }
+    .player-btn, .player-badge, .player-select-wrap { height: 54px; }
+    .player-btn { font-size: 17px; padding: 0 26px; }
+    .player-btn .ui-icon, .player-select-icon { width: 20px; height: 20px; }
+    .player-badge { font-size: 14px; padding: 0 18px; }
+    .player-select { font-size: 17px !important; min-width: 220px; }
     .config-card-summary { padding: 22px 28px; font-size: 25px; }
     .config-card-summary::after { font-size: 20px; }
     .config-card-body { padding: 26px 28px; }
