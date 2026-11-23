@@ -156,9 +156,9 @@ function renderLogEntry(log, isOpen, logKey) {
     const displayStatus = (rawStatus === 'OK') ? 'INFO' : rawStatus;
     const st = displayStatus.toLowerCase();
     const gutter = (st === 'success') ? 'success'
-                 : (st === 'info') ? 'info'
-                 : (st === 'warn' || st === 'warning') ? 'warn'
-                 : 'err';
+        : (st === 'info') ? 'info'
+            : (st === 'warn' || st === 'warning') ? 'warn'
+                : 'err';
     const payloadHtml = log.payload
         ? `<details ${isOpen ? 'open' : ''}>
             <summary class="log-payload-toggle">View payload</summary>
@@ -199,7 +199,7 @@ function formatShutdownWatcher(s) {
     const idleStreak = s.idle_streak || 0;
     const pollInterval = s.poll_interval || 1200;
     const pollMins = Math.max(1, Math.round(pollInterval / 60));
-    
+
     let label = `${idleStreak} of ${idleNeeded} idle polls`;
     let detail = '';
 
@@ -208,7 +208,7 @@ function formatShutdownWatcher(s) {
         const parts = s.next_check.split(' ');
         nextCheckTime = parts.length > 1 ? parts[1].substring(0, 5) : s.next_check.substring(0, 5);
     }
-    
+
     if (s.stream_count > 0) {
         const streamStr = s.stream_count === 1 ? '1 active stream' : `${s.stream_count} active streams`;
         label = `0 of ${idleNeeded} idle polls (Paused)`;
@@ -233,12 +233,12 @@ function formatShutdownWatcher(s) {
         } else {
             timeStr = `${minsLeft} min`;
         }
-        
+
         const pollWord = pollsLeft === 1 ? '1 poll left' : `${pollsLeft} polls left`;
         const nextPart = nextCheckTime ? ` • Next check: ${nextCheckTime}` : '';
         detail = `Est. shutdown in ~${timeStr} (${pollWord} @ ${pollMins}m)${nextPart}`;
     }
-    
+
     return { label, detail };
 }
 
@@ -254,8 +254,8 @@ function updateShutdownWatcher(s) {
         const pct = isPaused ? 0 : Math.min((s.idle_streak / s.idle_needed) * 100, 100);
         bar.style.width = pct + '%';
         bar.style.background = s.idle_streak >= s.idle_needed ? '#e05252'
-                             : s.idle_streak > 0              ? '#e5a00d'
-                             :                                  '#3ecf8e';
+            : s.idle_streak > 0 ? '#e5a00d'
+                : '#3ecf8e';
     }
 
     const container = el('pw-streams-container');
@@ -607,19 +607,19 @@ function loadShowEpisodes(showId, forceReload = false) {
                 </summary>
                 <div class="season-episodes">
                     ${sec.episodes.map(ep => {
-                        const tag = `S${String(ep.season).padStart(2, '0')}E${String(ep.episode).padStart(2, '0')}`;
-                        const st = ep.status;
-                        const badgeCls = st === 'downloaded' ? 'badge-green'
-                                       : st === 'queued' ? 'badge-blue'
-                                       : st === 'missing' ? 'badge-amber'
-                                       : 'badge-dim';
-                        const badgeTxt = st === 'downloaded' ? 'ON DISK' : st.toUpperCase();
-                        const actions = (st === 'missing' || st === 'watched' || st === 'upcoming')
-                            ? `<button class="btn-clear btn-ep" onclick="queueSingleEpisode(${showId}, ${ep.season}, ${ep.episode}, this)">Get</button>
+            const tag = `S${String(ep.season).padStart(2, '0')}E${String(ep.episode).padStart(2, '0')}`;
+            const st = ep.status;
+            const badgeCls = st === 'downloaded' ? 'badge-green'
+                : st === 'queued' ? 'badge-blue'
+                    : st === 'missing' ? 'badge-amber'
+                        : 'badge-dim';
+            const badgeTxt = st === 'downloaded' ? 'ON DISK' : st.toUpperCase();
+            const actions = (st === 'missing' || st === 'watched' || st === 'upcoming')
+                ? `<button class="btn-clear btn-ep" onclick="queueSingleEpisode(${showId}, ${ep.season}, ${ep.episode}, this)">Get</button>
                                <button class="btn-clear btn-ep" onclick="openEpisodePicker(${showId}, ${ep.season}, ${ep.episode})">Pick</button>
                                <button class="btn-clear btn-ep" onclick="queueShowFrom(${showId}, ${ep.season}, ${ep.episode}, this)">Start Here</button>`
-                            : '';
-                        return `
+                : '';
+            return `
                         <div class="ep-row">
                             <div class="ep-row-left">
                                 <span class="ep-tag">${tag}</span>
@@ -631,7 +631,7 @@ function loadShowEpisodes(showId, forceReload = false) {
                                 ${actions}
                             </div>
                         </div>`;
-                    }).join('')}
+        }).join('')}
                 </div>
             </details>
         `).join('');
@@ -713,9 +713,9 @@ function loadLibrary() {
                 moviesEl.innerHTML = movies.map(m => {
                     const st = (m.status || 'wanted').toLowerCase();
                     const badgeCls = st === 'downloaded' ? 'badge-green'
-                                   : st === 'wanted' ? 'badge-amber'
-                                   : st === 'downloading' ? 'badge-blue'
-                                   : 'badge-dim';
+                        : st === 'wanted' ? 'badge-amber'
+                            : st === 'downloading' ? 'badge-blue'
+                                : 'badge-dim';
                     return `
                     <div class="library-row">
                         <div style="display:flex; align-items:center; gap:10px;">
@@ -1054,7 +1054,7 @@ function triggerShutdownNow() {
         btn.style.borderColor = 'var(--red)';
         btn.style.color = 'var(--red)';
         btn.style.fontWeight = '600';
-        
+
         shutdownConfirmTimer = setTimeout(() => {
             resetShutdownBtn();
         }, 5000);
@@ -1214,13 +1214,13 @@ function buildServiceUrl(configuredUrl) {
         const parsed = new URL(raw);
         const currentProtocol = window.location.protocol;
         const currentHost = window.location.hostname;
-        
+
         let port = parsed.port;
         if (!port) {
             if (parsed.protocol === 'https:') port = '443';
             else if (parsed.protocol === 'http:') port = '80';
         }
-        
+
         const pathname = (parsed.pathname === '/' || !parsed.pathname) ? '' : parsed.pathname;
         const search = parsed.search || '';
         const hash = parsed.hash || '';
@@ -1234,7 +1234,7 @@ function buildServiceUrl(configuredUrl) {
 
 function updatePillLinks(urls) {
     const mappings = {
-        plex:     urls.PLEX_URL || urls.plex,
+        plex: urls.PLEX_URL || urls.plex,
         jellyfin: urls.JELLYFIN_URL || urls.jellyfin,
     };
     for (const [key, rawUrl] of Object.entries(mappings)) {

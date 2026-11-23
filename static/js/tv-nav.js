@@ -66,7 +66,7 @@
             // Spatial weighting: penalize off-axis distance so aligned elements win
             let primaryDist = (direction === 'ArrowUp' || direction === 'ArrowDown') ? Math.abs(dy) : Math.abs(dx);
             let secondaryDist = (direction === 'ArrowUp' || direction === 'ArrowDown') ? Math.abs(dx) : Math.abs(dy);
-            
+
             let score = primaryDist + (secondaryDist * 2.5);
 
             if (score < minDistance) {

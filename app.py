@@ -1,4 +1,4 @@
-from flask import Flask, request, jsonify, render_template
+from flask import Flask, request, jsonify, render_template, send_from_directory
 
 import os
 import logging
@@ -75,6 +75,19 @@ def get_service_connections() -> dict:
 
 
 # ── Routes ────────────────────────────────────────────────────────────────────
+
+@app.route('/manifest.json')
+def pwa_manifest():
+    return send_from_directory(app.static_folder, 'manifest.json', mimetype='application/manifest+json')
+
+
+@app.route('/sw.js')
+def pwa_service_worker():
+    resp = send_from_directory(app.static_folder, 'sw.js', mimetype='application/javascript')
+    resp.headers['Service-Worker-Allowed'] = '/'
+    resp.headers['Cache-Control'] = 'no-cache'
+    return resp
+
 
 @app.route('/')
 def index():

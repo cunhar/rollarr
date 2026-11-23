@@ -40,6 +40,19 @@ class TestAppRoutes(unittest.TestCase):
         self.assertIn('shows', r_lib.get_json())
         self.assertIn('movies', r_lib.get_json())
 
+    def test_pwa_manifest_and_service_worker(self):
+        r_man = self.client.get('/manifest.json')
+        self.assertEqual(r_man.status_code, 200)
+        manifest = r_man.get_json()
+        self.assertEqual(manifest['display'], 'standalone')
+        sizes = {icon['sizes'] for icon in manifest['icons']}
+        self.assertIn('192x192', sizes)
+        self.assertIn('512x512', sizes)
+
+        r_sw = self.client.get('/sw.js')
+        self.assertEqual(r_sw.status_code, 200)
+        self.assertEqual(r_sw.headers.get('Service-Worker-Allowed'), '/')
+
 
 if __name__ == '__main__':
     unittest.main()

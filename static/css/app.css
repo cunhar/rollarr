@@ -1,24 +1,31 @@
-*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+*,
+*::before,
+*::after {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+}
 
 :root {
     color-scheme: dark;
-    --bg:          #0d1017;
-    --surface:     #161b26;
-    --surface-2:   #1f2636;
-    --border:      #2b3447;
-    --border-hi:   #43506b;
-    --text:        #f3f5f9;
-    --text-sub:    #a3acc2;
-    --text-muted:  #828ca6;
-    --accent:      #6c7bff;
-    --accent-dim:  rgba(108,123,255,.16);
-    --green:       #43d997;
-    --amber:       #f2b329;
-    --red:         #f06060;
-    --red-dim:     rgba(240,96,96,.16);
-    --font:        'Inter', system-ui, sans-serif;
-    --mono:        'JetBrains Mono', 'Fira Code', monospace;
+    --bg: #0d1017;
+    --surface: #161b26;
+    --surface-2: #1f2636;
+    --border: #2b3447;
+    --border-hi: #43506b;
+    --text: #f3f5f9;
+    --text-sub: #a3acc2;
+    --text-muted: #828ca6;
+    --accent: #6c7bff;
+    --accent-dim: rgba(108, 123, 255, .16);
+    --green: #43d997;
+    --amber: #f2b329;
+    --red: #f06060;
+    --red-dim: rgba(240, 96, 96, .16);
+    --font: 'Inter', system-ui, sans-serif;
+    --mono: 'JetBrains Mono', 'Fira Code', monospace;
 }
+
 html {
     scrollbar-gutter: stable;
     overflow-y: scroll;
@@ -31,14 +38,17 @@ html {
     width: 8px;
     height: 8px;
 }
+
 ::-webkit-scrollbar-track {
     background: var(--bg);
 }
+
 ::-webkit-scrollbar-thumb {
     background: var(--border-hi);
     border-radius: 4px;
     border: 2px solid var(--bg);
 }
+
 ::-webkit-scrollbar-thumb:hover {
     background: var(--accent);
 }
@@ -68,28 +78,33 @@ body {
     border-bottom: 1px solid var(--border);
     margin-bottom: 0;
 }
+
 .brand {
     display: flex;
     align-items: baseline;
     gap: 10px;
 }
+
 .brand-name {
     font-size: 17px;
     font-weight: 600;
     letter-spacing: -.3px;
     color: var(--text);
 }
+
 .brand-sub {
     font-size: 11px;
     color: var(--text-sub);
     letter-spacing: .5px;
     text-transform: uppercase;
 }
+
 .conn-pills {
     display: flex;
     gap: 8px;
     flex-wrap: wrap;
 }
+
 .conn-pill {
     display: inline-flex;
     align-items: center;
@@ -104,11 +119,13 @@ body {
     cursor: pointer;
     transition: border-color .15s, background .15s;
 }
+
 .conn-pill:hover {
     border-color: var(--accent);
     background: var(--surface-2);
     color: var(--text);
 }
+
 .conn-pip {
     width: 7px;
     height: 7px;
@@ -116,15 +133,28 @@ body {
     border-radius: 50%;
     display: inline-block;
 }
-.conn-pip.ok   { background: var(--green); box-shadow: 0 0 8px var(--green); }
-.conn-pip.err  { background: var(--red); box-shadow: 0 0 8px var(--red); }
-.conn-pip.warn { background: var(--amber); box-shadow: 0 0 8px var(--amber); }
+
+.conn-pip.ok {
+    background: var(--green);
+    box-shadow: 0 0 8px var(--green);
+}
+
+.conn-pip.err {
+    background: var(--red);
+    box-shadow: 0 0 8px var(--red);
+}
+
+.conn-pip.warn {
+    background: var(--amber);
+    box-shadow: 0 0 8px var(--amber);
+}
 
 /* ── Tab bar ────────────────────────────────────────── */
 .tabbar {
     display: flex;
     border-bottom: 1px solid var(--border);
 }
+
 .tab-btn {
     padding: 12px 20px;
     font: 12px/1 var(--font);
@@ -139,15 +169,25 @@ body {
     transition: color .15s, border-color .15s;
     margin-bottom: -1px;
 }
-.tab-btn:hover { color: var(--text); }
+
+.tab-btn:hover {
+    color: var(--text);
+}
+
 .tab-btn.active {
     color: var(--text);
     border-bottom-color: var(--accent);
 }
 
 /* ── Tab panels & Standardized Header Rows ────────────── */
-.tab-panel { display: none; padding-top: 24px; }
-.tab-panel.active { display: block; }
+.tab-panel {
+    display: none;
+    padding-top: 24px;
+}
+
+.tab-panel.active {
+    display: block;
+}
 
 .tab-header-row {
     display: flex;
@@ -156,6 +196,7 @@ body {
     margin-bottom: 20px;
     min-height: 32px;
 }
+
 .tab-header-meta {
     font-size: 10px;
     color: var(--text-sub);
@@ -167,6 +208,7 @@ body {
     display: none !important;
     margin: 0 !important;
 }
+
 #nzbget-container:not(:empty),
 #pw-streams-container:not(:empty) {
     margin-bottom: 20px;
@@ -188,6 +230,7 @@ body {
     background: var(--surface);
     margin-bottom: 24px;
 }
+
 .config-card {
     border: 1px solid var(--border);
     background: var(--surface);
@@ -195,9 +238,11 @@ body {
     border-radius: 4px;
     overflow: hidden;
 }
+
 .config-card[open] {
     border-color: var(--border-hi);
 }
+
 .config-card-summary {
     padding: 14px 16px;
     cursor: pointer;
@@ -209,25 +254,31 @@ body {
     background: var(--surface);
     transition: background 0.15s ease;
 }
+
 .config-card-summary:hover {
     background: var(--surface-2);
 }
+
 .config-card-summary::-webkit-details-marker {
     display: none;
 }
+
 .config-card-summary::after {
     content: "▾";
     font-size: 13px;
     color: var(--text-sub);
     transition: transform 0.15s ease;
 }
+
 .config-card[open] .config-card-summary::after {
     transform: rotate(180deg);
 }
+
 .config-card-body {
     padding: 16px;
     border-top: 1px solid var(--border);
 }
+
 .kv-row {
     display: flex;
     align-items: baseline;
@@ -235,7 +286,11 @@ body {
     border-bottom: 1px solid var(--border);
     gap: 16px;
 }
-.kv-row:last-child { border-bottom: none; }
+
+.kv-row:last-child {
+    border-bottom: none;
+}
+
 .kv-key {
     min-width: 160px;
     font-size: 11px;
@@ -245,13 +300,17 @@ body {
     color: var(--text-sub);
     flex-shrink: 0;
 }
+
 .kv-val {
     font-family: var(--mono);
     font-size: 12px;
     color: var(--text);
     word-break: break-all;
 }
-.kv-val.dim { color: var(--text-sub); }
+
+.kv-val.dim {
+    color: var(--text-sub);
+}
 
 /* ── Status grid (dashboard top) ────────────────────── */
 .stat-grid {
@@ -262,6 +321,7 @@ body {
     border: 1px solid var(--border);
     margin-bottom: 24px;
 }
+
 .stat-cell {
     background: var(--surface);
     padding: 16px;
@@ -269,6 +329,7 @@ body {
     flex-direction: column;
     gap: 6px;
 }
+
 .stat-label {
     font-size: 10px;
     font-weight: 600;
@@ -276,6 +337,7 @@ body {
     text-transform: uppercase;
     color: var(--text-sub);
 }
+
 .stat-value {
     font-size: 22px;
     font-weight: 600;
@@ -283,15 +345,26 @@ body {
     color: var(--text);
     line-height: 1;
 }
+
 .stat-value.timestamp {
     font-size: 14px;
     font-weight: 500;
     margin-top: 4px;
     line-height: 1.3;
 }
-.stat-value.green { color: var(--green); }
-.stat-value.amber { color: var(--amber); }
-.stat-value.red   { color: var(--red); }
+
+.stat-value.green {
+    color: var(--green);
+}
+
+.stat-value.amber {
+    color: var(--amber);
+}
+
+.stat-value.red {
+    color: var(--red);
+}
+
 .stat-meta {
     font-size: 12px;
     color: var(--text-sub);
@@ -305,12 +378,14 @@ body {
     padding: 14px 16px;
     margin-bottom: 24px;
 }
+
 .idle-header {
     display: flex;
     justify-content: space-between;
     align-items: center;
     margin-bottom: 10px;
 }
+
 .idle-label {
     font-size: 10px;
     font-weight: 600;
@@ -318,26 +393,31 @@ body {
     text-transform: uppercase;
     color: var(--text-sub);
 }
+
 .idle-count {
     font-family: var(--mono);
     font-size: 11px;
     color: var(--text-sub);
 }
+
 .idle-track {
     height: 4px;
     background: var(--surface-2);
     border: 1px solid var(--border);
 }
+
 .idle-fill {
     height: 100%;
     transition: width .6s ease, background .4s;
 }
+
 .idle-meta {
     margin-top: 8px;
     font-size: 13px;
     font-family: var(--mono);
     color: var(--text-sub);
 }
+
 .badge {
     display: inline-block;
     font-size: 9px;
@@ -347,11 +427,36 @@ body {
     padding: 2px 7px;
     border: 1px solid;
 }
-.badge-green { color: var(--green); border-color: var(--green); background: rgba(62,207,142,.08); }
-.badge-blue  { color: #5b6af0; border-color: #5b6af0; background: rgba(91,106,240,.08); }
-.badge-amber { color: var(--amber); border-color: var(--amber); background: rgba(229,160,13,.08); }
-.badge-red   { color: var(--red);   border-color: var(--red);   background: rgba(224,82,82,.08); }
-.badge-dim   { color: var(--text-sub); border-color: var(--border-hi); background: transparent; }
+
+.badge-green {
+    color: var(--green);
+    border-color: var(--green);
+    background: rgba(62, 207, 142, .08);
+}
+
+.badge-blue {
+    color: #5b6af0;
+    border-color: #5b6af0;
+    background: rgba(91, 106, 240, .08);
+}
+
+.badge-amber {
+    color: var(--amber);
+    border-color: var(--amber);
+    background: rgba(229, 160, 13, .08);
+}
+
+.badge-red {
+    color: var(--red);
+    border-color: var(--red);
+    background: rgba(224, 82, 82, .08);
+}
+
+.badge-dim {
+    color: var(--text-sub);
+    border-color: var(--border-hi);
+    background: transparent;
+}
 
 /* ── Active Streams ─────────────────────────────────── */
 .stream-card {
@@ -363,6 +468,7 @@ body {
     flex-direction: column;
     gap: 8px;
 }
+
 .stream-header {
     display: flex;
     align-items: center;
@@ -370,26 +476,31 @@ body {
     gap: 12px;
     flex-wrap: wrap;
 }
+
 .stream-user {
     display: flex;
     align-items: center;
     gap: 8px;
 }
+
 .stream-user-name {
     font-size: 12px;
     font-weight: 600;
     color: var(--text);
 }
+
 .stream-device {
     font-size: 11px;
     color: var(--text-sub);
     font-family: var(--mono);
 }
+
 .stream-badges {
     display: flex;
     align-items: center;
     gap: 6px;
 }
+
 .stream-title {
     font-size: 13px;
     font-weight: 500;
@@ -398,11 +509,13 @@ body {
     overflow: hidden;
     text-overflow: ellipsis;
 }
+
 .stream-progress-wrap {
     display: flex;
     flex-direction: column;
     gap: 4px;
 }
+
 .stream-progress-meta {
     display: flex;
     justify-content: space-between;
@@ -410,11 +523,13 @@ body {
     color: var(--text-sub);
     font-family: var(--mono);
 }
+
 .stream-progress-track {
     height: 4px;
     background: var(--surface-2);
     border: 1px solid var(--border);
 }
+
 .stream-progress-fill {
     height: 100%;
     background: var(--green);
@@ -432,6 +547,7 @@ body {
     gap: 8px;
     pointer-events: none;
 }
+
 .toast {
     pointer-events: auto;
     background: var(--surface-2);
@@ -441,24 +557,48 @@ body {
     font-size: 13px;
     font-family: var(--mono);
     color: var(--text);
-    box-shadow: 0 6px 20px rgba(0,0,0,0.7);
+    box-shadow: 0 6px 20px rgba(0, 0, 0, 0.7);
     display: flex;
     align-items: center;
     gap: 12px;
     animation: toastSlideIn .25s ease-out;
     max-width: 400px;
 }
-.toast.ok   { border-left-color: var(--green); }
-.toast.err  { border-left-color: var(--red); }
-.toast.warn { border-left-color: var(--amber); }
+
+.toast.ok {
+    border-left-color: var(--green);
+}
+
+.toast.err {
+    border-left-color: var(--red);
+}
+
+.toast.warn {
+    border-left-color: var(--amber);
+}
 
 @keyframes toastSlideIn {
-    from { transform: translateX(100%); opacity: 0; }
-    to   { transform: translateX(0); opacity: 1; }
+    from {
+        transform: translateX(100%);
+        opacity: 0;
+    }
+
+    to {
+        transform: translateX(0);
+        opacity: 1;
+    }
 }
+
 @keyframes toastFadeOut {
-    from { opacity: 1; transform: translateX(0); }
-    to   { opacity: 0; transform: translateX(20px); }
+    from {
+        opacity: 1;
+        transform: translateX(0);
+    }
+
+    to {
+        opacity: 0;
+        transform: translateX(20px);
+    }
 }
 
 /* ── Log list ───────────────────────────────────────── */
@@ -468,9 +608,11 @@ body {
     justify-content: space-between;
     margin-bottom: 12px;
 }
+
 .log-list {
     border: 1px solid var(--border);
 }
+
 .log-entry {
     display: flex;
     gap: 0;
@@ -478,30 +620,50 @@ body {
     font-family: var(--mono);
     font-size: 11px;
 }
-.log-entry:last-child { border-bottom: none; }
+
+.log-entry:last-child {
+    border-bottom: none;
+}
+
 .log-gutter {
     width: 4px;
     flex-shrink: 0;
 }
-.log-gutter.success { background: var(--green); }
-.log-gutter.info    { background: var(--accent); }
-.log-gutter.warn    { background: var(--amber); }
-.log-gutter.err     { background: var(--red); }
+
+.log-gutter.success {
+    background: var(--green);
+}
+
+.log-gutter.info {
+    background: var(--accent);
+}
+
+.log-gutter.warn {
+    background: var(--amber);
+}
+
+.log-gutter.err {
+    background: var(--red);
+}
+
 .log-body {
     padding: 10px 14px;
     flex: 1;
     min-width: 0;
 }
+
 .log-meta {
     display: flex;
     gap: 12px;
     align-items: center;
     margin-bottom: 4px;
 }
+
 .log-ts {
     color: var(--text-sub);
     font-size: 10px;
 }
+
 .log-tag {
     font-size: 9px;
     font-weight: 600;
@@ -510,10 +672,31 @@ body {
     padding: 1px 5px;
     border: 1px solid;
 }
-.log-tag.success { color: var(--green);  border-color: var(--green);  background: rgba(62,207,142,0.08); }
-.log-tag.info    { color: var(--accent); border-color: var(--accent); background: rgba(91,106,240,0.08); }
-.log-tag.warn    { color: var(--amber);  border-color: var(--amber);  background: rgba(229,160,13,0.08); }
-.log-tag.err     { color: var(--red);    border-color: var(--red);    background: rgba(224,82,82,0.08); }
+
+.log-tag.success {
+    color: var(--green);
+    border-color: var(--green);
+    background: rgba(62, 207, 142, 0.08);
+}
+
+.log-tag.info {
+    color: var(--accent);
+    border-color: var(--accent);
+    background: rgba(91, 106, 240, 0.08);
+}
+
+.log-tag.warn {
+    color: var(--amber);
+    border-color: var(--amber);
+    background: rgba(229, 160, 13, 0.08);
+}
+
+.log-tag.err {
+    color: var(--red);
+    border-color: var(--red);
+    background: rgba(224, 82, 82, 0.08);
+}
+
 .log-msg {
     color: var(--text);
     font-size: 11px;
@@ -521,6 +704,7 @@ body {
     white-space: normal;
     word-break: break-word;
 }
+
 .log-payload-toggle {
     margin-top: 6px;
     font-size: 10px;
@@ -528,7 +712,11 @@ body {
     cursor: pointer;
     user-select: none;
 }
-.log-payload-toggle:hover { color: var(--accent); }
+
+.log-payload-toggle:hover {
+    color: var(--accent);
+}
+
 .log-payload-pre {
     margin-top: 6px;
     padding: 8px 10px;
@@ -540,6 +728,7 @@ body {
     white-space: pre-wrap;
     word-break: break-all;
 }
+
 .no-logs {
     padding: 28px;
     text-align: center;
@@ -548,6 +737,7 @@ body {
     background: var(--surface);
     border: 1px solid var(--border);
 }
+
 .btn-clear {
     font: 11px/1 var(--font);
     font-weight: 500;
@@ -560,11 +750,15 @@ body {
     cursor: pointer;
     transition: color .15s, border-color .15s;
 }
+
 .btn-clear:hover {
     color: var(--red);
     border-color: var(--red);
 }
-.btn-clear:active { opacity: .7; }
+
+.btn-clear:active {
+    opacity: .7;
+}
 
 /* ── Config tab ─────────────────────────────────────── */
 .config-note {
@@ -577,12 +771,14 @@ body {
     margin-bottom: 24px;
     font-family: var(--mono);
 }
+
 .form-group {
     display: flex;
     flex-direction: column;
     gap: 6px;
     margin-bottom: 16px;
 }
+
 .form-label {
     font-size: 11px;
     font-family: var(--mono);
@@ -590,6 +786,7 @@ body {
     text-transform: uppercase;
     letter-spacing: .5px;
 }
+
 .form-input {
     background: var(--surface);
     border: 1px solid var(--border-hi);
@@ -602,6 +799,7 @@ body {
     transition: border-color .15s;
     box-sizing: border-box;
 }
+
 .form-input:focus {
     border-color: var(--accent);
 }
@@ -610,7 +808,7 @@ body {
 :focus-visible {
     outline: 3px solid var(--accent) !important;
     outline-offset: 2px !important;
-    box-shadow: 0 0 16px rgba(91,106,240,0.85), 0 0 4px var(--accent) !important;
+    box-shadow: 0 0 16px rgba(91, 106, 240, 0.85), 0 0 4px var(--accent) !important;
     border-color: var(--accent) !important;
     z-index: 10 !important;
 }
@@ -629,14 +827,18 @@ body {
     background: var(--accent-dim) !important;
     transform: scale(1.03);
 }
+
 .form-grid {
     display: grid;
     grid-template-columns: 1fr 1fr;
     gap: 16px;
     margin-bottom: 8px;
 }
+
 @media (max-width: 600px) {
-    .form-grid { grid-template-columns: 1fr; }
+    .form-grid {
+        grid-template-columns: 1fr;
+    }
 }
 
 /* ── Last-action bar ────────────────────────────────── */
@@ -650,6 +852,7 @@ body {
     margin-bottom: 24px;
     word-break: break-word;
 }
+
 .last-action-bar strong {
     color: var(--text-sub);
     font-weight: 600;
@@ -659,8 +862,13 @@ body {
     margin-right: 8px;
 }
 
-.tab-label-mobile { display: none; }
-.tab-label-desktop { display: inline; }
+.tab-label-mobile {
+    display: none;
+}
+
+.tab-label-desktop {
+    display: inline;
+}
 
 /* ── Library, Calendar, Modal & Dashboard Helpers ───── */
 .search-bar-row {
@@ -669,19 +877,23 @@ body {
     margin-bottom: 18px;
     flex-wrap: wrap;
 }
+
 .search-type-select {
     width: 170px;
     flex-shrink: 0;
 }
+
 .search-query-input {
     flex: 1;
     min-width: 200px;
 }
+
 .media-grid {
     display: grid;
     grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
     gap: 12px;
 }
+
 .media-card {
     display: flex;
     gap: 12px;
@@ -689,6 +901,7 @@ body {
     border: 1px solid var(--border);
     padding: 12px;
 }
+
 .media-poster {
     width: 64px;
     height: 96px;
@@ -697,6 +910,7 @@ body {
     flex-shrink: 0;
     border: 1px solid var(--border);
 }
+
 .media-poster-placeholder {
     display: flex;
     align-items: center;
@@ -704,6 +918,7 @@ body {
     color: var(--text-sub);
     font-family: var(--mono);
 }
+
 .media-card-info {
     display: flex;
     flex-direction: column;
@@ -711,26 +926,31 @@ body {
     gap: 6px;
     min-width: 0;
 }
+
 .media-card-title {
     font-weight: 600;
     color: var(--text);
 }
+
 .media-year {
     color: var(--text-sub);
     font-weight: 400;
     font-family: var(--sans);
     font-size: 12px;
 }
+
 .media-card-overview {
     font-size: 12px;
     color: var(--text-sub);
     line-height: 1.4;
 }
+
 .media-list {
     display: flex;
     flex-direction: column;
     gap: 8px;
 }
+
 .library-row {
     display: flex;
     justify-content: space-between;
@@ -740,17 +960,20 @@ body {
     padding: 10px 14px;
     gap: 12px;
 }
+
 .ep-controls-row {
     display: flex;
     align-items: center;
     gap: 6px;
     flex-wrap: wrap;
 }
+
 .season-card {
     border: 1px solid var(--border);
     background: var(--bg);
     margin-bottom: 8px;
 }
+
 .season-summary {
     display: flex;
     justify-content: space-between;
@@ -763,22 +986,34 @@ body {
     color: var(--text);
     list-style: none;
 }
-.season-summary::-webkit-details-marker { display: none; }
-.season-summary:hover { background: var(--surface-2); }
+
+.season-summary::-webkit-details-marker {
+    display: none;
+}
+
+.season-summary:hover {
+    background: var(--surface-2);
+}
+
 .season-episodes {
     border-top: 1px solid var(--border);
     padding: 4px 0;
 }
+
 .ep-row {
     display: flex;
     justify-content: space-between;
     align-items: center;
     gap: 10px;
     padding: 7px 14px;
-    border-bottom: 1px solid rgba(255,255,255,0.03);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.03);
     flex-wrap: wrap;
 }
-.ep-row:last-child { border-bottom: none; }
+
+.ep-row:last-child {
+    border-bottom: none;
+}
+
 .ep-row-left {
     display: flex;
     align-items: center;
@@ -786,18 +1021,21 @@ body {
     min-width: 0;
     flex: 1;
 }
+
 .ep-row-right {
     display: flex;
     align-items: center;
     gap: 6px;
     flex-shrink: 0;
 }
+
 .ep-tag {
     font-family: var(--mono);
     font-size: 12px;
     color: var(--accent);
     flex-shrink: 0;
 }
+
 .ep-title {
     font-size: 13px;
     color: var(--text);
@@ -805,12 +1043,14 @@ body {
     text-overflow: ellipsis;
     white-space: nowrap;
 }
+
 .ep-airdate {
     font-family: var(--sans);
     font-size: 11px;
     color: var(--text-sub);
     flex-shrink: 0;
 }
+
 .lib-thumb {
     width: 32px;
     height: 46px;
@@ -820,6 +1060,7 @@ body {
     flex-shrink: 0;
     border-radius: 3px;
 }
+
 .lib-thumb-placeholder {
     display: inline-flex;
     align-items: center;
@@ -828,6 +1069,7 @@ body {
     font-size: 10px;
     color: var(--text-sub);
 }
+
 .disk-guard-alert {
     background: var(--red-dim);
     border: 1px solid var(--red);
@@ -836,6 +1078,7 @@ body {
     margin-bottom: 18px;
     font-size: 13px;
 }
+
 .cal-row {
     display: flex;
     justify-content: space-between;
@@ -846,6 +1089,7 @@ body {
     padding: 10px 14px;
     flex-wrap: wrap;
 }
+
 .cal-sub {
     font-size: 12px;
     color: var(--text-sub);
@@ -853,6 +1097,7 @@ body {
     text-overflow: ellipsis;
     white-space: nowrap;
 }
+
 .download-nzb-name {
     font-family: var(--mono);
     font-size: 12px;
@@ -861,17 +1106,20 @@ body {
     overflow: hidden;
     text-overflow: ellipsis;
 }
+
 .stream-bw {
     font-family: var(--mono);
     font-size: 11px;
     color: var(--text-sub);
 }
+
 .dl-rate {
     font-family: var(--mono);
     font-size: 12px;
     color: var(--green);
     font-weight: 600;
 }
+
 .stat-sub {
     display: flex;
     justify-content: space-between;
@@ -880,6 +1128,7 @@ body {
     font-family: var(--mono);
     color: var(--text-sub);
 }
+
 .form-hint {
     font-size: 12px;
     color: var(--text-muted);
@@ -887,6 +1136,7 @@ body {
     margin-top: 4px;
     display: block;
 }
+
 .modal-backdrop {
     position: fixed;
     inset: 0;
@@ -897,6 +1147,7 @@ body {
     z-index: 1000;
     padding: 16px;
 }
+
 .modal-panel {
     background: var(--surface);
     border: 1px solid var(--border-hi);
@@ -906,6 +1157,7 @@ body {
     display: flex;
     flex-direction: column;
 }
+
 .modal-header {
     display: flex;
     justify-content: space-between;
@@ -913,6 +1165,7 @@ body {
     padding: 14px 18px;
     border-bottom: 1px solid var(--border);
 }
+
 .modal-body {
     overflow-y: auto;
     padding: 14px 18px;
@@ -920,6 +1173,7 @@ body {
     flex-direction: column;
     gap: 10px;
 }
+
 .release-row {
     display: flex;
     justify-content: space-between;
@@ -929,6 +1183,7 @@ body {
     background: var(--bg);
     border: 1px solid var(--border);
 }
+
 .release-title {
     font-family: var(--mono);
     font-size: 12px;
@@ -936,6 +1191,7 @@ body {
     word-break: break-all;
     margin-bottom: 5px;
 }
+
 .release-meta {
     display: flex;
     align-items: center;
@@ -960,6 +1216,7 @@ body {
 .disk-guard-alert {
     border-radius: 6px;
 }
+
 .btn-clear {
     display: inline-flex;
     align-items: center;
@@ -974,19 +1231,24 @@ body {
     padding: 6px 13px;
     white-space: nowrap;
 }
+
 .btn-clear:hover:not(:disabled) {
     background: var(--accent-dim);
     border-color: var(--accent);
     color: #fff;
 }
+
 .btn-clear:disabled {
     opacity: 0.4;
     cursor: default;
 }
-.btn-sm, .btn-ep {
+
+.btn-sm,
+.btn-ep {
     padding: 5px 11px;
     font-size: 11px;
 }
+
 .ui-icon {
     width: 14px;
     height: 14px;
@@ -994,15 +1256,18 @@ body {
     display: inline-block;
     vertical-align: middle;
 }
+
 .btn-icon-trash {
     padding: 6px 10px;
     color: var(--text-sub);
 }
+
 .btn-icon-trash:hover:not(:disabled) {
     background: var(--red-dim);
     border-color: var(--red);
     color: var(--red);
 }
+
 .form-input {
     background: var(--bg);
     border-color: var(--border-hi);
@@ -1010,30 +1275,37 @@ body {
     font-size: 13px;
     color: var(--text);
 }
+
 .form-input::placeholder {
     color: var(--text-muted);
 }
+
 .section-title {
     color: var(--text-sub);
     font-size: 12px;
     font-weight: 600;
     letter-spacing: .6px;
 }
+
 .tab-btn {
     font-size: 13px;
     color: var(--text-sub);
 }
+
 .tab-btn.active {
     color: var(--text);
 }
+
 .conn-pill {
     background: var(--surface);
     border-radius: 999px;
     font-size: 12px;
 }
+
 .dash-section {
     margin-bottom: 24px;
 }
+
 .dash-section-header {
     display: flex;
     justify-content: space-between;
@@ -1041,6 +1313,7 @@ body {
     margin-bottom: 10px;
     min-height: 28px;
 }
+
 .dash-section .stream-card:last-child {
     margin-bottom: 0;
 }
@@ -1050,8 +1323,15 @@ body {
     .shell {
         padding: 16px 16px 40px;
     }
-    .tab-label-mobile { display: inline; }
-    .tab-label-desktop { display: none; }
+
+    .tab-label-mobile {
+        display: inline;
+    }
+
+    .tab-label-desktop {
+        display: none;
+    }
+
     .tabbar {
         width: 100%;
         overflow-x: auto;
@@ -1059,9 +1339,11 @@ body {
         -webkit-overflow-scrolling: touch;
         scrollbar-width: none;
     }
+
     .tabbar::-webkit-scrollbar {
         display: none;
     }
+
     .tab-btn {
         flex: 1;
         text-align: center;
@@ -1070,25 +1352,37 @@ body {
         white-space: nowrap;
         margin-bottom: 0;
     }
+
     .topbar {
         flex-direction: column;
         align-items: flex-start;
         gap: 12px;
     }
+
     .conn-pills {
         width: 100%;
         display: flex;
         gap: 6px;
     }
+
     .conn-pill {
         flex: 1;
         justify-content: center;
         padding: 6px 8px;
         font-size: 10px;
     }
-    .brand-sub { display: none; }
-    .stat-grid { grid-template-columns: 1fr 1fr; }
-    .kv-key { min-width: 120px; }
+
+    .brand-sub {
+        display: none;
+    }
+
+    .stat-grid {
+        grid-template-columns: 1fr 1fr;
+    }
+
+    .kv-key {
+        min-width: 120px;
+    }
 }
 
 /* Desktop & Smart TV (900px+) */
@@ -1097,27 +1391,106 @@ body {
         max-width: 92vw;
         padding: 40px 32px 64px;
     }
-    body { font-size: 17px; }
-    .topbar { gap: 18px; }
-    .brand { flex-shrink: 0; }
-    .conn-pills { flex-wrap: nowrap; gap: 10px; }
-    .brand-name { font-size: 26px; }
-    .brand-sub { font-size: 13px; }
-    .conn-pill { padding: 9px 18px; font-size: 14px; gap: 8px; white-space: nowrap; }
-    .conn-pip { width: 10px; height: 10px; }
-    .tab-btn { padding: 15px 24px; font-size: 16px; }
-    .section-title { font-size: 15px; letter-spacing: .8px; }
-    .config-card-summary { padding: 16px 22px; font-size: 19px; }
-    .library-row, .cal-row { padding: 14px 20px; font-size: 19px; }
-    .lib-thumb { width: 42px; height: 60px; }
-    .season-summary { padding: 13px 18px; font-size: 17px; }
-    .ep-row { padding: 11px 18px; }
-    .ep-tag { font-size: 16px; }
-    .ep-title { font-size: 17px; }
-    .ep-airdate { font-size: 14px; }
-    .btn-clear { font-size: 15px; padding: 10px 20px; }
-    .btn-sm, .btn-ep { font-size: 14px; padding: 6px 14px; }
-    .badge { font-size: 13px; padding: 5px 11px; }
+
+    body {
+        font-size: 17px;
+    }
+
+    .topbar {
+        gap: 18px;
+    }
+
+    .brand {
+        flex-shrink: 0;
+    }
+
+    .conn-pills {
+        flex-wrap: nowrap;
+        gap: 10px;
+    }
+
+    .brand-name {
+        font-size: 26px;
+    }
+
+    .brand-sub {
+        font-size: 13px;
+    }
+
+    .conn-pill {
+        padding: 9px 18px;
+        font-size: 14px;
+        gap: 8px;
+        white-space: nowrap;
+    }
+
+    .conn-pip {
+        width: 10px;
+        height: 10px;
+    }
+
+    .tab-btn {
+        padding: 15px 24px;
+        font-size: 16px;
+    }
+
+    .section-title {
+        font-size: 15px;
+        letter-spacing: .8px;
+    }
+
+    .config-card-summary {
+        padding: 16px 22px;
+        font-size: 19px;
+    }
+
+    .library-row,
+    .cal-row {
+        padding: 14px 20px;
+        font-size: 19px;
+    }
+
+    .lib-thumb {
+        width: 42px;
+        height: 60px;
+    }
+
+    .season-summary {
+        padding: 13px 18px;
+        font-size: 17px;
+    }
+
+    .ep-row {
+        padding: 11px 18px;
+    }
+
+    .ep-tag {
+        font-size: 16px;
+    }
+
+    .ep-title {
+        font-size: 17px;
+    }
+
+    .ep-airdate {
+        font-size: 14px;
+    }
+
+    .btn-clear {
+        font-size: 15px;
+        padding: 10px 20px;
+    }
+
+    .btn-sm,
+    .btn-ep {
+        font-size: 14px;
+        padding: 6px 14px;
+    }
+
+    .badge {
+        font-size: 13px;
+        padding: 5px 11px;
+    }
 }
 
 /* 1080p TVs & Desktop Displays (1200px+) */
@@ -1126,64 +1499,272 @@ body {
         max-width: min(92vw, 1680px);
         padding: 44px 40px 72px;
     }
-    body { font-size: 19px; }
-    .topbar { gap: 20px; padding-bottom: 28px; }
-    .brand { flex-shrink: 0; }
-    .conn-pills { flex-wrap: nowrap; gap: 12px; }
-    .brand-name { font-size: 32px; }
-    .brand-sub { font-size: 15px; }
-    .conn-pill { padding: 10px 22px; font-size: 16px; gap: 10px; white-space: nowrap; }
-    .conn-pip { width: 11px; height: 11px; }
-    .tab-btn { padding: 18px 30px; font-size: 18px; border-bottom-width: 3px; }
-    .section-title { font-size: 17px; letter-spacing: 1px; }
-    .dash-section { margin-bottom: 32px; }
-    .dash-section-header { margin-bottom: 14px; min-height: 40px; }
-    .stat-cell { padding: 26px; gap: 10px; }
-    .stat-value { font-size: 40px; }
-    .stat-value.timestamp { font-size: 19px; }
-    .stat-label { font-size: 15px; }
-    .stat-meta, .stat-sub { font-size: 15px; }
-    .idle-section { padding: 22px 26px; }
-    .idle-label { font-size: 16px; }
-    .idle-count { font-size: 18px; }
-    .idle-meta { font-size: 17px; }
-    .idle-track { height: 8px; }
-    .form-input { font-size: 18px; padding: 14px 20px; }
-    .form-label { font-size: 15px; }
-    .form-hint { font-size: 14px; }
-    .btn-clear { font-size: 16px; padding: 11px 22px; }
-    .btn-sm, .btn-ep { font-size: 15px; padding: 7px 16px; }
-    .badge { font-size: 14px; padding: 5px 12px; }
-    .config-card-summary { padding: 18px 24px; font-size: 22px; }
-    .config-card-summary::after { font-size: 18px; }
-    .config-card-body { padding: 22px 24px; }
-    .stream-card { padding: 20px 26px; gap: 12px; }
-    .stream-user-name { font-size: 22px; }
-    .stream-title { font-size: 20px; }
-    .stream-device, .download-nzb-name { font-size: 16px; }
-    .stream-progress-meta { font-size: 15px; }
-    .stream-progress-track { height: 7px; }
-    .stream-bw, .dl-rate { font-size: 16px; }
-    .media-grid { grid-template-columns: repeat(auto-fill, minmax(380px, 1fr)); gap: 16px; }
-    .media-poster { width: 88px; height: 132px; }
-    .media-card-title { font-size: 19px; }
-    .media-year { font-size: 16px; }
-    .media-card-overview { font-size: 15px; }
-    .library-row, .cal-row { padding: 16px 24px; font-size: 22px; }
-    .cal-sub { font-size: 16px; }
-    .lib-thumb { width: 48px; height: 68px; }
-    .season-summary { padding: 15px 22px; font-size: 19px; }
-    .ep-row { padding: 12px 22px; gap: 14px; }
-    .ep-tag { font-size: 17px; }
-    .ep-title { font-size: 19px; }
-    .ep-airdate { font-size: 15px; }
-    .modal-panel { max-width: 1020px; }
-    .release-title { font-size: 16px; }
-    .release-meta { font-size: 14px; }
-    .log-entry, .log-msg { font-size: 16px; }
-    .log-ts { font-size: 14px; }
-    .toast-container { top: 32px; right: 32px; gap: 14px; }
-    .toast { font-size: 17px; padding: 16px 26px; max-width: 540px; border-left-width: 5px; }
+
+    body {
+        font-size: 19px;
+    }
+
+    .topbar {
+        gap: 20px;
+        padding-bottom: 28px;
+    }
+
+    .brand {
+        flex-shrink: 0;
+    }
+
+    .conn-pills {
+        flex-wrap: nowrap;
+        gap: 12px;
+    }
+
+    .brand-name {
+        font-size: 32px;
+    }
+
+    .brand-sub {
+        font-size: 15px;
+    }
+
+    .conn-pill {
+        padding: 10px 22px;
+        font-size: 16px;
+        gap: 10px;
+        white-space: nowrap;
+    }
+
+    .conn-pip {
+        width: 11px;
+        height: 11px;
+    }
+
+    .tab-btn {
+        padding: 18px 30px;
+        font-size: 18px;
+        border-bottom-width: 3px;
+    }
+
+    .section-title {
+        font-size: 17px;
+        letter-spacing: 1px;
+    }
+
+    .dash-section {
+        margin-bottom: 32px;
+    }
+
+    .dash-section-header {
+        margin-bottom: 14px;
+        min-height: 40px;
+    }
+
+    .stat-cell {
+        padding: 26px;
+        gap: 10px;
+    }
+
+    .stat-value {
+        font-size: 40px;
+    }
+
+    .stat-value.timestamp {
+        font-size: 19px;
+    }
+
+    .stat-label {
+        font-size: 15px;
+    }
+
+    .stat-meta,
+    .stat-sub {
+        font-size: 15px;
+    }
+
+    .idle-section {
+        padding: 22px 26px;
+    }
+
+    .idle-label {
+        font-size: 16px;
+    }
+
+    .idle-count {
+        font-size: 18px;
+    }
+
+    .idle-meta {
+        font-size: 17px;
+    }
+
+    .idle-track {
+        height: 8px;
+    }
+
+    .form-input {
+        font-size: 18px;
+        padding: 14px 20px;
+    }
+
+    .form-label {
+        font-size: 15px;
+    }
+
+    .form-hint {
+        font-size: 14px;
+    }
+
+    .btn-clear {
+        font-size: 16px;
+        padding: 11px 22px;
+    }
+
+    .btn-sm,
+    .btn-ep {
+        font-size: 15px;
+        padding: 7px 16px;
+    }
+
+    .badge {
+        font-size: 14px;
+        padding: 5px 12px;
+    }
+
+    .config-card-summary {
+        padding: 18px 24px;
+        font-size: 22px;
+    }
+
+    .config-card-summary::after {
+        font-size: 18px;
+    }
+
+    .config-card-body {
+        padding: 22px 24px;
+    }
+
+    .stream-card {
+        padding: 20px 26px;
+        gap: 12px;
+    }
+
+    .stream-user-name {
+        font-size: 22px;
+    }
+
+    .stream-title {
+        font-size: 20px;
+    }
+
+    .stream-device,
+    .download-nzb-name {
+        font-size: 16px;
+    }
+
+    .stream-progress-meta {
+        font-size: 15px;
+    }
+
+    .stream-progress-track {
+        height: 7px;
+    }
+
+    .stream-bw,
+    .dl-rate {
+        font-size: 16px;
+    }
+
+    .media-grid {
+        grid-template-columns: repeat(auto-fill, minmax(380px, 1fr));
+        gap: 16px;
+    }
+
+    .media-poster {
+        width: 88px;
+        height: 132px;
+    }
+
+    .media-card-title {
+        font-size: 19px;
+    }
+
+    .media-year {
+        font-size: 16px;
+    }
+
+    .media-card-overview {
+        font-size: 15px;
+    }
+
+    .library-row,
+    .cal-row {
+        padding: 16px 24px;
+        font-size: 22px;
+    }
+
+    .cal-sub {
+        font-size: 16px;
+    }
+
+    .lib-thumb {
+        width: 48px;
+        height: 68px;
+    }
+
+    .season-summary {
+        padding: 15px 22px;
+        font-size: 19px;
+    }
+
+    .ep-row {
+        padding: 12px 22px;
+        gap: 14px;
+    }
+
+    .ep-tag {
+        font-size: 17px;
+    }
+
+    .ep-title {
+        font-size: 19px;
+    }
+
+    .ep-airdate {
+        font-size: 15px;
+    }
+
+    .modal-panel {
+        max-width: 1020px;
+    }
+
+    .release-title {
+        font-size: 16px;
+    }
+
+    .release-meta {
+        font-size: 14px;
+    }
+
+    .log-entry,
+    .log-msg {
+        font-size: 16px;
+    }
+
+    .log-ts {
+        font-size: 14px;
+    }
+
+    .toast-container {
+        top: 32px;
+        right: 32px;
+        gap: 14px;
+    }
+
+    .toast {
+        font-size: 17px;
+        padding: 16px 26px;
+        max-width: 540px;
+        border-left-width: 5px;
+    }
 }
 
 /* 4K Ultra-HD & Big Screen TVs (1600px+) */
@@ -1192,63 +1773,272 @@ body {
         max-width: min(92vw, 1920px);
         padding: 52px 48px 84px;
     }
-    body { font-size: 21px; }
-    .brand-name { font-size: 36px; }
-    .brand-sub { font-size: 16px; }
-    .conn-pill { padding: 12px 24px; font-size: 18px; gap: 10px; border-width: 1.5px; }
-    .conn-pip { width: 12px; height: 12px; }
-    .tab-btn { padding: 20px 36px; font-size: 20px; border-bottom-width: 3px; }
-    .section-title { font-size: 19px; letter-spacing: 1.1px; }
-    .dash-section { margin-bottom: 36px; }
-    .dash-section-header { margin-bottom: 16px; min-height: 46px; }
-    .stat-cell { padding: 30px; gap: 12px; }
-    .stat-value { font-size: 46px; }
-    .stat-value.timestamp { font-size: 22px; }
-    .stat-label { font-size: 17px; }
-    .stat-meta, .stat-sub { font-size: 17px; }
-    .stream-card { padding: 24px 30px; gap: 14px; border-width: 1.5px; }
-    .stream-user-name { font-size: 25px; }
-    .stream-device, .download-nzb-name { font-size: 18px; }
-    .stream-title { font-size: 23px; }
-    .stream-progress-meta { font-size: 17px; }
-    .stream-progress-track { height: 8px; }
-    .stream-bw, .dl-rate { font-size: 18px; }
-    .form-input { font-size: 20px; padding: 16px 22px; border-width: 1.5px; }
-    .form-label { font-size: 17px; }
-    .form-hint { font-size: 16px; }
-    .idle-section { padding: 24px 30px; border-width: 1.5px; }
-    .idle-label { font-size: 18px; }
-    .idle-count { font-size: 20px; }
-    .idle-meta { font-size: 19px; }
-    .idle-track { height: 9px; }
-    .btn-clear { font-size: 18px; padding: 12px 26px; border-width: 1.5px; }
-    .btn-sm, .btn-ep { font-size: 16px; padding: 8px 18px; }
-    .badge { font-size: 15px; padding: 6px 14px; }
-    .config-card-summary { padding: 22px 28px; font-size: 25px; }
-    .config-card-summary::after { font-size: 20px; }
-    .config-card-body { padding: 26px 28px; }
-    .media-grid { grid-template-columns: repeat(auto-fill, minmax(440px, 1fr)); gap: 20px; }
-    .media-poster { width: 100px; height: 150px; }
-    .media-card-title { font-size: 22px; }
-    .media-year { font-size: 18px; }
-    .media-card-overview { font-size: 17px; }
-    .library-row, .cal-row { padding: 18px 28px; font-size: 25px; }
-    .cal-sub { font-size: 18px; }
-    .lib-thumb { width: 56px; height: 80px; }
-    .season-summary { padding: 18px 24px; font-size: 21px; }
-    .ep-row { padding: 14px 24px; gap: 16px; }
-    .ep-tag { font-size: 19px; }
-    .ep-title { font-size: 21px; }
-    .ep-airdate { font-size: 17px; }
-    .modal-panel { max-width: 1180px; }
-    .release-title { font-size: 18px; }
-    .release-meta { font-size: 16px; }
-    .log-entry, .log-msg { font-size: 18px; }
-    .log-ts { font-size: 16px; }
-    .toast-container { top: 36px; right: 36px; gap: 14px; }
-    .toast { font-size: 19px; padding: 18px 28px; max-width: 600px; border-left-width: 6px; }
-    ::-webkit-scrollbar { width: 12px; height: 12px; }
-    ::-webkit-scrollbar-thumb { border-radius: 6px; border-width: 2px; }
+
+    body {
+        font-size: 21px;
+    }
+
+    .brand-name {
+        font-size: 36px;
+    }
+
+    .brand-sub {
+        font-size: 16px;
+    }
+
+    .conn-pill {
+        padding: 12px 24px;
+        font-size: 18px;
+        gap: 10px;
+        border-width: 1.5px;
+    }
+
+    .conn-pip {
+        width: 12px;
+        height: 12px;
+    }
+
+    .tab-btn {
+        padding: 20px 36px;
+        font-size: 20px;
+        border-bottom-width: 3px;
+    }
+
+    .section-title {
+        font-size: 19px;
+        letter-spacing: 1.1px;
+    }
+
+    .dash-section {
+        margin-bottom: 36px;
+    }
+
+    .dash-section-header {
+        margin-bottom: 16px;
+        min-height: 46px;
+    }
+
+    .stat-cell {
+        padding: 30px;
+        gap: 12px;
+    }
+
+    .stat-value {
+        font-size: 46px;
+    }
+
+    .stat-value.timestamp {
+        font-size: 22px;
+    }
+
+    .stat-label {
+        font-size: 17px;
+    }
+
+    .stat-meta,
+    .stat-sub {
+        font-size: 17px;
+    }
+
+    .stream-card {
+        padding: 24px 30px;
+        gap: 14px;
+        border-width: 1.5px;
+    }
+
+    .stream-user-name {
+        font-size: 25px;
+    }
+
+    .stream-device,
+    .download-nzb-name {
+        font-size: 18px;
+    }
+
+    .stream-title {
+        font-size: 23px;
+    }
+
+    .stream-progress-meta {
+        font-size: 17px;
+    }
+
+    .stream-progress-track {
+        height: 8px;
+    }
+
+    .stream-bw,
+    .dl-rate {
+        font-size: 18px;
+    }
+
+    .form-input {
+        font-size: 20px;
+        padding: 16px 22px;
+        border-width: 1.5px;
+    }
+
+    .form-label {
+        font-size: 17px;
+    }
+
+    .form-hint {
+        font-size: 16px;
+    }
+
+    .idle-section {
+        padding: 24px 30px;
+        border-width: 1.5px;
+    }
+
+    .idle-label {
+        font-size: 18px;
+    }
+
+    .idle-count {
+        font-size: 20px;
+    }
+
+    .idle-meta {
+        font-size: 19px;
+    }
+
+    .idle-track {
+        height: 9px;
+    }
+
+    .btn-clear {
+        font-size: 18px;
+        padding: 12px 26px;
+        border-width: 1.5px;
+    }
+
+    .btn-sm,
+    .btn-ep {
+        font-size: 16px;
+        padding: 8px 18px;
+    }
+
+    .badge {
+        font-size: 15px;
+        padding: 6px 14px;
+    }
+
+    .config-card-summary {
+        padding: 22px 28px;
+        font-size: 25px;
+    }
+
+    .config-card-summary::after {
+        font-size: 20px;
+    }
+
+    .config-card-body {
+        padding: 26px 28px;
+    }
+
+    .media-grid {
+        grid-template-columns: repeat(auto-fill, minmax(440px, 1fr));
+        gap: 20px;
+    }
+
+    .media-poster {
+        width: 100px;
+        height: 150px;
+    }
+
+    .media-card-title {
+        font-size: 22px;
+    }
+
+    .media-year {
+        font-size: 18px;
+    }
+
+    .media-card-overview {
+        font-size: 17px;
+    }
+
+    .library-row,
+    .cal-row {
+        padding: 18px 28px;
+        font-size: 25px;
+    }
+
+    .cal-sub {
+        font-size: 18px;
+    }
+
+    .lib-thumb {
+        width: 56px;
+        height: 80px;
+    }
+
+    .season-summary {
+        padding: 18px 24px;
+        font-size: 21px;
+    }
+
+    .ep-row {
+        padding: 14px 24px;
+        gap: 16px;
+    }
+
+    .ep-tag {
+        font-size: 19px;
+    }
+
+    .ep-title {
+        font-size: 21px;
+    }
+
+    .ep-airdate {
+        font-size: 17px;
+    }
+
+    .modal-panel {
+        max-width: 1180px;
+    }
+
+    .release-title {
+        font-size: 18px;
+    }
+
+    .release-meta {
+        font-size: 16px;
+    }
+
+    .log-entry,
+    .log-msg {
+        font-size: 18px;
+    }
+
+    .log-ts {
+        font-size: 16px;
+    }
+
+    .toast-container {
+        top: 36px;
+        right: 36px;
+        gap: 14px;
+    }
+
+    .toast {
+        font-size: 19px;
+        padding: 18px 28px;
+        max-width: 600px;
+        border-left-width: 6px;
+    }
+
+    ::-webkit-scrollbar {
+        width: 12px;
+        height: 12px;
+    }
+
+    ::-webkit-scrollbar-thumb {
+        border-radius: 6px;
+        border-width: 2px;
+    }
 }
 
 /* Giant 4K TV & 10-Foot Distance Mode (2200px+) */
@@ -1257,24 +2047,102 @@ body {
         max-width: 2200px;
         padding: 72px 64px 100px;
     }
-    body { font-size: 22px; }
-    .brand-name { font-size: 36px; }
-    .brand-sub { font-size: 17px; }
-    .conn-pill { padding: 12px 24px; font-size: 18px; gap: 12px; border-width: 2px; }
-    .conn-pip { width: 13px; height: 13px; }
-    .tab-btn { padding: 20px 38px; font-size: 21px; border-bottom-width: 4px; }
-    .section-title { font-size: 19px; letter-spacing: 1.2px; }
-    .stream-user-name { font-size: 24px; }
-    .stream-device, .download-nzb-name { font-size: 18px; }
-    .stream-title { font-size: 23px; }
-    .stream-progress-meta { font-size: 17px; }
-    .form-input { font-size: 21px; padding: 16px 22px; border-width: 2px; }
-    .btn-clear { font-size: 18px; padding: 13px 26px; border-width: 2px; }
-    .btn-sm, .btn-ep { font-size: 16px; padding: 8px 16px; }
-    .badge { font-size: 15px; padding: 6px 14px; }
-    .library-row, .cal-row { padding: 18px 26px; font-size: 22px; }
-    .lib-thumb { width: 52px; height: 74px; }
-    .ep-tag { font-size: 18px; }
-    .ep-title { font-size: 20px; }
-    .ep-airdate { font-size: 16px; }
+
+    body {
+        font-size: 22px;
+    }
+
+    .brand-name {
+        font-size: 36px;
+    }
+
+    .brand-sub {
+        font-size: 17px;
+    }
+
+    .conn-pill {
+        padding: 12px 24px;
+        font-size: 18px;
+        gap: 12px;
+        border-width: 2px;
+    }
+
+    .conn-pip {
+        width: 13px;
+        height: 13px;
+    }
+
+    .tab-btn {
+        padding: 20px 38px;
+        font-size: 21px;
+        border-bottom-width: 4px;
+    }
+
+    .section-title {
+        font-size: 19px;
+        letter-spacing: 1.2px;
+    }
+
+    .stream-user-name {
+        font-size: 24px;
+    }
+
+    .stream-device,
+    .download-nzb-name {
+        font-size: 18px;
+    }
+
+    .stream-title {
+        font-size: 23px;
+    }
+
+    .stream-progress-meta {
+        font-size: 17px;
+    }
+
+    .form-input {
+        font-size: 21px;
+        padding: 16px 22px;
+        border-width: 2px;
+    }
+
+    .btn-clear {
+        font-size: 18px;
+        padding: 13px 26px;
+        border-width: 2px;
+    }
+
+    .btn-sm,
+    .btn-ep {
+        font-size: 16px;
+        padding: 8px 16px;
+    }
+
+    .badge {
+        font-size: 15px;
+        padding: 6px 14px;
+    }
+
+    .library-row,
+    .cal-row {
+        padding: 18px 26px;
+        font-size: 22px;
+    }
+
+    .lib-thumb {
+        width: 52px;
+        height: 74px;
+    }
+
+    .ep-tag {
+        font-size: 18px;
+    }
+
+    .ep-title {
+        font-size: 20px;
+    }
+
+    .ep-airdate {
+        font-size: 16px;
+    }
 }
