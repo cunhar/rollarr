@@ -84,10 +84,10 @@ def get_state(refresh_live: bool = True):
 
     plex_url, plex_token = get_plex_credentials()
     jf_url, jf_key = get_jellyfin_credentials()
-    has_media_server = True  # Built-in player is always available alongside optional Plex / Jellyfin
+    has_media_server = bool((plex_url and plex_token) or (jf_url and jf_key))
     shutdown_mode = _get_shutdown_mode()
     dry_run = (shutdown_mode == 'dry_run')
-    enabled = bool(shutdown_mode != 'disabled')
+    enabled = bool(has_media_server and shutdown_mode != 'disabled')
     idle_needed = int(get_config('PLEX_IDLE_POLLS', 3))
     poll_interval = int(get_config('PLEX_POLL_INTERVAL', 1200))
 
@@ -103,7 +103,7 @@ def get_state(refresh_live: bool = True):
 
     if refresh_live and has_media_server:
         now_time = time.time()
-        if now_time - _last_fetch_time > 5 or _get_builtin_player_sessions():
+        if now_time - _last_fetch_time > 5:
             _last_fetch_time = now_time
             count, streams = _get_all_active_sessions()
             has_dl, dl_detail = _has_active_downloads()
@@ -352,28 +352,13 @@ def _get_jellyfin_active_sessions() -> tuple[int | None, list[dict]]:
         return None, []
 
 
-def _get_builtin_player_sessions() -> list[dict]:
-    try:
-        from services.player_service import get_active_streams
-        return get_active_streams()
-    except Exception as exc:
-        logger.debug(f"[PlexWatcher] Failed checking built-in player sessions: {exc}")
-        return []
-
-
 def _get_all_active_sessions() -> tuple[int | None, list[dict]]:
-    """Combine active sessions across Rolarr's built-in player, Plex, and Jellyfin."""
+    """Combine active sessions across Plex and Jellyfin (whichever are configured)."""
     plex_url, plex_token = get_plex_credentials()
     jf_url, jf_key = get_jellyfin_credentials()
     total = 0
     streams = []
     any_ok = False
-
-    builtin_streams = _get_builtin_player_sessions()
-    if builtin_streams:
-        any_ok = True
-        total += len(builtin_streams)
-        streams.extend(builtin_streams)
 
     if plex_url and plex_token:
         p_cnt, p_streams = _get_active_sessions()
@@ -388,10 +373,6 @@ def _get_all_active_sessions() -> tuple[int | None, list[dict]]:
             any_ok = True
             total += j_cnt
             streams.extend(j_streams)
-
-    # Built-in player is always local and reachable if neither Plex nor Jellyfin is configured
-    if not (plex_url and plex_token) and not (jf_url and jf_key):
-        any_ok = True
 
     return (total, streams) if any_ok else (None, [])
 
@@ -616,6 +597,11 @@ def _watcher_loop():
             jf_url, jf_key = get_jellyfin_credentials()
             poll_interval = int(get_config('PLEX_POLL_INTERVAL', 1200))
             idle_needed = int(get_config('PLEX_IDLE_POLLS', 3))
+
+            if not ((plex_url and plex_token) or (jf_url and jf_key)):
+                _update_state(status='not_configured')
+                time.sleep(10)
+                continue
 
             now_ts = _now()
             next_ts = (

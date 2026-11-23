@@ -8,12 +8,9 @@
     const FOCUSABLE_SELECTOR = 'a[href], button:not(:disabled), input:not(:disabled), select:not(:disabled), details summary, [tabindex="0"]';
 
     function getFocusableElements() {
-        const playerModal = document.getElementById('player-modal');
         const releaseModal = document.getElementById('release-modal');
         let root = document;
-        if (playerModal && playerModal.style.display !== 'none') {
-            root = playerModal;
-        } else if (releaseModal && releaseModal.style.display !== 'none') {
+        if (releaseModal && releaseModal.style.display !== 'none') {
             root = releaseModal;
         }
         return Array.from(root.querySelectorAll(FOCUSABLE_SELECTOR)).filter(el => {

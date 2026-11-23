@@ -110,17 +110,6 @@ def init_db():
                 reason     TEXT,
                 failed_at  TEXT NOT NULL
             );
-
-            CREATE TABLE IF NOT EXISTS playback_progress (
-                media_type   TEXT NOT NULL,      -- 'episode' | 'movie'
-                media_id     INTEGER NOT NULL,   -- shows.id or movies.id
-                season       INTEGER NOT NULL DEFAULT 0,
-                episode      INTEGER NOT NULL DEFAULT 0,
-                position_sec REAL NOT NULL DEFAULT 0,
-                duration_sec REAL NOT NULL DEFAULT 0,
-                updated_at   TEXT NOT NULL,
-                PRIMARY KEY (media_type, media_id, season, episode)
-            );
         """)
         # Lightweight schema migration for episode watch-cursor & queue ordering columns
         cols = {r['name'] for r in c.execute("PRAGMA table_info(shows)").fetchall()}
@@ -451,79 +440,4 @@ def get_blocklisted_guids() -> set[str]:
         rows = c.execute("SELECT nzb_guid FROM blocklist").fetchall()
         return {r['nzb_guid'] for r in rows}
 
-
-# ── Playback Progress ────────────────────────────────────────────────────────
-
-def save_playback_progress(
-    media_type: str,
-    media_id: int,
-    position_sec: float,
-    duration_sec: float = 0.0,
-    season: int | None = None,
-    episode: int | None = None,
-):
-    s_val = int(season or 0) if media_type == 'episode' else 0
-    e_val = int(episode or 0) if media_type == 'episode' else 0
-    ts = now_str()
-    with _conn() as c:
-        c.execute(
-            """
-            INSERT INTO playback_progress (
-                media_type, media_id, season, episode, position_sec, duration_sec, updated_at
-            ) VALUES (?, ?, ?, ?, ?, ?, ?)
-            ON CONFLICT(media_type, media_id, season, episode) DO UPDATE SET
-                position_sec = excluded.position_sec,
-                duration_sec = CASE WHEN excluded.duration_sec > 0 THEN excluded.duration_sec ELSE playback_progress.duration_sec END,
-                updated_at   = excluded.updated_at
-            """,
-            (media_type, int(media_id), s_val, e_val, float(position_sec), float(duration_sec or 0.0), ts),
-        )
-
-
-def get_playback_progress(
-    media_type: str,
-    media_id: int,
-    season: int | None = None,
-    episode: int | None = None,
-) -> dict[str, Any] | None:
-    s_val = int(season or 0) if media_type == 'episode' else 0
-    e_val = int(episode or 0) if media_type == 'episode' else 0
-    with _conn() as c:
-        row = c.execute(
-            "SELECT * FROM playback_progress WHERE media_type = ? AND media_id = ? AND season = ? AND episode = ?",
-            (media_type, int(media_id), s_val, e_val),
-        ).fetchone()
-        return dict(row) if row else None
-
-
-def get_show_playback_map(show_id: int) -> dict[tuple[int, int], dict[str, Any]]:
-    with _conn() as c:
-        rows = c.execute(
-            "SELECT * FROM playback_progress WHERE media_type = 'episode' AND media_id = ?",
-            (int(show_id),),
-        ).fetchall()
-        return {(int(r['season']), int(r['episode'])): dict(r) for r in rows}
-
-
-def get_all_movies_playback_map() -> dict[int, dict[str, Any]]:
-    with _conn() as c:
-        rows = c.execute(
-            "SELECT * FROM playback_progress WHERE media_type = 'movie'"
-        ).fetchall()
-        return {int(r['media_id']): dict(r) for r in rows}
-
-
-def clear_playback_progress(
-    media_type: str,
-    media_id: int,
-    season: int | None = None,
-    episode: int | None = None,
-):
-    s_val = int(season or 0) if media_type == 'episode' else 0
-    e_val = int(episode or 0) if media_type == 'episode' else 0
-    with _conn() as c:
-        c.execute(
-            "DELETE FROM playback_progress WHERE media_type = ? AND media_id = ? AND season = ? AND episode = ?",
-            (media_type, int(media_id), s_val, e_val),
-        )
 

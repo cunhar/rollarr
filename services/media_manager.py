@@ -366,26 +366,6 @@ def _scan_show_episodes_on_disk(show_title: str) -> set[tuple[int, int]]:
     return found
 
 
-def get_next_available_episode_for_show(show: dict[str, Any]) -> dict[str, Any] | None:
-    """Return metadata for the earliest on-disk episode of a show (including resume percentage)."""
-    on_disk = sorted(_scan_show_episodes_on_disk(show['title']))
-    if not on_disk:
-        return None
-    s_num, e_num = on_disk[0]
-    prog_map = db.get_show_playback_map(int(show['id']))
-    ep_prog = prog_map.get((s_num, e_num))
-    res_pos = round(float(ep_prog['position_sec']), 1) if ep_prog else 0.0
-    res_dur = round(float(ep_prog['duration_sec']), 1) if ep_prog else 0.0
-    res_pct = round(min(99.0, res_pos / res_dur * 100.0)) if (res_dur > 0 and res_pos > 15) else 0
-    return {
-        'season': s_num,
-        'episode': e_num,
-        'tag': f"S{s_num:02d}E{e_num:02d}",
-        'resume_pct': res_pct,
-        'on_disk_count': len(on_disk),
-    }
-
-
 def get_show_episodes_status(show_id: int) -> dict[str, Any]:
     """Return all seasons and episodes for a tracked show with on-disk / queued / watched / unaired status."""
     show = db.get_show(show_id)
@@ -411,7 +391,6 @@ def get_show_episodes_status(show_id: int) -> dict[str, Any]:
     earliest_active = min(active_eps) if active_eps else None
     latest_active = max(active_eps) if active_eps else None
     window_full = len(active_eps) >= get_rolling_window()
-    prog_map = db.get_show_playback_map(show_id)
 
     seasons_map: dict[int, list[dict[str, Any]]] = {}
     for ep in episodes:
@@ -430,11 +409,6 @@ def get_show_episodes_status(show_id: int) -> dict[str, Any]:
         else:
             ep_status = 'missing'
 
-        ep_prog = prog_map.get(cur_key) if ep_status == 'downloaded' else None
-        res_pos = round(float(ep_prog['position_sec']), 1) if ep_prog else 0.0
-        res_dur = round(float(ep_prog['duration_sec']), 1) if ep_prog else 0.0
-        res_pct = round(min(99.0, res_pos / res_dur * 100.0)) if (res_dur > 0 and res_pos > 15) else 0
-
         seasons_map.setdefault(s_num, []).append({
             'season': s_num,
             'episode': e_num,
@@ -442,9 +416,6 @@ def get_show_episodes_status(show_id: int) -> dict[str, Any]:
             'airdate': ep['airdate'],
             'aired': ep['aired'],
             'status': ep_status,
-            'resume_position_sec': res_pos,
-            'duration_sec': res_dur,
-            'resume_pct': res_pct,
         })
 
     seasons = []

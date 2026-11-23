@@ -1,4 +1,4 @@
-from flask import Flask, request, jsonify, render_template, Response
+from flask import Flask, request, jsonify, render_template
 
 import os
 import logging
@@ -7,7 +7,7 @@ import concurrent.futures
 
 import config_store
 from integrations import metadata
-from services import db, plex_watcher, plex_poller, activity_log, usenet_downloader, media_manager, player_service
+from services import db, plex_watcher, plex_poller, activity_log, usenet_downloader, media_manager
 from services.disk_service import get_disk_space_summary
 from services.connection_tester import (
     test_connection,
@@ -49,7 +49,6 @@ plex_poller.set_log_callback(activity_log.log_call)
 plex_watcher.set_log_callback(activity_log.log_call)
 usenet_downloader.set_log_callback(activity_log.log_call)
 media_manager.set_autograb_log_callback(activity_log.log_call)
-player_service.set_log_callback(activity_log.log_call)
 
 if not os.environ.get('ROLARR_NO_BACKGROUND'):
     plex_poller.start()
@@ -208,19 +207,11 @@ def api_search():
 @app.route('/api/library')
 def api_library():
     movies = db.list_movies()
-    prog_map = db.get_all_movies_playback_map()
     for m in movies:
         fpath = m.get('file_path')
         on_disk = bool(fpath and os.path.isfile(fpath)) or (media_manager.find_movie_file_on_disk(m['title'], m.get('year')) is not None)
-        m['on_disk'] = on_disk
         if on_disk and (m.get('status') or '').lower() == 'wanted':
             m['status'] = 'downloaded'
-        m_prog = prog_map.get(int(m['id'])) if on_disk else None
-        res_pos = round(float(m_prog['position_sec']), 1) if m_prog else 0.0
-        res_dur = round(float(m_prog['duration_sec']), 1) if m_prog else 0.0
-        m['resume_position_sec'] = res_pos
-        m['duration_sec'] = res_dur
-        m['resume_pct'] = round(min(99.0, res_pos / res_dur * 100.0)) if (res_dur > 0 and res_pos > 15) else 0
 
     status_rank = {'downloaded': 0, 'downloading': 1, 'wanted': 2}
     movies.sort(key=lambda m: (
@@ -228,12 +219,8 @@ def api_library():
         (m.get('title') or '').lower(),
     ))
 
-    shows = db.list_shows()
-    for s in shows:
-        s['next_available'] = media_manager.get_next_available_episode_for_show(s)
-
     return jsonify({
-        'shows': shows,
+        'shows': db.list_shows(),
         'movies': movies,
         'recent_downloads': db.list_recent_downloads(15),
     }), 200
@@ -344,66 +331,6 @@ def api_calendar():
 def api_autograb_run():
     res = media_manager.run_auto_grab()
     return jsonify(res), 200
-
-
-# ── Built-in Media Player Endpoints ──────────────────────────────────────────
-
-@app.route('/api/player/info/<media_type>/<int:media_id>')
-def api_player_info(media_type: str, media_id: int):
-    season = request.args.get('season', type=int)
-    episode = request.args.get('episode', type=int)
-    res = player_service.get_player_info(media_type, media_id, season=season, episode=episode)
-    return jsonify(res), 200 if res.get('status') == 'success' else 404
-
-
-@app.route('/api/player/stream/<media_type>/<int:media_id>')
-def api_player_stream(media_type: str, media_id: int):
-    season = request.args.get('season', type=int)
-    episode = request.args.get('episode', type=int)
-    start_sec = request.args.get('start', default=0.0, type=float)
-    audio_idx = request.args.get('audio', default=0, type=int)
-    force_transcode = request.args.get('transcode', default='0') in ('1', 'true')
-    return player_service.stream_media_response(
-        media_type=media_type,
-        media_id=media_id,
-        season=season,
-        episode=episode,
-        start_sec=start_sec,
-        audio_idx=audio_idx,
-        force_transcode=force_transcode,
-    )
-
-
-@app.route('/api/player/subtitles/<media_type>/<int:media_id>/<sub_id>.vtt')
-def api_player_subtitles(media_type: str, media_id: int, sub_id: str):
-    season = request.args.get('season', type=int)
-    episode = request.args.get('episode', type=int)
-    offset_sec = request.args.get('offset', default=0.0, type=float)
-    vtt_text, err = player_service.get_subtitle_vtt(
-        media_type, media_id, sub_id, season=season, episode=episode, offset_sec=offset_sec
-    )
-    if err or vtt_text is None:
-        return Response(err or 'Subtitle not found', status=404, mimetype='text/plain')
-    return Response(vtt_text, status=200, mimetype='text/vtt; charset=utf-8')
-
-
-@app.route('/api/player/heartbeat', methods=['POST'])
-def api_player_heartbeat():
-    res = player_service.record_heartbeat(request.json or {})
-    return jsonify(res), 200 if res.get('status') == 'success' else 400
-
-
-@app.route('/api/player/watched', methods=['POST'])
-def api_player_watched():
-    data = request.json or {}
-    media_type = (data.get('media_type') or '').lower()
-    media_id = int(data.get('media_id') or 0)
-    season = int(data['season']) if data.get('season') is not None else None
-    episode = int(data['episode']) if data.get('episode') is not None else None
-    if not media_type or not media_id:
-        return jsonify({'status': 'error', 'message': 'Missing media_type or media_id'}), 400
-    res = player_service.mark_media_watched(media_type, media_id, season=season, episode=episode)
-    return jsonify(res), 200 if res.get('status') == 'success' else 400
 
 
 # ── Activity & Disk Endpoints ────────────────────────────────────────────────
