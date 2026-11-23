@@ -357,7 +357,7 @@ def _clean_subtitle_text(text: str) -> str:
 
 
 def srt_to_vtt(srt_content: str, offset_sec: float = 0.0) -> str:
-    """Convert SubRip (.srt) or WebVTT text content into clean HTML5 WebVTT (.vtt), optionally shifted by offset_sec."""
+    """Convert SubRip (.srt) or WebVTT text content into clean HTML5 WebVTT (.vtt), dropping cues before offset_sec."""
     text = (srt_content or '').lstrip('\ufeff').replace('\r\n', '\n').replace('\r', '\n')
     text = re.sub(r'^WEBVTT[^\n]*\n+', '', text).strip()
     text = _clean_subtitle_text(text)
@@ -380,18 +380,40 @@ def srt_to_vtt(srt_content: str, offset_sec: float = 0.0) -> str:
     offset_ms = int(round(max(0.0, float(offset_sec or 0.0)) * 1000))
 
     ts_pat = re.compile(
-        r'(?:(\d{1,2}):)?(\d{2}):(\d{2})[,\.](\d{3})\s*-->\s*(?:(\d{1,2}):)?(\d{2}):(\d{2})[,\.](\d{3})'
+        r'^(?:(\d{1,2}):)?(\d{2}):(\d{2})[,\.](\d{3})\s*-->\s*(?:(\d{1,2}):)?(\d{2}):(\d{2})[,\.](\d{3})(.*)$'
     )
 
-    def _replace_ts(m: re.Match) -> str:
-        start_ms = _parse_ts_ms(m.group(1), m.group(2), m.group(3), m.group(4)) - offset_ms
-        end_ms = _parse_ts_ms(m.group(5), m.group(6), m.group(7), m.group(8)) - offset_ms
-        if end_ms <= 0:
-            return "00:00:00.000 --> 00:00:00.001"
-        return f"{_fmt_vtt_ts(start_ms)} --> {_fmt_vtt_ts(end_ms)}"
+    cues_out: list[str] = []
+    for block in re.split(r'\n{2,}', text):
+        lines = [ln.strip() for ln in block.strip().split('\n') if ln.strip()]
+        if not lines:
+            continue
+        ts_idx = -1
+        ts_match = None
+        for idx, ln in enumerate(lines):
+            m = ts_pat.match(ln)
+            if m:
+                ts_idx = idx
+                ts_match = m
+                break
+        if ts_match is None:
+            continue
 
-    text = ts_pat.sub(_replace_ts, text)
-    return "WEBVTT\n\n" + text.strip() + "\n"
+        start_ms = _parse_ts_ms(ts_match.group(1), ts_match.group(2), ts_match.group(3), ts_match.group(4)) - offset_ms
+        end_ms = _parse_ts_ms(ts_match.group(5), ts_match.group(6), ts_match.group(7), ts_match.group(8)) - offset_ms
+        if end_ms <= 50:
+            # Drop cues that already finished before the current seek offset!
+            continue
+        if start_ms < 0:
+            start_ms = 0
+
+        payload_lines = lines[ts_idx + 1:]
+        if not payload_lines:
+            continue
+
+        cues_out.append(f"{_fmt_vtt_ts(start_ms)} --> {_fmt_vtt_ts(end_ms)}\n" + "\n".join(payload_lines))
+
+    return "WEBVTT\n\n" + "\n\n".join(cues_out) + "\n"
 
 
 def get_subtitle_vtt(
