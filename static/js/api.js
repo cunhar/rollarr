@@ -170,6 +170,38 @@ const Api = {
             body: JSON.stringify({ service, ...params })
         });
         return await res.json();
+    },
+
+    async fetchPlayerInfo(mediaType, mediaId, season = null, episode = null) {
+        const params = new URLSearchParams();
+        if (season !== null && season !== undefined) params.set('season', season);
+        if (episode !== null && episode !== undefined) params.set('episode', episode);
+        const qs = params.toString() ? `?${params.toString()}` : '';
+        const res = await fetch(`/api/player/info/${mediaType}/${mediaId}${qs}`);
+        return { ok: res.ok, data: await res.json() };
+    },
+
+    async sendPlayerHeartbeat(payload) {
+        const res = await fetch('/api/player/heartbeat', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload)
+        });
+        return res.ok ? await res.json() : null;
+    },
+
+    async markMediaWatched(mediaType, mediaId, season = null, episode = null) {
+        const res = await fetch('/api/player/watched', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                media_type: mediaType,
+                media_id: mediaId,
+                season,
+                episode
+            })
+        });
+        return { ok: res.ok, data: await res.json() };
     }
 };
 

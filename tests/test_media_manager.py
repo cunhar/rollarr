@@ -49,11 +49,9 @@ class TestMediaManagerAndDb(unittest.TestCase):
             season=1, episode=2, nzb_title='Severance.S01E02.1080p',
             nzb_url='http://nzb/2', nzb_guid='guid-2', size_bytes=1024,
         )
-        ok, _ = db.move_download(dl2['id'], 'up')
-        self.assertTrue(ok)
+        self.assertTrue(db.move_download(dl2['id'], 'up'))
         self.assertEqual(db.get_next_queued_download()['id'], dl2['id'])
-        ok, _ = db.move_download(dl2['id'], 'down')
-        self.assertTrue(ok)
+        self.assertTrue(db.move_download(dl2['id'], 'down'))
         self.assertEqual(db.get_next_queued_download()['id'], dl['id'])
 
         db.add_to_blocklist('guid-1', 'Severance.S01E01.1080p', 'missing articles')

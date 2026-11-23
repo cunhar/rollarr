@@ -391,6 +391,7 @@ def get_show_episodes_status(show_id: int) -> dict[str, Any]:
     earliest_active = min(active_eps) if active_eps else None
     latest_active = max(active_eps) if active_eps else None
     window_full = len(active_eps) >= get_rolling_window()
+    prog_map = db.get_show_playback_map(show_id)
 
     seasons_map: dict[int, list[dict[str, Any]]] = {}
     for ep in episodes:
@@ -409,6 +410,11 @@ def get_show_episodes_status(show_id: int) -> dict[str, Any]:
         else:
             ep_status = 'missing'
 
+        ep_prog = prog_map.get(cur_key) if ep_status == 'downloaded' else None
+        res_pos = round(float(ep_prog['position_sec']), 1) if ep_prog else 0.0
+        res_dur = round(float(ep_prog['duration_sec']), 1) if ep_prog else 0.0
+        res_pct = round(min(99.0, res_pos / res_dur * 100.0)) if (res_dur > 0 and res_pos > 15) else 0
+
         seasons_map.setdefault(s_num, []).append({
             'season': s_num,
             'episode': e_num,
@@ -416,6 +422,9 @@ def get_show_episodes_status(show_id: int) -> dict[str, Any]:
             'airdate': ep['airdate'],
             'aired': ep['aired'],
             'status': ep_status,
+            'resume_position_sec': res_pos,
+            'duration_sec': res_dur,
+            'resume_pct': res_pct,
         })
 
     seasons = []

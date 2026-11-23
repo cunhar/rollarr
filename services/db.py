@@ -110,6 +110,17 @@ def init_db():
                 reason     TEXT,
                 failed_at  TEXT NOT NULL
             );
+
+            CREATE TABLE IF NOT EXISTS playback_progress (
+                media_type   TEXT NOT NULL,      -- 'episode' | 'movie'
+                media_id     INTEGER NOT NULL,   -- shows.id or movies.id
+                season       INTEGER NOT NULL DEFAULT 0,
+                episode      INTEGER NOT NULL DEFAULT 0,
+                position_sec REAL NOT NULL DEFAULT 0,
+                duration_sec REAL NOT NULL DEFAULT 0,
+                updated_at   TEXT NOT NULL,
+                PRIMARY KEY (media_type, media_id, season, episode)
+            );
         """)
         # Lightweight schema migration for episode watch-cursor & queue ordering columns
         cols = {r['name'] for r in c.execute("PRAGMA table_info(shows)").fetchall()}
@@ -386,50 +397,29 @@ def list_active_downloads() -> list[dict[str, Any]]:
         return [dict(r) for r in rows]
 
 
-def move_download(download_id: int, direction: str) -> tuple[bool, int | None]:
-    """
-    Move a 'downloading' or 'queued' download one position 'up' or 'down'.
-    Returns (moved: bool, preempt_job_id: int | None).
-    If a queued item is moved above the currently downloading item (or the
-    downloading item is moved down), returns that downloading job's ID so the
-    worker can preempt and re-queue it cleanly.
-    """
+def move_download(download_id: int, direction: str) -> bool:
+    """Move a queued download one position 'up' or 'down' in the queue."""
     direction = (direction or '').lower()
     if direction not in ('up', 'down'):
-        return False, None
+        return False
     with _conn() as c:
         rows = c.execute(
-            """
-            SELECT id, status, COALESCE(queue_order, id) AS ord
-            FROM downloads
-            WHERE status IN ('downloading', 'queued')
-            ORDER BY
-                CASE status WHEN 'downloading' THEN 0 ELSE 1 END ASC,
-                ord ASC,
-                id ASC
-            """
+            "SELECT id, COALESCE(queue_order, id) AS ord FROM downloads WHERE status = 'queued' ORDER BY ord ASC, id ASC"
         ).fetchall()
         ids = [r['id'] for r in rows]
-        statuses = {r['id']: r['status'] for r in rows}
         if download_id not in ids:
-            return False, None
+            return False
         idx = ids.index(download_id)
         swap_idx = idx - 1 if direction == 'up' else idx + 1
         if swap_idx < 0 or swap_idx >= len(ids):
-            return False, None
+            return False
 
-        # Swap positions in the list
-        ids[idx], ids[swap_idx] = ids[swap_idx], ids[idx]
-        for new_ord, dl_id in enumerate(ids, start=1):
+        # Normalize unique order values and swap the two adjacent items
+        orders = list(range(1, len(ids) + 1))
+        orders[idx], orders[swap_idx] = orders[swap_idx], orders[idx]
+        for dl_id, new_ord in zip(ids, orders):
             c.execute("UPDATE downloads SET queue_order = ? WHERE id = ?", (new_ord, dl_id))
-
-        # Check if a currently downloading job is no longer at position 0
-        preempt_id = None
-        for pos, dl_id in enumerate(ids):
-            if statuses[dl_id] == 'downloading' and pos > 0:
-                preempt_id = dl_id
-                break
-        return True, preempt_id
+        return True
 
 
 def list_recent_downloads(limit: int = 20) -> list[dict[str, Any]]:
@@ -460,3 +450,80 @@ def get_blocklisted_guids() -> set[str]:
     with _conn() as c:
         rows = c.execute("SELECT nzb_guid FROM blocklist").fetchall()
         return {r['nzb_guid'] for r in rows}
+
+
+# ── Playback Progress ────────────────────────────────────────────────────────
+
+def save_playback_progress(
+    media_type: str,
+    media_id: int,
+    position_sec: float,
+    duration_sec: float = 0.0,
+    season: int | None = None,
+    episode: int | None = None,
+):
+    s_val = int(season or 0) if media_type == 'episode' else 0
+    e_val = int(episode or 0) if media_type == 'episode' else 0
+    ts = now_str()
+    with _conn() as c:
+        c.execute(
+            """
+            INSERT INTO playback_progress (
+                media_type, media_id, season, episode, position_sec, duration_sec, updated_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?)
+            ON CONFLICT(media_type, media_id, season, episode) DO UPDATE SET
+                position_sec = excluded.position_sec,
+                duration_sec = CASE WHEN excluded.duration_sec > 0 THEN excluded.duration_sec ELSE playback_progress.duration_sec END,
+                updated_at   = excluded.updated_at
+            """,
+            (media_type, int(media_id), s_val, e_val, float(position_sec), float(duration_sec or 0.0), ts),
+        )
+
+
+def get_playback_progress(
+    media_type: str,
+    media_id: int,
+    season: int | None = None,
+    episode: int | None = None,
+) -> dict[str, Any] | None:
+    s_val = int(season or 0) if media_type == 'episode' else 0
+    e_val = int(episode or 0) if media_type == 'episode' else 0
+    with _conn() as c:
+        row = c.execute(
+            "SELECT * FROM playback_progress WHERE media_type = ? AND media_id = ? AND season = ? AND episode = ?",
+            (media_type, int(media_id), s_val, e_val),
+        ).fetchone()
+        return dict(row) if row else None
+
+
+def get_show_playback_map(show_id: int) -> dict[tuple[int, int], dict[str, Any]]:
+    with _conn() as c:
+        rows = c.execute(
+            "SELECT * FROM playback_progress WHERE media_type = 'episode' AND media_id = ?",
+            (int(show_id),),
+        ).fetchall()
+        return {(int(r['season']), int(r['episode'])): dict(r) for r in rows}
+
+
+def get_all_movies_playback_map() -> dict[int, dict[str, Any]]:
+    with _conn() as c:
+        rows = c.execute(
+            "SELECT * FROM playback_progress WHERE media_type = 'movie'"
+        ).fetchall()
+        return {int(r['media_id']): dict(r) for r in rows}
+
+
+def clear_playback_progress(
+    media_type: str,
+    media_id: int,
+    season: int | None = None,
+    episode: int | None = None,
+):
+    s_val = int(season or 0) if media_type == 'episode' else 0
+    e_val = int(episode or 0) if media_type == 'episode' else 0
+    with _conn() as c:
+        c.execute(
+            "DELETE FROM playback_progress WHERE media_type = ? AND media_id = ? AND season = ? AND episode = ?",
+            (media_type, int(media_id), s_val, e_val),
+        )
+

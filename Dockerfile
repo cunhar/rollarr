@@ -19,8 +19,8 @@ FROM python:3.11-alpine
 
 WORKDIR /app
 
-# Usenet post-processing tools: PAR2 repair + 7zip + official RARLAB unrar
-RUN apk add --no-cache par2cmdline 7zip libstdc++
+# Usenet post-processing tools: PAR2 repair + 7zip + official RARLAB unrar + FFmpeg for built-in direct-stream player
+RUN apk add --no-cache par2cmdline 7zip libstdc++ ffmpeg
 
 # Copy compiled Python packages and unrar binary from builder (no build tools left in final image)
 COPY --from=builder /install /usr/local
@@ -35,4 +35,4 @@ COPY *.py .
 
 EXPOSE 5000
 
-CMD ["sh", "-c", "gunicorn --bind 0.0.0.0:${PORT:-5000} --workers 1 --threads 4 --timeout 120 app:app"]
+CMD ["sh", "-c", "gunicorn --bind 0.0.0.0:${PORT:-5000} --workers 1 --threads 8 --timeout 0 app:app"]

@@ -610,11 +610,18 @@ function loadShowEpisodes(showId, forceReload = false) {
                                        : st === 'missing' ? 'badge-amber'
                                        : 'badge-dim';
                         const badgeTxt = st === 'downloaded' ? 'ON DISK' : st.toUpperCase();
-                        const actions = (st === 'missing' || st === 'watched' || st === 'upcoming')
-                            ? `<button class="btn-clear btn-ep" onclick="queueSingleEpisode(${showId}, ${ep.season}, ${ep.episode}, this)">Get</button>
+                        let actions = '';
+                        if (st === 'downloaded') {
+                            const playLabel = (ep.resume_pct && ep.resume_pct > 0)
+                                ? `▶ Resume (${ep.resume_pct}%)`
+                                : '▶ Play';
+                            actions = `<button class="btn-clear btn-ep btn-play" onclick="openPlayer('episode', ${showId}, ${ep.season}, ${ep.episode})">${playLabel}</button>
+                               <button class="btn-clear btn-ep" title="Mark watched & recycle" onclick="markItemWatchedFromList('episode', ${showId}, ${ep.season}, ${ep.episode}, this)">✓ Watched</button>`;
+                        } else if (st === 'missing' || st === 'watched' || st === 'upcoming') {
+                            actions = `<button class="btn-clear btn-ep" onclick="queueSingleEpisode(${showId}, ${ep.season}, ${ep.episode}, this)">Get</button>
                                <button class="btn-clear btn-ep" onclick="openEpisodePicker(${showId}, ${ep.season}, ${ep.episode})">Pick</button>
-                               <button class="btn-clear btn-ep" onclick="queueShowFrom(${showId}, ${ep.season}, ${ep.episode}, this)">Start Here</button>`
-                            : '';
+                               <button class="btn-clear btn-ep" onclick="queueShowFrom(${showId}, ${ep.season}, ${ep.episode}, this)">Start Here</button>`;
+                        }
                         return `
                         <div class="ep-row">
                             <div class="ep-row-left">
@@ -709,20 +716,26 @@ function loadLibrary() {
             } else {
                 moviesEl.innerHTML = movies.map(m => {
                     const st = (m.status || 'wanted').toLowerCase();
-                    const badgeCls = st === 'downloaded' ? 'badge-green'
+                    const isPlayable = (st === 'downloaded' || m.on_disk);
+                    const badgeCls = isPlayable ? 'badge-green'
                                    : st === 'wanted' ? 'badge-amber'
                                    : st === 'downloading' ? 'badge-blue'
                                    : 'badge-dim';
+                    const playLabel = (m.resume_pct && m.resume_pct > 0)
+                        ? `▶ Resume (${m.resume_pct}%)`
+                        : '▶ Play';
                     return `
                     <div class="library-row">
                         <div style="display:flex; align-items:center; gap:10px;">
                             ${m.poster_url ? `<img class="lib-thumb" src="${escapeHtml(m.poster_url)}" alt="">` : `<span class="lib-thumb lib-thumb-placeholder">🎬</span>`}
                             <strong>${escapeHtml(m.title)}</strong>
                             ${m.year ? `<span class="media-year">(${m.year})</span>` : ''}
-                            <span class="badge ${badgeCls}">${escapeHtml(m.status || 'wanted')}</span>
+                            <span class="badge ${badgeCls}">${escapeHtml(isPlayable ? 'on disk' : (m.status || 'wanted'))}</span>
                         </div>
                         <div class="ep-controls-row">
-                            ${st === 'wanted' ? `<button class="btn-clear" onclick="openMoviePicker(${m.id})">Pick</button>` : ''}
+                            ${isPlayable ? `<button class="btn-clear btn-play" onclick="openPlayer('movie', ${m.id})">${playLabel}</button>
+                                            <button class="btn-clear" title="Mark watched & recycle" onclick="markItemWatchedFromList('movie', ${m.id}, null, null, this)">✓ Watched</button>` : ''}
+                            ${st === 'wanted' && !isPlayable ? `<button class="btn-clear" onclick="openMoviePicker(${m.id})">Pick</button>` : ''}
                             <button class="btn-clear" onclick="deleteLibraryItem('movie', ${m.id}, this)">Remove</button>
                         </div>
                     </div>`;
@@ -1248,9 +1261,525 @@ function updatePillLinks(urls) {
     }
 }
 
+// ── Built-in TV & Web Media Player ───────────────────────────────────────────
+
+let _playerCtx = null;
+let _playerHeartbeatTimer = null;
+let _playerOsdTimer = null;
+let _playerScrubbing = false;
+
+function _fmtTime(totalSec) {
+    const s = Math.max(0, Math.floor(Number(totalSec) || 0));
+    const hrs = Math.floor(s / 3600);
+    const mins = Math.floor((s % 3600) / 60);
+    const secs = s % 60;
+    if (hrs > 0) {
+        return `${hrs}:${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`;
+    }
+    return `${mins}:${String(secs).padStart(2, '0')}`;
+}
+
+function _currentPlaybackPosition() {
+    if (!_playerCtx) return 0;
+    const video = el('rolarr-video');
+    const vTime = video ? (Number(video.currentTime) || 0) : 0;
+    return (_playerCtx.stream_mode === 'remux')
+        ? (_playerCtx.base_offset_sec + vTime)
+        : vTime;
+}
+
+function _currentPlaybackDuration() {
+    if (!_playerCtx) return 0;
+    const video = el('rolarr-video');
+    const vDur = (video && Number.isFinite(video.duration) && video.duration > 0) ? video.duration : 0;
+    return _playerCtx.duration_sec > 0 ? _playerCtx.duration_sec : vDur;
+}
+
+function _buildStreamUrl(ctx, startSec, audioIdx) {
+    const params = new URLSearchParams();
+    if (ctx.season !== null && ctx.season !== undefined) params.set('season', ctx.season);
+    if (ctx.episode !== null && ctx.episode !== undefined) params.set('episode', ctx.episode);
+    if (startSec > 0.5) params.set('start', Math.floor(startSec));
+    if (audioIdx > 0) params.set('audio', audioIdx);
+    const qs = params.toString() ? `?${params.toString()}` : '';
+    return `/api/player/stream/${ctx.media_type}/${ctx.media_id}${qs}`;
+}
+
+function _buildSubtitleUrl(ctx, subId) {
+    const params = new URLSearchParams();
+    if (ctx.season !== null && ctx.season !== undefined) params.set('season', ctx.season);
+    if (ctx.episode !== null && ctx.episode !== undefined) params.set('episode', ctx.episode);
+    const qs = params.toString() ? `?${params.toString()}` : '';
+    return `/api/player/subtitles/${ctx.media_type}/${ctx.media_id}/${encodeURIComponent(subId)}.vtt${qs}`;
+}
+
+function wakePlayerOsd() {
+    const modal = el('player-modal');
+    if (!modal || modal.style.display === 'none') return;
+    modal.classList.remove('osd-hidden');
+    if (_playerOsdTimer) clearTimeout(_playerOsdTimer);
+    _playerOsdTimer = setTimeout(() => {
+        const video = el('rolarr-video');
+        if (video && !video.paused) {
+            modal.classList.add('osd-hidden');
+        }
+    }, 4500);
+}
+
+function onPlayerBackdropClick(e) {
+    if (e.target && e.target.id === 'rolarr-video') {
+        const modal = el('player-modal');
+        if (modal && modal.classList.contains('osd-hidden')) {
+            wakePlayerOsd();
+        } else {
+            togglePlayerPlay();
+        }
+    }
+}
+
+function openPlayer(mediaType, mediaId, season = null, episode = null) {
+    const modal = el('player-modal');
+    const video = el('rolarr-video');
+    if (!modal || !video) return;
+
+    modal.style.display = 'flex';
+    wakePlayerOsd();
+    setText('player-title', 'Loading media...');
+    setText('player-subtitle', '');
+
+    Api.fetchPlayerInfo(mediaType, mediaId, season, episode)
+        .then(({ ok, data }) => {
+            if (!ok || !data || data.status !== 'success') {
+                showToast((data && data.message) || 'Could not start playback', 'err');
+                closePlayer();
+                return;
+            }
+
+            _playerCtx = {
+                media_type: data.media_type,
+                media_id: data.media_id,
+                season: data.season,
+                episode: data.episode,
+                title: data.title,
+                filename: data.filename,
+                duration_sec: Number(data.duration_sec) || 0,
+                stream_mode: data.stream_mode || 'remux',
+                base_offset_sec: Number(data.resume_position_sec) || 0,
+                audio_idx: 0,
+                subtitles: data.subtitles || [],
+                next_episode: data.next_episode || null,
+            };
+
+            setText('player-title', data.title);
+            setText('player-subtitle', `${data.filename} · ${(data.video_codec || 'h264').toUpperCase()}`);
+
+            const badge = el('player-mode-badge');
+            if (badge) {
+                if (_playerCtx.stream_mode === 'direct') {
+                    badge.textContent = 'DIRECT PLAY';
+                    badge.className = 'badge badge-green';
+                } else {
+                    badge.textContent = 'DIRECT STREAM';
+                    badge.className = 'badge badge-blue';
+                }
+            }
+
+            const nextBtn = el('btn-player-next');
+            if (nextBtn) {
+                if (_playerCtx.next_episode) {
+                    nextBtn.style.display = '';
+                    nextBtn.textContent = `⏭ Next (${_playerCtx.next_episode.tag})`;
+                } else {
+                    nextBtn.style.display = 'none';
+                }
+            }
+
+            // Populate audio selector
+            const audioWrap = el('player-audio-wrap');
+            const audioSel = el('player-audio-select');
+            const aTracks = data.audio_tracks || [];
+            if (audioWrap && audioSel) {
+                if (aTracks.length > 1) {
+                    audioWrap.style.display = '';
+                    audioSel.innerHTML = aTracks.map(a => `<option value="${a.index}">${escapeHtml(a.label)}</option>`).join('');
+                } else {
+                    audioWrap.style.display = 'none';
+                    audioSel.innerHTML = '';
+                }
+            }
+
+            // Populate subtitles selector & <track> elements
+            const subSel = el('player-sub-select');
+            video.querySelectorAll('track').forEach(t => t.remove());
+            if (subSel) {
+                const subs = _playerCtx.subtitles;
+                let opts = '<option value="off">Subtitles Off</option>';
+                let defaultSubId = 'off';
+                subs.forEach((s, idx) => {
+                    if (idx === 0) defaultSubId = s.id;
+                    opts += `<option value="${escapeHtml(s.id)}" ${idx === 0 ? 'selected' : ''}>${escapeHtml(s.label)}</option>`;
+                    const trk = document.createElement('track');
+                    trk.kind = 'subtitles';
+                    trk.label = s.label;
+                    trk.srclang = s.lang || 'en';
+                    trk.src = _buildSubtitleUrl(_playerCtx, s.id);
+                    trk.dataset.subId = s.id;
+                    if (idx === 0) trk.default = true;
+                    video.appendChild(trk);
+                });
+                subSel.innerHTML = opts;
+                setTimeout(() => onPlayerSubtitleChange(defaultSubId), 200);
+            }
+
+            _startVideoStream(_playerCtx.base_offset_sec, 0);
+
+            if (_playerHeartbeatTimer) clearInterval(_playerHeartbeatTimer);
+            _playerHeartbeatTimer = setInterval(_sendCurrentHeartbeat, 10000);
+
+            const playBtn = el('btn-player-play');
+            if (playBtn) playBtn.focus();
+        })
+        .catch(() => {
+            showToast('Failed to load player metadata', 'err');
+            closePlayer();
+        });
+}
+
+function _startVideoStream(startSec, audioIdx) {
+    if (!_playerCtx) return;
+    const video = el('rolarr-video');
+    if (!video) return;
+
+    _playerCtx.audio_idx = Number(audioIdx) || 0;
+    if (_playerCtx.stream_mode === 'direct' && _playerCtx.audio_idx === 0) {
+        _playerCtx.base_offset_sec = 0;
+        video.src = _buildStreamUrl(_playerCtx, 0, 0);
+        video.load();
+        if (startSec > 1) {
+            const onLoaded = () => {
+                video.removeEventListener('loadedmetadata', onLoaded);
+                try { video.currentTime = startSec; } catch (_) {}
+            };
+            video.addEventListener('loadedmetadata', onLoaded);
+        }
+    } else {
+        _playerCtx.stream_mode = 'remux';
+        _playerCtx.base_offset_sec = Math.max(0, Number(startSec) || 0);
+        video.src = _buildStreamUrl(_playerCtx, _playerCtx.base_offset_sec, _playerCtx.audio_idx);
+        video.load();
+    }
+
+    video.play().catch(() => {});
+    setTimeout(() => {
+        const subSel = el('player-sub-select');
+        if (subSel) onPlayerSubtitleChange(subSel.value);
+    }, 350);
+}
+
+function togglePlayerPlay() {
+    const video = el('rolarr-video');
+    if (!video) return;
+    wakePlayerOsd();
+    if (video.paused) {
+        video.play().catch(() => {});
+    } else {
+        video.pause();
+    }
+}
+
+function seekPlayerTo(targetSec) {
+    if (!_playerCtx) return;
+    const video = el('rolarr-video');
+    if (!video) return;
+    wakePlayerOsd();
+
+    const dur = _currentPlaybackDuration();
+    const clamped = dur > 0 ? Math.max(0, Math.min(dur - 2, targetSec)) : Math.max(0, targetSec);
+
+    if (_playerCtx.stream_mode === 'direct' && _playerCtx.audio_idx === 0) {
+        try {
+            video.currentTime = clamped;
+        } catch (_) {}
+    } else {
+        _startVideoStream(clamped, _playerCtx.audio_idx);
+    }
+}
+
+function seekPlayerRelative(deltaSec) {
+    const cur = _currentPlaybackPosition();
+    seekPlayerTo(cur + deltaSec);
+}
+
+function onPlayerSeekInput(sliderVal) {
+    _playerScrubbing = true;
+    wakePlayerOsd();
+    const dur = _currentPlaybackDuration();
+    if (dur > 0) {
+        const previewSec = (Number(sliderVal) / 1000) * dur;
+        setText('player-time-cur', _fmtTime(previewSec));
+    }
+}
+
+function onPlayerSeekCommit(sliderVal) {
+    _playerScrubbing = false;
+    const dur = _currentPlaybackDuration();
+    if (dur > 0) {
+        const targetSec = (Number(sliderVal) / 1000) * dur;
+        seekPlayerTo(targetSec);
+    }
+}
+
+function onPlayerAudioChange(audioIdx) {
+    if (!_playerCtx) return;
+    const curPos = _currentPlaybackPosition();
+    _startVideoStream(curPos, Number(audioIdx) || 0);
+}
+
+function onPlayerSubtitleChange(subId) {
+    const video = el('rolarr-video');
+    if (!video) return;
+    const tracks = video.textTracks;
+    const domTracks = Array.from(video.querySelectorAll('track'));
+    for (let i = 0; i < tracks.length; i++) {
+        const domTrk = domTracks[i];
+        const id = domTrk ? domTrk.dataset.subId : '';
+        tracks[i].mode = (subId !== 'off' && id === subId) ? 'showing' : 'disabled';
+    }
+}
+
+function togglePlayerFullscreen() {
+    const modal = el('player-modal');
+    if (!modal) return;
+    if (!document.fullscreenElement) {
+        if (modal.requestFullscreen) modal.requestFullscreen().catch(() => {});
+    } else {
+        if (document.exitFullscreen) document.exitFullscreen().catch(() => {});
+    }
+}
+
+function _sendCurrentHeartbeat(forceState = null) {
+    if (!_playerCtx) return Promise.resolve(null);
+    const video = el('rolarr-video');
+    const state = forceState || (video && video.paused ? 'paused' : 'playing');
+    const pos = _currentPlaybackPosition();
+    const dur = _currentPlaybackDuration();
+    return Api.sendPlayerHeartbeat({
+        media_type: _playerCtx.media_type,
+        media_id: _playerCtx.media_id,
+        season: _playerCtx.season,
+        episode: _playerCtx.episode,
+        title: _playerCtx.title,
+        position_sec: pos,
+        duration_sec: dur,
+        state: state,
+        stream_mode: _playerCtx.stream_mode,
+    });
+}
+
+function closePlayer() {
+    const modal = el('player-modal');
+    const video = el('rolarr-video');
+    if (_playerHeartbeatTimer) {
+        clearInterval(_playerHeartbeatTimer);
+        _playerHeartbeatTimer = null;
+    }
+    if (_playerOsdTimer) {
+        clearTimeout(_playerOsdTimer);
+        _playerOsdTimer = null;
+    }
+    if (_playerCtx) {
+        const showIdToReload = _playerCtx.media_type === 'episode' ? _playerCtx.media_id : null;
+        _sendCurrentHeartbeat('stopped').finally(() => {
+            loadLibrary();
+            if (showIdToReload) loadShowEpisodes(showIdToReload, true);
+            setTimeout(pollAll, 300);
+        });
+        _playerCtx = null;
+    }
+    if (video) {
+        video.pause();
+        video.removeAttribute('src');
+        video.load();
+    }
+    if (document.fullscreenElement && document.exitFullscreen) {
+        document.exitFullscreen().catch(() => {});
+    }
+    if (modal) {
+        modal.style.display = 'none';
+        modal.classList.remove('osd-hidden');
+    }
+}
+
+function playNextEpisodeFromOsd() {
+    if (!_playerCtx || !_playerCtx.next_episode) return;
+    const nxt = _playerCtx.next_episode;
+    const cur = _playerCtx;
+    Api.markMediaWatched(cur.media_type, cur.media_id, cur.season, cur.episode).then(({ data }) => {
+        if (data && data.message) showToast(data.message, 'ok');
+        openPlayer('episode', nxt.show_id, nxt.season, nxt.episode);
+    });
+}
+
+function markCurrentPlayingWatched() {
+    if (!_playerCtx) return;
+    const cur = _playerCtx;
+    const nxt = cur.next_episode;
+    Api.markMediaWatched(cur.media_type, cur.media_id, cur.season, cur.episode).then(({ ok, data }) => {
+        showToast((data && data.message) || 'Marked as watched', ok ? 'ok' : 'err');
+        _playerCtx = null;
+        closePlayer();
+        loadLibrary();
+        if (cur.media_type === 'episode') loadShowEpisodes(cur.media_id, true);
+        if (nxt) {
+            showToast(`Up Next: ${nxt.tag} is ready on disk`, 'info');
+        }
+        setTimeout(pollAll, 400);
+    });
+}
+
+function markItemWatchedFromList(mediaType, mediaId, season = null, episode = null, btnEl = null) {
+    if (btnEl && btnEl.dataset.confirming !== '1') {
+        const orig = btnEl.textContent;
+        btnEl.dataset.confirming = '1';
+        btnEl.dataset.origText = orig;
+        btnEl.textContent = '✓ Confirm Watched?';
+        btnEl.style.borderColor = 'var(--green)';
+        btnEl.style.color = 'var(--green)';
+        btnEl._confirmTimer = setTimeout(() => {
+            btnEl.dataset.confirming = '';
+            btnEl.textContent = btnEl.dataset.origText || '✓ Watched';
+            btnEl.style.borderColor = '';
+            btnEl.style.color = '';
+        }, 4500);
+        return;
+    }
+    if (btnEl && btnEl._confirmTimer) clearTimeout(btnEl._confirmTimer);
+    if (btnEl) {
+        btnEl.disabled = true;
+        btnEl.textContent = 'Recycling...';
+    }
+    Api.markMediaWatched(mediaType, mediaId, season, episode)
+        .then(({ ok, data }) => {
+            showToast((data && data.message) || 'Marked as watched', ok ? 'ok' : 'err');
+            if (mediaType === 'episode') loadShowEpisodes(mediaId, true);
+            else loadLibrary();
+            setTimeout(pollAll, 500);
+        })
+        .catch(() => {
+            showToast('Failed to mark watched', 'err');
+            if (btnEl) {
+                btnEl.disabled = false;
+                btnEl.textContent = '✓ Watched';
+            }
+        });
+}
+
+function _initPlayerEvents() {
+    const video = el('rolarr-video');
+    if (!video) return;
+
+    video.addEventListener('play', () => {
+        setText('btn-player-play', '⏸ Pause');
+        wakePlayerOsd();
+    });
+
+    video.addEventListener('pause', () => {
+        setText('btn-player-play', '▶ Play');
+        const modal = el('player-modal');
+        if (modal) modal.classList.remove('osd-hidden');
+    });
+
+    video.addEventListener('timeupdate', () => {
+        if (!_playerCtx || _playerScrubbing) return;
+        const pos = _currentPlaybackPosition();
+        const dur = _currentPlaybackDuration();
+        setText('player-time-cur', _fmtTime(pos));
+        setText('player-time-dur', _fmtTime(dur));
+        const seekbar = el('player-seekbar');
+        if (seekbar && dur > 0) {
+            seekbar.value = Math.min(1000, Math.max(0, Math.round((pos / dur) * 1000)));
+        }
+    });
+
+    video.addEventListener('ended', () => {
+        if (!_playerCtx) return;
+        const cur = _playerCtx;
+        const nxt = cur.next_episode;
+        _sendCurrentHeartbeat('ended').then(res => {
+            if (res && res.watched_triggered && res.watched_result) {
+                showToast(res.watched_result.message || 'Finished & recycled', 'ok');
+            }
+            if (nxt) {
+                showToast(`Auto-playing next episode: ${nxt.tag}`, 'info');
+                openPlayer('episode', nxt.show_id, nxt.season, nxt.episode);
+            } else {
+                _playerCtx = null;
+                closePlayer();
+                loadLibrary();
+                if (cur.media_type === 'episode') loadShowEpisodes(cur.media_id, true);
+            }
+        });
+    });
+
+    document.addEventListener('keydown', (e) => {
+        const modal = el('player-modal');
+        if (!modal || modal.style.display === 'none') return;
+
+        wakePlayerOsd();
+
+        if (e.key === 'Escape' || e.key === 'Backspace' || e.key === 'GoBack') {
+            if (document.activeElement && document.activeElement.tagName === 'SELECT') return;
+            e.preventDefault();
+            closePlayer();
+            return;
+        }
+        if (e.key === ' ' || e.key === 'MediaPlayPause') {
+            e.preventDefault();
+            togglePlayerPlay();
+            return;
+        }
+        if (e.key === 'MediaPlay') {
+            e.preventDefault();
+            video.play().catch(() => {});
+            return;
+        }
+        if (e.key === 'MediaPause') {
+            e.preventDefault();
+            video.pause();
+            return;
+        }
+        if (e.key === 'MediaFastForward') {
+            e.preventDefault();
+            seekPlayerRelative(30);
+            return;
+        }
+        if (e.key === 'MediaRewind') {
+            e.preventDefault();
+            seekPlayerRelative(-15);
+            return;
+        }
+    });
+}
+
+window.openPlayer = openPlayer;
+window.closePlayer = closePlayer;
+window.togglePlayerPlay = togglePlayerPlay;
+window.seekPlayerRelative = seekPlayerRelative;
+window.onPlayerSeekInput = onPlayerSeekInput;
+window.onPlayerSeekCommit = onPlayerSeekCommit;
+window.onPlayerAudioChange = onPlayerAudioChange;
+window.onPlayerSubtitleChange = onPlayerSubtitleChange;
+window.togglePlayerFullscreen = togglePlayerFullscreen;
+window.wakePlayerOsd = wakePlayerOsd;
+window.onPlayerBackdropClick = onPlayerBackdropClick;
+window.playNextEpisodeFromOsd = playNextEpisodeFromOsd;
+window.markCurrentPlayingWatched = markCurrentPlayingWatched;
+window.markItemWatchedFromList = markItemWatchedFromList;
+
 // Global initialization
 window.addEventListener('hashchange', handleHashChange);
 window.addEventListener('DOMContentLoaded', () => {
+    _initPlayerEvents();
     handleHashChange();
     pollAll();
     loadLibrary();
