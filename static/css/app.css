@@ -718,7 +718,7 @@ body {
 .media-year {
     color: var(--text-sub);
     font-weight: 400;
-    font-family: var(--mono);
+    font-family: var(--sans);
     font-size: 12px;
 }
 .media-card-overview {
@@ -806,7 +806,7 @@ body {
     white-space: nowrap;
 }
 .ep-airdate {
-    font-family: var(--mono);
+    font-family: var(--sans);
     font-size: 11px;
     color: var(--text-sub);
     flex-shrink: 0;

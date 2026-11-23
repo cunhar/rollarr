@@ -18,6 +18,21 @@ function escapeHtml(str) {
     return String(str).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 }
 
+const MONTH_NAMES = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+
+function formatDate(raw) {
+    if (!raw) return '';
+    const str = String(raw).trim();
+    const m = str.match(/^(\d{4})-(\d{2})-(\d{2})(?:\s+(.+))?$/);
+    if (!m) return str;
+    const year = m[1];
+    const monthIdx = parseInt(m[2], 10) - 1;
+    const day = parseInt(m[3], 10);
+    const timePart = m[4] ? ' • ' + m[4] : '';
+    if (monthIdx < 0 || monthIdx > 11 || isNaN(day)) return str;
+    return `${MONTH_NAMES[monthIdx]} ${day}, ${year}${timePart}`;
+}
+
 function switchTab(name, updateHash = true) {
     if (!VALID_TABS.includes(name)) name = 'dashboard';
 
@@ -150,7 +165,7 @@ function renderLogEntry(log, isOpen, logKey) {
         <div class="log-gutter ${gutter}"></div>
         <div class="log-body">
             <div class="log-meta">
-                <span class="log-ts">${escapeHtml(log.timestamp)}</span>
+                <span class="log-ts">${escapeHtml(formatDate(log.timestamp))}</span>
                 <span class="log-tag ${gutter}">${escapeHtml(displayStatus)}</span>
             </div>
             <div class="log-msg">${escapeHtml(log.message)}</div>
@@ -605,7 +620,7 @@ function loadShowEpisodes(showId, forceReload = false) {
                             <div class="ep-row-left">
                                 <span class="ep-tag">${tag}</span>
                                 <span class="ep-title">${escapeHtml(ep.title)}</span>
-                                ${ep.airdate ? `<span class="ep-airdate">${escapeHtml(ep.airdate)}</span>` : ''}
+                                ${ep.airdate ? `<span class="ep-airdate">${escapeHtml(formatDate(ep.airdate))}</span>` : ''}
                             </div>
                             <div class="ep-row-right">
                                 <span class="badge ${badgeCls}">${badgeTxt}</span>
@@ -830,7 +845,7 @@ function loadCalendar() {
                     </div>
                 </div>
                 <div style="display:flex; align-items:center; gap:8px; flex-shrink:0;">
-                    <span class="ep-airdate">${escapeHtml(it.airdate)}</span>
+                    <span class="ep-airdate">${escapeHtml(formatDate(it.airdate))}</span>
                     <span class="badge ${whenCls}">${when}</span>
                     ${it.on_disk ? '<span class="badge badge-green">ON DISK</span>' : ''}
                 </div>
