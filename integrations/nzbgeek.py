@@ -167,23 +167,48 @@ def search_movie(
 ) -> list[dict[str, Any]]:
     """
     Search NZBgeek for a movie.
-    Prefers IMDB ID lookup (exact, like Radarr), falling back to title + year query.
+    Queries by IMDB ID first (exact, like Radarr), and also falls back to
+    Newznab movie category text search (t=search&cat=2000) and t=movie&q=...
     """
     results: list[dict[str, Any]] = []
+    seen_guids: set[str] = set()
+
+    def _add_unique(items: list[dict[str, Any]], matched_imdb: bool = False):
+        for it in items:
+            g = it.get('guid') or it.get('nzb_url') or it.get('title')
+            if g and g not in seen_guids:
+                seen_guids.add(g)
+                if matched_imdb:
+                    it['matched_by_imdb'] = True
+                results.append(it)
+
     if imdb_id:
-        clean_imdb = re.sub(r'^tt', '', str(imdb_id))
+        clean_imdb = re.sub(r'^tt', '', str(imdb_id).strip())
         if clean_imdb.isdigit():
-            results = _query({
+            _add_unique(_query({
                 't': 'movie',
                 'imdbid': clean_imdb,
-            })
-    if not results:
-        q = f"{title} {year}" if year else title
-        results = _query({
+            }), matched_imdb=True)
+
+    q_with_year = f"{title} {year}".strip() if year else title.strip()
+    if not results and q_with_year:
+        _add_unique(_query({
+            't': 'search',
+            'cat': '2000',
+            'q': q_with_year,
+        }))
+    if not results and title:
+        _add_unique(_query({
             't': 'movie',
-            'q': q,
-        })
-    logger.info(f"[NZBgeek] Movie search '{title}' ({year or ''}) -> {len(results)} candidate(s)")
+            'q': title.strip(),
+        }))
+    if not results and q_with_year:
+        _add_unique(_query({
+            't': 'search',
+            'q': q_with_year,
+        }))
+
+    logger.info(f"[NZBgeek] Movie search '{title}' ({year or ''}, imdb={imdb_id or 'none'}) -> {len(results)} candidate(s)")
     return results
 
 

@@ -70,6 +70,27 @@ class TestReleaseSelector(unittest.TestCase):
         )
         self.assertEqual([r['guid'] for r in ranked], ['dv_hdr'])
 
+    def test_movie_title_and_year_normalization(self):
+        # 1. "Dune: Part Two" matches "Dune.Part.2.2024..."
+        c1 = [{'title': 'Dune.Part.2.2024.1080p.WEB-DL.DDP5.1.H264-GRP', 'guid': 'm1', 'nzb_url': 'u', 'size_bytes': 5 * 1024**3}]
+        r1 = select_releases(c1, 'movie', {'title': 'Dune: Part Two', 'year': 2024})
+        self.assertEqual(len(r1), 1)
+
+        # 2. "Gladiator II" matches "Gladiator.2.2024..."
+        c2 = [{'title': 'Gladiator.2.2024.1080p.WEB-DL.DDP5.1.H264-GRP', 'guid': 'm2', 'nzb_url': 'u', 'size_bytes': 5 * 1024**3}]
+        r2 = select_releases(c2, 'movie', {'title': 'Gladiator II', 'year': 2024})
+        self.assertEqual(len(r2), 1)
+
+        # 3. "1917" (2019) with adjacent 4-digit year numbers in title
+        c3 = [{'title': '1917.2019.1080p.BluRay.x264-GRP', 'guid': 'm3', 'nzb_url': 'u', 'size_bytes': 5 * 1024**3}]
+        r3 = select_releases(c3, 'movie', {'title': '1917', 'year': 2019})
+        self.assertEqual(len(r3), 1)
+
+        # 4. "Deadpool & Wolverine" matches "Deadpool.and.Wolverine.2024..."
+        c4 = [{'title': 'Deadpool.and.Wolverine.2024.1080p.WEB-DL.DDP5.1-GRP', 'guid': 'm4', 'nzb_url': 'u', 'size_bytes': 5 * 1024**3}]
+        r4 = select_releases(c4, 'movie', {'title': 'Deadpool & Wolverine', 'year': 2024})
+        self.assertEqual(len(r4), 1)
+
 
 if __name__ == '__main__':
     unittest.main()

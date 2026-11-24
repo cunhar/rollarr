@@ -95,6 +95,11 @@ const Api = {
         return { ok: res.ok, data: await res.json() };
     },
 
+    async queueMovie(movieId) {
+        const res = await fetch(`/api/library/movie/${movieId}/queue`, { method: 'POST' });
+        return { ok: res.ok, data: await res.json() };
+    },
+
     async deleteLibraryItem(type, id) {
         const res = await fetch(`/api/library/${type}/${id}`, { method: 'DELETE' });
         return res.ok ? await res.json() : null;

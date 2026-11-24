@@ -512,7 +512,9 @@ function addLibraryItem(type, idx, btnEl) {
     };
     Api.addMedia(type, payload)
         .then(({ ok, data }) => {
-            showToast(data.message || 'Added to library', ok ? 'ok' : 'err');
+            const isSuccess = ok && data && data.status === 'success';
+            const toastType = isSuccess ? 'ok' : (ok && data && data.status === 'warning' ? 'warn' : 'err');
+            showToast(data.message || 'Added to library', toastType);
             if (btnEl) btnEl.textContent = ok ? 'Added ✓' : 'Retry';
             if (btnEl && !ok) btnEl.disabled = false;
             loadLibrary();
@@ -725,7 +727,7 @@ function loadLibrary() {
                             <span class="badge ${badgeCls}">${escapeHtml(m.status || 'wanted')}</span>
                         </div>
                         <div class="ep-controls-row">
-                            ${st === 'wanted' ? `<button class="btn-clear" onclick="openMoviePicker(${m.id})">Pick</button>` : ''}
+                            ${st === 'wanted' ? `<button class="btn-clear btn-ep" onclick="queueSingleMovie(${m.id}, this)">Get</button><button class="btn-clear btn-ep" onclick="openMoviePicker(${m.id})">Pick</button>` : ''}
                             <button type="button" class="btn-clear btn-icon-trash" title="Remove Movie" onclick="deleteLibraryItem('movie', ${m.id}, this)">${SVG_ICONS.trash}</button>
                         </div>
                     </div>`;
@@ -767,6 +769,26 @@ function _renderPickerModal(data) {
             <button class="btn-clear" onclick="grabPickedRelease(${idx}, this)">Grab</button>
         </div>
     `).join('');
+}
+
+function queueSingleMovie(movieId, btnEl) {
+    if (btnEl) {
+        btnEl.disabled = true;
+        btnEl.textContent = '...';
+    }
+    Api.queueMovie(movieId)
+        .then(({ ok, data }) => {
+            showToast(data.message || 'Movie queued', ok && data.status === 'success' ? 'ok' : 'warn');
+            loadLibrary();
+            setTimeout(pollAll, 500);
+        })
+        .catch(() => showToast('Failed to queue movie', 'err'))
+        .finally(() => {
+            if (btnEl) {
+                btnEl.disabled = false;
+                btnEl.textContent = 'Get';
+            }
+        });
 }
 
 function openMoviePicker(movieId) {

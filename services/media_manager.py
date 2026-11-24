@@ -236,6 +236,45 @@ def queue_episode(
     return True, f"Queued {best['title']} ({best['parsed']['resolution']}, score {best['score']})"
 
 
+def _resolve_movie_imdb_id(movie: dict[str, Any]) -> str:
+    """Resolve and persist a missing IMDb ID for a tracked movie via Radarr proxy or IMDb search."""
+    existing = (movie.get('imdb_id') or '').strip()
+    if existing:
+        return existing
+    title = (movie.get('title') or '').strip()
+    year = movie.get('year')
+    tmdb_id = movie.get('tmdb_id')
+    if not title:
+        return ''
+    q = f"{title} {year}".strip() if year else title
+    candidates = metadata.search_movies_radarr_proxy(q) or metadata.search_movies_imdb(q)
+    target_clean = clean_title(title)
+    resolved = ''
+    for c in candidates:
+        c_imdb = (c.get('imdb_id') or '').strip()
+        if not c_imdb:
+            continue
+        if tmdb_id and int(tmdb_id) > 0 and c.get('tmdb_id') == int(tmdb_id):
+            resolved = c_imdb
+            break
+        if clean_title(c.get('title') or '') == target_clean:
+            if not year or not c.get('year') or abs(int(year) - int(c['year'])) <= 1:
+                resolved = c_imdb
+                break
+    if resolved and movie.get('tmdb_id'):
+        movie['imdb_id'] = resolved
+        db.upsert_movie(
+            tmdb_id=movie['tmdb_id'],
+            imdb_id=resolved,
+            title=movie['title'],
+            year=movie.get('year'),
+            poster_url=movie.get('poster_url'),
+            status=movie.get('status') or 'wanted',
+            file_path=movie.get('file_path'),
+        )
+    return resolved
+
+
 def queue_movie(movie: dict[str, Any], retry_count: int = 0) -> tuple[bool, str]:
     """Search NZBgeek for a movie, pick the best non-blocklisted release, and enqueue it."""
     title = movie['title']
@@ -244,10 +283,11 @@ def queue_movie(movie: dict[str, Any], retry_count: int = 0) -> tuple[bool, str]
     if retry_count == 0 and db.has_active_download('movie', title):
         return False, f"Movie '{title}' is already queued"
 
+    imdb_id = _resolve_movie_imdb_id(movie)
     candidates = nzbgeek.search_movie(
         title=title,
         year=year,
-        imdb_id=movie.get('imdb_id'),
+        imdb_id=imdb_id,
     )
     if not candidates:
         return False, f"No NZBgeek results for '{title}'"
@@ -259,6 +299,16 @@ def queue_movie(movie: dict[str, Any], retry_count: int = 0) -> tuple[bool, str]
         expected={'title': title, 'year': year},
         blocklisted_guids=blocked,
     )
+    # If IMDB-ID search returned only candidates that got rejected by filters, also try text search
+    if not ranked and imdb_id:
+        fallback_cands = nzbgeek.search_movie(title=title, year=year, imdb_id=None)
+        if fallback_cands:
+            ranked = release_selector.select_releases(
+                candidates=fallback_cands,
+                media_type='movie',
+                expected={'title': title, 'year': year},
+                blocklisted_guids=blocked,
+            )
     if not ranked:
         return False, f"No suitable release for '{title}' after junk/blocklist filter"
 
@@ -486,6 +536,9 @@ def add_movie(
     if tmdb_id and int(tmdb_id) > 0:
         info = metadata.get_movie_details(int(tmdb_id))
 
+    if info and imdb_id and not info.get('imdb_id'):
+        info['imdb_id'] = imdb_id
+
     if not info:
         if not title:
             return {'status': 'error', 'message': 'Could not resolve movie details'}
@@ -502,14 +555,25 @@ def add_movie(
             'poster_url': poster_url or '',
         }
 
+    existing_file = find_movie_file_on_disk(info['title'], info.get('year'))
+    initial_status = 'downloaded' if existing_file else 'wanted'
+
     movie = db.upsert_movie(
         tmdb_id=info['tmdb_id'],
         imdb_id=info.get('imdb_id'),
         title=info['title'],
         year=info.get('year'),
         poster_url=info.get('poster_url'),
-        status='wanted',
+        status=initial_status,
+        file_path=existing_file,
     )
+
+    if existing_file:
+        return {
+            'status': 'success',
+            'message': f"Added '{movie['title']}' — already on disk",
+            'movie': movie,
+        }
 
     ok, msg = queue_movie(movie)
     return {
@@ -593,10 +657,11 @@ def search_releases_for_movie(movie_id: int) -> dict[str, Any]:
     movie = db.get_movie(movie_id)
     if not movie:
         return {'status': 'error', 'message': 'Movie not found', 'releases': []}
+    imdb_id = _resolve_movie_imdb_id(movie)
     candidates = nzbgeek.search_movie(
         title=movie['title'],
         year=movie.get('year'),
-        imdb_id=movie.get('imdb_id'),
+        imdb_id=imdb_id,
     )
     blocked = db.get_blocklisted_guids()
     ranked = release_selector.select_releases(
@@ -605,6 +670,15 @@ def search_releases_for_movie(movie_id: int) -> dict[str, Any]:
         expected={'title': movie['title'], 'year': movie.get('year')},
         blocklisted_guids=set(),
     )
+    if not ranked and imdb_id:
+        fallback_cands = nzbgeek.search_movie(title=movie['title'], year=movie.get('year'), imdb_id=None)
+        if fallback_cands:
+            ranked = release_selector.select_releases(
+                candidates=fallback_cands,
+                media_type='movie',
+                expected={'title': movie['title'], 'year': movie.get('year')},
+                blocklisted_guids=set(),
+            )
     out = []
     for r in ranked[:15]:
         out.append({

@@ -324,6 +324,8 @@ def cancel_download(download_id: int) -> bool:
         _cancelled_ids.add(download_id)
     if job['status'] == 'queued':
         db.update_download(download_id, status='cancelled', error='Cancelled by user')
+        if job.get('media_type') == 'movie' and job.get('media_id'):
+            db.update_movie_status(int(job['media_id']), 'wanted')
     _activity_log('info', f"Cancelled download #{download_id}: {job['nzb_title']}")
     return True
 
@@ -412,19 +414,20 @@ def _run_par2(work_dir: str) -> tuple[bool, str]:
     # Prefer the shortest base .par2 file (not .vol00+01.par2)
     base_par2 = sorted(par2_files, key=lambda f: ('.vol' in f.lower(), len(f)))[0]
     cmd = [par2_bin, 'r', '-q', os.path.join(work_dir, base_par2)]
-    res = subprocess.run(cmd, cwd=work_dir, capture_output=True, text=True, timeout=600)
+    res = subprocess.run(cmd, cwd=work_dir, capture_output=True, text=True, timeout=1800)
     if res.returncode == 0:
         return True, 'PAR2 verified/repaired'
     return False, (res.stderr or res.stdout or 'PAR2 repair failed')[:300]
 
 
 def _unpack_archives(work_dir: str, extract_dir: str) -> tuple[bool, str]:
-    """Extract RAR / 7z / ZIP archives found in work_dir into extract_dir."""
+    """Extract RAR / 7z / ZIP / .001 archives found in work_dir into extract_dir."""
     os.makedirs(extract_dir, exist_ok=True)
     entries = sorted(os.listdir(work_dir))
 
     rar_targets = []
     other_archives = []
+    split_001_archives = []
     for name in entries:
         low = name.lower()
         if low.endswith('.rar'):
@@ -435,6 +438,8 @@ def _unpack_archives(work_dir: str, extract_dir: str) -> tuple[bool, str]:
             rar_targets.append(os.path.join(work_dir, name))
         elif low.endswith(('.7z', '.zip', '.7z.001')):
             other_archives.append(os.path.join(work_dir, name))
+        elif low.endswith('.001') and not low.endswith('.par2'):
+            split_001_archives.append(os.path.join(work_dir, name))
 
     unrar_bin = shutil.which('unrar')
     sevenz_bin = shutil.which('7z') or shutil.which('7zz') or shutil.which('7za')
@@ -443,12 +448,12 @@ def _unpack_archives(work_dir: str, extract_dir: str) -> tuple[bool, str]:
         if unrar_bin:
             res = subprocess.run(
                 [unrar_bin, 'x', '-o+', '-p-', '-y', rar_path, extract_dir + os.sep],
-                capture_output=True, text=True, timeout=600,
+                capture_output=True, text=True, timeout=1800,
             )
         elif sevenz_bin:
             res = subprocess.run(
                 [sevenz_bin, 'x', '-y', '-p', f'-o{extract_dir}', rar_path],
-                capture_output=True, text=True, timeout=600,
+                capture_output=True, text=True, timeout=1800,
             )
         else:
             return False, 'Neither unrar nor 7z is installed'
@@ -464,12 +469,48 @@ def _unpack_archives(work_dir: str, extract_dir: str) -> tuple[bool, str]:
             return False, '7z binary not installed'
         res = subprocess.run(
             [sevenz_bin, 'x', '-y', '-p', f'-o{extract_dir}', arc_path],
-            capture_output=True, text=True, timeout=600,
+            capture_output=True, text=True, timeout=1800,
         )
         if res.returncode != 0:
             return False, f"Archive extraction failed: {(res.stderr or res.stdout)[:200]}"
 
+    if not rar_targets and not other_archives and split_001_archives:
+        for arc_path in split_001_archives:
+            extracted = False
+            if unrar_bin:
+                res = subprocess.run(
+                    [unrar_bin, 'x', '-o+', '-p-', '-y', arc_path, extract_dir + os.sep],
+                    capture_output=True, text=True, timeout=1800,
+                )
+                if res.returncode == 0:
+                    extracted = True
+            if not extracted and sevenz_bin:
+                res = subprocess.run(
+                    [sevenz_bin, 'x', '-y', '-p', f'-o{extract_dir}', arc_path],
+                    capture_output=True, text=True, timeout=1800,
+                )
+                if res.returncode == 0:
+                    extracted = True
+            if not extracted:
+                return False, 'Failed extracting .001 split archive'
+
     return True, 'Unpacked'
+
+
+def _detect_video_magic_ext(fpath: str) -> str | None:
+    """Inspect magic header bytes of an obfuscated file to detect MKV/MP4/AVI containers."""
+    try:
+        with open(fpath, 'rb') as fh:
+            hdr = fh.read(32)
+        if hdr.startswith(b'\x1a\x45\xdf\xa3'):
+            return '.mkv'
+        if len(hdr) >= 12 and hdr[4:8] == b'ftyp':
+            return '.mp4'
+        if len(hdr) >= 12 and hdr[:4] == b'RIFF' and hdr[8:12] == b'AVI ':
+            return '.avi'
+    except OSError:
+        pass
+    return None
 
 
 def _find_largest_video(search_dirs: list[str]) -> str | None:
@@ -494,6 +535,34 @@ def _find_largest_video(search_dirs: list[str]) -> str | None:
                 if sz > best_size:
                     best_size = sz
                     best_path = full
+
+    # Fallback: check for large obfuscated video files (>50 MB) without standard extensions
+    if not best_path:
+        for root_dir in search_dirs:
+            if not os.path.isdir(root_dir):
+                continue
+            for dirpath, _, filenames in os.walk(root_dir):
+                for fname in filenames:
+                    low = fname.lower()
+                    if low.endswith(('.par2', '.rar', '.7z', '.zip', '.nfo', '.sfv', '.srr', '.srs', '.txt')):
+                        continue
+                    full = os.path.join(dirpath, fname)
+                    try:
+                        sz = os.path.getsize(full)
+                    except OSError:
+                        continue
+                    if sz < 50 * 1024 * 1024:
+                        continue
+                    detected_ext = _detect_video_magic_ext(full)
+                    if detected_ext and sz > best_size:
+                        renamed = full + detected_ext
+                        try:
+                            os.rename(full, renamed)
+                            full = renamed
+                        except OSError:
+                            pass
+                        best_size = sz
+                        best_path = full
     return best_path
 
 
@@ -572,6 +641,8 @@ def _process_job(job: dict[str, Any]):
         # Prepare tasks: list of (file_idx, file_meta, segment)
         file_locks: dict[int, threading.Lock] = {i: threading.Lock() for i in range(len(files))}
         file_paths: dict[int, str] = {}
+        file_paths_lock = threading.Lock()
+        claimed_paths: set[str] = set()
         tasks: queue.Queue = queue.Queue()
         for f_idx, fmeta in enumerate(files):
             for seg in fmeta['segments']:
@@ -621,8 +692,14 @@ def _process_job(job: dict[str, Any]):
                         with file_locks[f_idx]:
                             fpath = file_paths.get(f_idx)
                             if not fpath:
-                                fpath = os.path.join(work_dir, target_name)
-                                file_paths[f_idx] = fpath
+                                with file_paths_lock:
+                                    cand_path = os.path.join(work_dir, target_name)
+                                    if cand_path in claimed_paths:
+                                        stem, ext = os.path.splitext(target_name)
+                                        cand_path = os.path.join(work_dir, f"{stem}_{f_idx}{ext}")
+                                    claimed_paths.add(cand_path)
+                                    file_paths[f_idx] = cand_path
+                                    fpath = cand_path
                             mode = 'r+b' if os.path.exists(fpath) else 'wb'
                             with open(fpath, mode) as fh:
                                 fh.seek(dec['begin'])
@@ -663,14 +740,18 @@ def _process_job(job: dict[str, Any]):
             if job_id in _cancelled_ids:
                 _cancelled_ids.discard(job_id)
                 db.update_download(job_id, status='cancelled', error='Cancelled by user')
+                if job.get('media_type') == 'movie' and job.get('media_id'):
+                    db.update_movie_status(int(job['media_id']), 'wanted')
                 return
 
         if total_segments > 0 and missing_segments / total_segments > 0.25:
             raise RuntimeError(f"Too many missing articles ({missing_segments}/{total_segments})")
 
         # PAR2 verify/repair if any segments were missing or had CRC errors
+        par2_ran = False
         if missing_segments > 0 or crc_errors > 0:
             db.update_download(job_id, status='verifying', progress_pct=99.0)
+            par2_ran = True
             ok, msg = _run_par2(work_dir)
             if not ok:
                 raise RuntimeError(f"PAR2 repair failed: {msg}")
@@ -678,11 +759,21 @@ def _process_job(job: dict[str, Any]):
         # Unpack archives
         db.update_download(job_id, status='unpacking', progress_pct=99.5)
         ok, msg = _unpack_archives(work_dir, extract_dir)
+        video_path = _find_largest_video([extract_dir, work_dir]) if ok else None
+
+        # Obfuscated Usenet posts often require PAR2 rename even when 0 segments are missing
+        if (not ok or not video_path) and not par2_ran:
+            db.update_download(job_id, status='verifying', progress_pct=99.2)
+            par2_ok, par2_msg = _run_par2(work_dir)
+            if par2_ok:
+                db.update_download(job_id, status='unpacking', progress_pct=99.5)
+                ok, msg = _unpack_archives(work_dir, extract_dir)
+                video_path = _find_largest_video([extract_dir, work_dir]) if ok else None
+            elif not ok:
+                raise RuntimeError(f"{msg} (PAR2: {par2_msg})")
+
         if not ok:
             raise RuntimeError(msg)
-
-        # Find video file & move to library
-        video_path = _find_largest_video([extract_dir, work_dir])
         if not video_path:
             raise RuntimeError("No video file found after extraction")
 
@@ -726,12 +817,15 @@ def _process_job(job: dict[str, Any]):
 
         # Automatic retry with next-best release
         retry_count = int(job.get('retry_count') or 0)
+        retried_ok = False
         if retry_count < MAX_RETRIES:
             try:
                 from services.media_manager import retry_failed_download
-                retry_failed_download(job)
+                retried_ok, _ = retry_failed_download(job)
             except Exception as r_exc:
                 logger.warning(f"[UsenetDL] Retry scheduling failed: {r_exc}")
+        if not retried_ok and job.get('media_type') == 'movie' and job.get('media_id'):
+            db.update_movie_status(int(job['media_id']), 'wanted')
     finally:
         with _state_lock:
             _live_state['download_rate_bps'] = 0

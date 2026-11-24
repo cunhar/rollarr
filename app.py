@@ -222,9 +222,21 @@ def api_library():
     movies = db.list_movies()
     for m in movies:
         fpath = m.get('file_path')
-        on_disk = bool(fpath and os.path.isfile(fpath)) or (media_manager.find_movie_file_on_disk(m['title'], m.get('year')) is not None)
-        if on_disk and (m.get('status') or '').lower() == 'wanted':
-            m['status'] = 'downloaded'
+        disk_path = fpath if (fpath and os.path.isfile(fpath)) else media_manager.find_movie_file_on_disk(m['title'], m.get('year'))
+        cur_status = (m.get('status') or 'wanted').lower()
+        if disk_path:
+            if cur_status != 'downloaded':
+                m['status'] = 'downloaded'
+                m['file_path'] = disk_path
+                db.update_movie_status(m['id'], 'downloaded', file_path=disk_path)
+        elif db.has_active_download('movie', m['title']):
+            if cur_status != 'downloading':
+                m['status'] = 'downloading'
+                db.update_movie_status(m['id'], 'downloading')
+        elif cur_status == 'downloading':
+            # Recover movies stuck in 'downloading' when no active download job exists
+            m['status'] = 'wanted'
+            db.update_movie_status(m['id'], 'wanted')
 
     status_rank = {'downloaded': 0, 'downloading': 1, 'wanted': 2}
     movies.sort(key=lambda m: (
@@ -301,6 +313,16 @@ def api_library_tv_queue(show_id: int):
     activity_log.log_call(res.get('status', 'info'), res.get('message', 'Queued show episodes'))
     code = 200 if res.get('status') in ('success', 'warning') else 400
     return jsonify(res), code
+
+
+@app.route('/api/library/movie/<int:movie_id>/queue', methods=['POST'])
+def api_library_movie_queue(movie_id: int):
+    movie = db.get_movie(movie_id)
+    if not movie:
+        return jsonify({'status': 'error', 'message': 'Movie not found'}), 404
+    ok, msg = media_manager.queue_movie(movie)
+    activity_log.log_call('success' if ok else 'warning', msg)
+    return jsonify({'status': 'success' if ok else 'warning', 'message': msg}), 200
 
 
 @app.route('/api/library/<media_type>/<int:item_id>', methods=['DELETE'])

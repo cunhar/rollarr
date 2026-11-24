@@ -73,9 +73,15 @@ _RE_EPISODE = re.compile(r'(?:^|[\.\s_\-])S(\d{1,2})E(\d{1,3})(?:[\-E](\d{1,3}))
 _RE_EPISODE_ALT = re.compile(r'(?:^|[\.\s_\-])(\d{1,2})x(\d{1,3})(?:$|[\.\s_\-])', re.I)
 # Season pack marker (e.g. S01 without E01, or "Season 1", "Complete")
 _RE_SEASON_ONLY = re.compile(r'(?:^|[\.\s_\-])(?:S(\d{1,2})(?!E\d)|Season[\.\s_\-]?(\d{1,2})|Complete[\.\s_\-]?Series)(?:$|[\.\s_\-])', re.I)
-_RE_YEAR = re.compile(r'(?:^|[\.\s_\-\(\[])((?:19|20)\d{2})(?:$|[\.\s_\-\)\]])')
+_RE_YEAR = re.compile(r'(?:^|[\.\s_\-\(\[])((?:19|20)\d{2})(?=$|[\.\s_\-\)\]])')
 
 RES_TIERS = ['480p', '720p', '1080p', '2160p']
+
+_NUMBER_WORD_MAP = {
+    'ii': '2', 'iii': '3', 'iv': '4', 'vi': '6', 'vii': '7', 'viii': '8', 'ix': '9',
+    'one': '1', 'two': '2', 'three': '3', 'four': '4', 'five': '5',
+    'six': '6', 'seven': '7', 'eight': '8', 'nine': '9',
+}
 
 
 def parse_release(title: str) -> dict[str, Any]:
@@ -147,24 +153,33 @@ def parse_release(title: str) -> dict[str, Any]:
         'ep_end': ep_end,
         'is_season_pack': is_season_pack,
         'year': year,
+        'years': years,
     }
+
+
+def _normalize_title_tokens(text: str) -> list[str]:
+    raw_tokens = re.findall(r'[a-z0-9]+', (text or '').lower().replace('&', ' and '))
+    return [_NUMBER_WORD_MAP.get(tok, tok) for tok in raw_tokens]
 
 
 def _title_matches(release_title: str, expected_title: str) -> bool:
     """Verify the release title actually contains the expected show/movie title words."""
     if not expected_title:
         return True
-    rel_clean = clean_title(release_title)
-    exp_clean = clean_title(expected_title)
-    if not exp_clean:
+    rel_tokens = _normalize_title_tokens(release_title)
+    exp_tokens = _normalize_title_tokens(expected_title)
+    if not exp_tokens:
         return True
-    if exp_clean in rel_clean:
+    rel_joined = ''.join(rel_tokens)
+    exp_joined = ''.join(exp_tokens)
+    if exp_joined in rel_joined:
         return True
-    # Fallback: check significant words (len >= 3)
-    words = [w for w in re.findall(r'[a-z0-9]+', expected_title.lower()) if len(w) >= 3]
+    # Fallback: check significant words (len >= 3, or numeric sequel numbers)
+    words = [w for w in exp_tokens if (len(w) >= 3 or w.isdigit()) and w not in ('the', 'and')]
     if not words:
         return True
-    matched = sum(1 for w in words if w in rel_clean)
+    rel_token_set = set(rel_tokens)
+    matched = sum(1 for w in words if (w in rel_token_set if w.isdigit() else w in rel_joined))
     return matched >= max(1, math.ceil(len(words) * 0.7))
 
 
@@ -227,9 +242,10 @@ def is_junk_release(
         if parsed['season'] is not None or parsed['is_season_pack']:
             return True, 'tv_release_for_movie'
         exp_year = expected.get('year')
-        if exp_year and parsed['year'] and abs(int(exp_year) - parsed['year']) > 1:
+        parsed_years = parsed.get('years') or ([parsed['year']] if parsed.get('year') else [])
+        if exp_year and parsed_years and all(abs(int(exp_year) - y) > 1 for y in parsed_years):
             return True, f"wrong_year ({parsed['year']} != {exp_year})"
-        if not _title_matches(rel_title, exp_title):
+        if not candidate.get('matched_by_imdb') and not _title_matches(rel_title, exp_title):
             return True, 'title_mismatch'
 
     return False, ''
