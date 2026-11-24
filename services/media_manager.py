@@ -481,6 +481,82 @@ def get_show_episodes_status(show_id: int) -> dict[str, Any]:
     return {'status': 'success', 'show': show, 'seasons': seasons}
 
 
+def manual_delete_episode(show_id: int, season: int, episode: int) -> dict[str, Any]:
+    """
+    Manually delete an episode file from disk (and cancel any active download for it)
+    without requiring it to be watched in Plex/Jellyfin.
+    """
+    show = db.get_show(show_id)
+    if not show:
+        return {'status': 'error', 'message': 'Show not found'}
+
+    season = int(season)
+    episode = int(episode)
+    tag = f"S{season:02d}E{episode:02d}"
+
+    # Cancel any queued/active download for this episode
+    cancelled_dl = False
+    for d in db.list_active_downloads():
+        if (
+            d.get('media_type') == 'episode'
+            and clean_title(d.get('title') or '') == clean_title(show['title'])
+            and int(d.get('season') or -1) == season
+            and int(d.get('episode') or -1) == episode
+        ):
+            usenet_downloader.cancel_download(int(d['id']))
+            cancelled_dl = True
+
+    deleted_disk, detail = delete_episode_file(show['title'], season, episode)
+    if not deleted_disk and not cancelled_dl:
+        return {'status': 'warning', 'message': f"{show['title']} {tag} — {detail}"}
+
+    remaining_on_disk = _scan_show_episodes_on_disk(show['title'])
+    if remaining_on_disk:
+        db.update_show_watch_cursor(show['id'], season, episode)
+    else:
+        db.update_show_watch_cursor(show['id'], None, None, force=True)
+
+    usenet_downloader._notify_media_servers()
+    action = detail if deleted_disk else 'cancelled active download'
+    return {'status': 'success', 'message': f"{show['title']} {tag} — {action}"}
+
+
+def manual_delete_season(show_id: int, season: int) -> dict[str, Any]:
+    """Manually delete all on-disk episode files (and cancel queued downloads) for a season."""
+    show = db.get_show(show_id)
+    if not show:
+        return {'status': 'error', 'message': 'Show not found'}
+
+    season = int(season)
+    for d in db.list_active_downloads():
+        if (
+            d.get('media_type') == 'episode'
+            and clean_title(d.get('title') or '') == clean_title(show['title'])
+            and int(d.get('season') or -1) == season
+        ):
+            usenet_downloader.cancel_download(int(d['id']))
+
+    on_disk = sorted(ep for (s, ep) in _scan_show_episodes_on_disk(show['title']) if s == season)
+    deleted_count = 0
+    for ep_num in on_disk:
+        ok, _ = delete_episode_file(show['title'], season, ep_num)
+        if ok:
+            deleted_count += 1
+
+    remaining_on_disk = _scan_show_episodes_on_disk(show['title'])
+    if not remaining_on_disk:
+        db.update_show_watch_cursor(show['id'], None, None, force=True)
+    elif on_disk:
+        db.update_show_watch_cursor(show['id'], season, max(on_disk))
+
+    usenet_downloader._notify_media_servers()
+    return {
+        'status': 'success' if deleted_count > 0 else 'warning',
+        'message': f"Deleted {deleted_count} episode(s) from {show['title']} Season {season}",
+        'deleted_count': deleted_count,
+    }
+
+
 def queue_show_from(show_id: int, start_season: int = 1, start_episode: int = 1) -> dict[str, Any]:
     """Queue the next ROLLING_WINDOW aired episodes for an existing tracked show starting at (S, E)."""
     show = db.get_show(show_id)

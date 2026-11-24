@@ -605,7 +605,10 @@ function loadShowEpisodes(showId, forceReload = false) {
             <details class="season-card" data-season="${sec.season}" ${openSeasons.has(String(sec.season)) ? 'open' : ''}>
                 <summary class="season-summary">
                     <span>Season ${sec.season}</span>
-                    <span class="badge ${sec.downloaded > 0 ? 'badge-green' : 'badge-dim'}">${sec.downloaded} / ${sec.total} on disk</span>
+                    <span style="display:flex; align-items:center; gap:8px;">
+                        <span class="badge ${sec.downloaded > 0 ? 'badge-green' : 'badge-dim'}">${sec.downloaded} / ${sec.total} on disk</span>
+                        ${sec.downloaded > 0 ? `<button type="button" class="btn-clear btn-icon-trash" title="Delete all on-disk episodes in Season ${sec.season}" onclick="event.preventDefault(); event.stopPropagation(); deleteSeasonFiles(${showId}, ${sec.season}, this)">${SVG_ICONS.trash}</button>` : ''}
+                    </span>
                 </summary>
                 <div class="season-episodes">
                     ${sec.episodes.map(ep => {
@@ -616,11 +619,17 @@ function loadShowEpisodes(showId, forceReload = false) {
                     : st === 'missing' ? 'badge-amber'
                         : 'badge-dim';
             const badgeTxt = st === 'downloaded' ? 'ON DISK' : st.toUpperCase();
-            const actions = (st === 'missing' || st === 'watched' || st === 'upcoming')
-                ? `<button class="btn-clear btn-ep" onclick="queueSingleEpisode(${showId}, ${ep.season}, ${ep.episode}, this)">Get</button>
-                               <button class="btn-clear btn-ep" onclick="openEpisodePicker(${showId}, ${ep.season}, ${ep.episode})">Pick</button>
-                               <button class="btn-clear btn-ep" onclick="queueShowFrom(${showId}, ${ep.season}, ${ep.episode}, this)">Start Here</button>`
-                : '';
+            let actions = '';
+            if (st === 'downloaded') {
+                actions = `<button class="btn-clear btn-ep" onclick="openEpisodePicker(${showId}, ${ep.season}, ${ep.episode})">Pick</button>
+                           <button type="button" class="btn-clear btn-icon-trash" title="Delete episode file from disk" onclick="deleteEpisodeFile(${showId}, ${ep.season}, ${ep.episode}, this)">${SVG_ICONS.trash}</button>`;
+            } else if (st === 'queued') {
+                actions = `<button type="button" class="btn-clear btn-icon-trash" title="Cancel queued episode download" onclick="deleteEpisodeFile(${showId}, ${ep.season}, ${ep.episode}, this)">${SVG_ICONS.trash}</button>`;
+            } else if (st === 'missing' || st === 'watched' || st === 'upcoming') {
+                actions = `<button class="btn-clear btn-ep" onclick="queueSingleEpisode(${showId}, ${ep.season}, ${ep.episode}, this)">Get</button>
+                           <button class="btn-clear btn-ep" onclick="openEpisodePicker(${showId}, ${ep.season}, ${ep.episode})">Pick</button>
+                           <button class="btn-clear btn-ep" onclick="queueShowFrom(${showId}, ${ep.season}, ${ep.episode}, this)">Start Here</button>`;
+            }
             return `
                         <div class="ep-row">
                             <div class="ep-row-left">
@@ -638,6 +647,78 @@ function loadShowEpisodes(showId, forceReload = false) {
             </details>
         `).join('');
     });
+}
+
+function deleteEpisodeFile(showId, season, episode, btnEl) {
+    if (btnEl && btnEl.dataset.confirming !== '1') {
+        const origHtml = btnEl.innerHTML;
+        btnEl.dataset.confirming = '1';
+        btnEl.dataset.origHtml = origHtml;
+        btnEl.innerHTML = `${SVG_ICONS.trash}<span>Confirm?</span>`;
+        btnEl.style.background = 'var(--red-dim)';
+        btnEl.style.borderColor = 'var(--red)';
+        btnEl.style.color = 'var(--red)';
+        btnEl.style.fontWeight = '600';
+        btnEl._confirmTimer = setTimeout(() => {
+            btnEl.dataset.confirming = '';
+            btnEl.innerHTML = btnEl.dataset.origHtml || SVG_ICONS.trash;
+            btnEl.style.background = '';
+            btnEl.style.borderColor = '';
+            btnEl.style.color = '';
+            btnEl.style.fontWeight = '';
+        }, 5000);
+        return;
+    }
+    if (btnEl && btnEl._confirmTimer) clearTimeout(btnEl._confirmTimer);
+    if (btnEl) btnEl.disabled = true;
+
+    Api.deleteSingleEpisode(showId, season, episode)
+        .then(({ ok, data }) => {
+            showToast((data && data.message) || 'Episode deleted', ok ? 'info' : 'err');
+            loadShowEpisodes(showId, true);
+            loadLibrary();
+            setTimeout(pollAll, 500);
+        })
+        .catch(() => {
+            showToast('Failed to delete episode', 'err');
+            if (btnEl) btnEl.disabled = false;
+        });
+}
+
+function deleteSeasonFiles(showId, season, btnEl) {
+    if (btnEl && btnEl.dataset.confirming !== '1') {
+        const origHtml = btnEl.innerHTML;
+        btnEl.dataset.confirming = '1';
+        btnEl.dataset.origHtml = origHtml;
+        btnEl.innerHTML = `${SVG_ICONS.trash}<span>Confirm?</span>`;
+        btnEl.style.background = 'var(--red-dim)';
+        btnEl.style.borderColor = 'var(--red)';
+        btnEl.style.color = 'var(--red)';
+        btnEl.style.fontWeight = '600';
+        btnEl._confirmTimer = setTimeout(() => {
+            btnEl.dataset.confirming = '';
+            btnEl.innerHTML = btnEl.dataset.origHtml || SVG_ICONS.trash;
+            btnEl.style.background = '';
+            btnEl.style.borderColor = '';
+            btnEl.style.color = '';
+            btnEl.style.fontWeight = '';
+        }, 5000);
+        return;
+    }
+    if (btnEl && btnEl._confirmTimer) clearTimeout(btnEl._confirmTimer);
+    if (btnEl) btnEl.disabled = true;
+
+    Api.deleteSeasonEpisodes(showId, season)
+        .then(({ ok, data }) => {
+            showToast((data && data.message) || 'Season files deleted', ok ? 'info' : 'err');
+            loadShowEpisodes(showId, true);
+            loadLibrary();
+            setTimeout(pollAll, 500);
+        })
+        .catch(() => {
+            showToast('Failed to delete season files', 'err');
+            if (btnEl) btnEl.disabled = false;
+        });
 }
 
 function deleteLibraryItem(type, id, btnEl) {

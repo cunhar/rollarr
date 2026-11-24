@@ -96,6 +96,27 @@ class TestMediaManagerAndDb(unittest.TestCase):
             self.assertFalse(os.path.exists(mov_file))
             self.assertFalse(os.path.exists(mov_dir))  # empty movie folder cleaned up
 
+            # Test manual_delete_episode & manual_delete_season
+            show = db.upsert_show(tvmaze_id=123, title='Severance', tvdb_id=456, year=2022)
+            os.makedirs(ep_dir, exist_ok=True)
+            ep1 = os.path.join(ep_dir, 'Severance - S01E01.mkv')
+            ep2 = os.path.join(ep_dir, 'Severance - S01E02.mkv')
+            ep3 = os.path.join(ep_dir, 'Severance - S01E03.mkv')
+            for p in (ep1, ep2, ep3):
+                with open(p, 'wb') as f:
+                    f.write(b'video')
+
+            res_ep = media_manager.manual_delete_episode(show['id'], 1, 1)
+            self.assertEqual(res_ep['status'], 'success')
+            self.assertFalse(os.path.exists(ep1))
+            self.assertTrue(os.path.exists(ep2))
+
+            res_sec = media_manager.manual_delete_season(show['id'], 1)
+            self.assertEqual(res_sec['status'], 'success')
+            self.assertEqual(res_sec['deleted_count'], 2)
+            self.assertFalse(os.path.exists(ep2))
+            self.assertFalse(os.path.exists(ep3))
+
 
 if __name__ == '__main__':
     unittest.main()

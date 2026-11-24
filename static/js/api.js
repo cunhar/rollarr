@@ -86,6 +86,22 @@ const Api = {
         return { ok: res.ok, data: await res.json() };
     },
 
+    async deleteSingleEpisode(showId, season, episode) {
+        const res = await fetch(`/api/library/tv/${showId}/episode`, {
+            method: 'DELETE',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ season, episode })
+        });
+        return { ok: res.ok, data: await res.json() };
+    },
+
+    async deleteSeasonEpisodes(showId, season) {
+        const res = await fetch(`/api/library/tv/${showId}/season/${season}`, {
+            method: 'DELETE'
+        });
+        return { ok: res.ok, data: await res.json() };
+    },
+
     async queueShowFrom(showId, startSeason, startEpisode) {
         const res = await fetch(`/api/library/tv/${showId}/queue`, {
             method: 'POST',

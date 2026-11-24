@@ -321,17 +321,28 @@ def api_library_tv_episodes(show_id: int):
     return jsonify(res), code
 
 
-@app.route('/api/library/tv/<int:show_id>/episode', methods=['POST'])
+@app.route('/api/library/tv/<int:show_id>/episode', methods=['POST', 'DELETE'])
 def api_library_tv_single_episode(show_id: int):
     show = db.get_show(show_id)
     if not show:
         return jsonify({'status': 'error', 'message': 'Show not found'}), 404
     data = request.json or {}
-    season = int(data.get('season') or 1)
-    episode = int(data.get('episode') or 1)
+    season = int(data.get('season') or request.args.get('season') or 1)
+    episode = int(data.get('episode') or request.args.get('episode') or 1)
+    if request.method == 'DELETE':
+        res = media_manager.manual_delete_episode(show_id, season, episode)
+        activity_log.log_call(res.get('status', 'info'), res.get('message', 'Deleted episode'))
+        return jsonify(res), 200 if res.get('status') in ('success', 'warning') else 400
     ok, msg = media_manager.queue_episode(show, season, episode)
     activity_log.log_call('success' if ok else 'warning', msg)
     return jsonify({'status': 'success' if ok else 'warning', 'message': msg}), 200
+
+
+@app.route('/api/library/tv/<int:show_id>/season/<int:season>', methods=['DELETE'])
+def api_library_tv_delete_season(show_id: int, season: int):
+    res = media_manager.manual_delete_season(show_id, season)
+    activity_log.log_call(res.get('status', 'info'), res.get('message', 'Deleted season'))
+    return jsonify(res), 200 if res.get('status') in ('success', 'warning') else 404
 
 
 @app.route('/api/library/tv/<int:show_id>/queue', methods=['POST'])
@@ -358,8 +369,23 @@ def api_library_movie_queue(movie_id: int):
 @app.route('/api/library/<media_type>/<int:item_id>', methods=['DELETE'])
 def api_library_delete(media_type: str, item_id: int):
     if media_type == 'movie':
+        mov = db.get_movie(item_id)
+        if mov:
+            for d in db.list_active_downloads():
+                if d.get('media_type') == 'movie' and (d.get('media_id') == item_id or media_manager.clean_title(d.get('title') or '') == media_manager.clean_title(mov['title'])):
+                    usenet_downloader.cancel_download(int(d['id']))
+            media_manager.delete_movie_file(mov['title'], mov.get('year'), reported_path=mov.get('file_path'))
+            usenet_downloader._notify_media_servers()
         ok = db.delete_movie(item_id)
     elif media_type == 'tv':
+        show = db.get_show(item_id)
+        if show:
+            for d in db.list_active_downloads():
+                if d.get('media_type') == 'episode' and (d.get('media_id') == item_id or media_manager.clean_title(d.get('title') or '') == media_manager.clean_title(show['title'])):
+                    usenet_downloader.cancel_download(int(d['id']))
+            for s_num, ep_num in list(media_manager._scan_show_episodes_on_disk(show['title'])):
+                media_manager.delete_episode_file(show['title'], s_num, ep_num)
+            usenet_downloader._notify_media_servers()
         ok = db.delete_show(item_id)
     else:
         return jsonify({'status': 'error', 'message': 'Invalid media type'}), 400

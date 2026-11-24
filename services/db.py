@@ -174,9 +174,15 @@ def get_show_by_tvmaze(tvmaze_id: int) -> dict[str, Any] | None:
         return dict(row) if row else None
 
 
-def update_show_watch_cursor(show_id: int, season: int, episode: int, force: bool = False):
-    """Advance (or set if force=True) the show's last watched (season, episode) cursor."""
+def update_show_watch_cursor(show_id: int, season: int | None, episode: int | None, force: bool = False):
+    """Advance (or set/clear if force=True) the show's last watched (season, episode) cursor."""
     with _conn() as c:
+        if season is None or episode is None:
+            c.execute(
+                "UPDATE shows SET last_watched_season = NULL, last_watched_episode = NULL WHERE id = ?",
+                (show_id,),
+            )
+            return
         if not force:
             row = c.execute(
                 "SELECT last_watched_season, last_watched_episode FROM shows WHERE id = ?",
