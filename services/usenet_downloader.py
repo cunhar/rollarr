@@ -690,13 +690,15 @@ def _process_job(job: dict[str, Any]):
         missing_segments = 0
         crc_errors = 0
         total_segments = sum(len(f['segments']) for f in files)
+        max_missing_allowed = max(40, int(total_segments * 0.25))
+        abort_missing = False
         progress_lock = threading.Lock()
         rate_window_start = time.time()
         rate_window_bytes = 0
         last_db_update = 0.0
 
         def worker():
-            nonlocal downloaded_bytes, missing_segments, crc_errors, rate_window_start, rate_window_bytes, last_db_update
+            nonlocal downloaded_bytes, missing_segments, crc_errors, abort_missing, rate_window_start, rate_window_bytes, last_db_update
             conn = NNTPConnection(host, port, use_ssl, username, password)
             try:
                 conn.connect()
@@ -705,6 +707,8 @@ def _process_job(job: dict[str, Any]):
                         if job_id in _cancelled_ids or job_id in _preempted_ids:
                             return
                         is_p = _paused
+                    if abort_missing:
+                        return
                     if is_p:
                         time.sleep(0.5)
                         continue
@@ -719,6 +723,8 @@ def _process_job(job: dict[str, Any]):
                         if raw is None:
                             with progress_lock:
                                 missing_segments += 1
+                                if missing_segments > max_missing_allowed or (downloaded_bytes == 0 and missing_segments >= 40):
+                                    abort_missing = True
                             continue
 
                         dec = decode_yenc(raw)
@@ -764,6 +770,8 @@ def _process_job(job: dict[str, Any]):
                         logger.debug(f"[UsenetDL] Segment fetch error: {exc}")
                         with progress_lock:
                             missing_segments += 1
+                            if missing_segments > max_missing_allowed or (downloaded_bytes == 0 and missing_segments >= 40):
+                                abort_missing = True
                     finally:
                         tasks.task_done()
             finally:
@@ -789,15 +797,16 @@ def _process_job(job: dict[str, Any]):
         if was_preempted:
             pct = min(99.0, (downloaded_bytes / total_bytes * 100.0)) if total_bytes > 0 else 0.0
             db.update_download(job_id, status='queued', downloaded_bytes=downloaded_bytes, progress_pct=round(pct, 1))
-            try:
-                with open(done_segs_file, 'w', encoding='utf-8') as df:
-                    df.write('\n'.join(done_msgids))
-            except OSError:
-                pass
+            if done_msgids:
+                try:
+                    with open(done_segs_file, 'w', encoding='utf-8') as df:
+                        df.write('\n'.join(done_msgids))
+                except OSError:
+                    pass
             _activity_log('info', f"Paused & re-queued '{job['nzb_title']}' at {round(pct, 1)}% to prioritize new top download")
             return
 
-        if total_segments > 0 and missing_segments / total_segments > 0.25:
+        if abort_missing or (total_segments > 0 and missing_segments / total_segments > 0.25):
             raise RuntimeError(f"Too many missing articles ({missing_segments}/{total_segments})")
 
         # PAR2 verify/repair if any segments were missing or had CRC errors

@@ -2,8 +2,14 @@ from flask import Flask, request, jsonify, render_template, send_from_directory
 
 import os
 import logging
+import threading
 from logging.handlers import RotatingFileHandler
 import concurrent.futures
+
+try:
+    threading.stack_size(2 * 1024 * 1024)
+except Exception:
+    pass
 
 import config_store
 from integrations import metadata
@@ -244,8 +250,32 @@ def api_library():
         (m.get('title') or '').lower(),
     ))
 
+    active_dls = db.list_active_downloads()
+    active_show_titles = {
+        media_manager.clean_title(d['title'])
+        for d in active_dls
+        if d.get('media_type') == 'episode' and d.get('title')
+    }
+    shows = db.list_shows()
+    for s in shows:
+        on_disk_cnt = len(media_manager._scan_show_episodes_on_disk(s['title']))
+        s['on_disk_count'] = on_disk_cnt
+        is_dl = media_manager.clean_title(s['title']) in active_show_titles
+        if is_dl:
+            s['status'] = 'downloading'
+        elif on_disk_cnt > 0:
+            s['status'] = f"{on_disk_cnt} on disk"
+        else:
+            s['status'] = 'idle'
+
+    show_rank = lambda s: (
+        0 if s['status'] == 'downloading' else (1 if s.get('on_disk_count', 0) > 0 else 2),
+        (s.get('title') or '').lower(),
+    )
+    shows.sort(key=show_rank)
+
     return jsonify({
-        'shows': db.list_shows(),
+        'shows': shows,
         'movies': movies,
         'recent_downloads': db.list_recent_downloads(15),
     }), 200

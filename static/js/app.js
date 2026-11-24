@@ -687,14 +687,19 @@ function loadLibrary() {
                 showsEl.querySelectorAll('details[data-show-id]').forEach(d => {
                     if (d.open) openIds.add(d.getAttribute('data-show-id'));
                 });
-                showsEl.innerHTML = shows.map(s => `
+                showsEl.innerHTML = shows.map(s => {
+                    const st = (s.status || 'idle').toLowerCase();
+                    const sBadge = st === 'downloading' ? 'badge-blue'
+                        : (st.includes('on disk') || st === 'active') ? 'badge-green'
+                            : 'badge-dim';
+                    return `
                     <details class="config-card" data-show-id="${s.id}" ${openIds.has(String(s.id)) ? 'open' : ''} ontoggle="onShowToggle(this, ${s.id})" style="margin-bottom:0;">
                         <summary class="config-card-summary">
                             <span style="display:flex; align-items:center; gap:10px; min-width:0;">
                                 ${s.poster_url ? `<img class="lib-thumb" src="${escapeHtml(s.poster_url)}" alt="">` : `<span class="lib-thumb lib-thumb-placeholder">TV</span>`}
                                 <strong>${escapeHtml(s.title)}</strong>
                                 ${s.year ? `<span class="media-year">(${s.year})</span>` : ''}
-                                <span class="badge badge-green">${escapeHtml(s.status || 'active')}</span>
+                                <span class="badge ${sBadge}">${escapeHtml(s.status || 'idle')}</span>
                             </span>
                             <button type="button" class="btn-clear btn-icon-trash" style="margin-left:auto; margin-right:12px;" title="Remove Show" onclick="event.preventDefault(); event.stopPropagation(); deleteLibraryItem('tv', ${s.id}, this)">${SVG_ICONS.trash}</button>
                         </summary>
@@ -702,7 +707,8 @@ function loadLibrary() {
                             <div id="show-episodes-${s.id}"></div>
                         </div>
                     </details>
-                `).join('');
+                `;
+                }).join('');
                 openIds.forEach(id => loadShowEpisodes(parseInt(id), true));
             }
         }
