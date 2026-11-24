@@ -54,6 +54,13 @@ class TestMediaManagerAndDb(unittest.TestCase):
         self.assertTrue(db.move_download(dl2['id'], 'down'))
         self.assertEqual(db.get_next_queued_download()['id'], dl['id'])
 
+        # Simulate dl currently 'downloading' and moving dl2 'up' into #1 slot
+        db.update_download(dl['id'], status='downloading', progress_pct=50.0)
+        ok_preempt, preempted_id = db.move_download_with_preempt(dl2['id'], 'up')
+        self.assertTrue(ok_preempt)
+        self.assertEqual(preempted_id, dl['id'])
+        self.assertEqual(db.get_next_queued_download()['id'], dl2['id'])
+
         db.add_to_blocklist('guid-1', 'Severance.S01E01.1080p', 'missing articles')
         self.assertIn('guid-1', db.get_blocklisted_guids())
 

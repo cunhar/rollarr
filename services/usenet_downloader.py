@@ -271,6 +271,7 @@ _state_lock = threading.Lock()
 _wake_event = threading.Event()
 _paused = False
 _cancelled_ids: set[int] = set()
+_preempted_ids: set[int] = set()
 _log_callback = None
 
 _live_state: dict[str, Any] = {
@@ -322,11 +323,27 @@ def cancel_download(download_id: int) -> bool:
         return False
     with _state_lock:
         _cancelled_ids.add(download_id)
+        _preempted_ids.discard(download_id)
     if job['status'] == 'queued':
         db.update_download(download_id, status='cancelled', error='Cancelled by user')
         if job.get('media_type') == 'movie' and job.get('media_id'):
             db.update_movie_status(int(job['media_id']), 'wanted')
+        dl_root = get_config('PATH_DOWNLOADS', '/downloads') or '/downloads'
+        shutil.rmtree(os.path.join(dl_root, 'tmp', f"job_{download_id}"), ignore_errors=True)
     _activity_log('info', f"Cancelled download #{download_id}: {job['nzb_title']}")
+    return True
+
+
+def move_download(download_id: int, direction: str) -> bool:
+    """Reorder a download in the queue, preempting the active download if displaced from #1."""
+    ok, preempted_id = db.move_download_with_preempt(download_id, direction)
+    if not ok:
+        return False
+    if preempted_id is not None:
+        with _state_lock:
+            if _live_state.get('active_job_id') == preempted_id:
+                _preempted_ids.add(preempted_id)
+        _wake_event.set()
     return True
 
 
@@ -617,11 +634,28 @@ def _process_job(job: dict[str, Any]):
     dl_root = get_config('PATH_DOWNLOADS', '/downloads') or '/downloads'
     work_dir = os.path.join(dl_root, 'tmp', f"job_{job_id}")
     extract_dir = os.path.join(work_dir, '_extracted')
+    done_segs_file = os.path.join(work_dir, '_done_segs.txt')
     os.makedirs(work_dir, exist_ok=True)
+    was_preempted = False
 
     try:
-        db.update_download(job_id, status='downloading', progress_pct=0.0, downloaded_bytes=0)
-        _activity_log('info', f"Starting Usenet download: {job['nzb_title']}")
+        prev_dl_bytes = int(job.get('downloaded_bytes') or 0)
+        prev_pct = float(job.get('progress_pct') or 0.0)
+        done_msgids: set[str] = set()
+        if os.path.isfile(done_segs_file):
+            try:
+                with open(done_segs_file, 'r', encoding='utf-8') as df:
+                    done_msgids = {line.strip() for line in df if line.strip()}
+            except OSError:
+                done_msgids = set()
+
+        db.update_download(
+            job_id,
+            status='downloading',
+            progress_pct=prev_pct if done_msgids else 0.0,
+            downloaded_bytes=prev_dl_bytes if done_msgids else 0,
+        )
+        _activity_log('info', f"{'Resuming' if done_msgids else 'Starting'} Usenet download: {job['nzb_title']}")
 
         nzb_bytes = download_nzb_bytes(job['nzb_url'])
         files = parse_nzb(nzb_bytes)
@@ -644,14 +678,18 @@ def _process_job(job: dict[str, Any]):
         file_paths_lock = threading.Lock()
         claimed_paths: set[str] = set()
         tasks: queue.Queue = queue.Queue()
+        skipped_bytes = 0
         for f_idx, fmeta in enumerate(files):
             for seg in fmeta['segments']:
+                if seg['msgid'] in done_msgids:
+                    skipped_bytes += int(seg.get('bytes') or 0)
+                    continue
                 tasks.put((f_idx, fmeta, seg))
 
-        downloaded_bytes = 0
+        downloaded_bytes = min(prev_dl_bytes, total_bytes) if (done_msgids and prev_dl_bytes > 0) else skipped_bytes
         missing_segments = 0
         crc_errors = 0
-        total_segments = tasks.qsize()
+        total_segments = sum(len(f['segments']) for f in files)
         progress_lock = threading.Lock()
         rate_window_start = time.time()
         rate_window_bytes = 0
@@ -664,7 +702,7 @@ def _process_job(job: dict[str, Any]):
                 conn.connect()
                 while True:
                     with _state_lock:
-                        if job_id in _cancelled_ids:
+                        if job_id in _cancelled_ids or job_id in _preempted_ids:
                             return
                         is_p = _paused
                     if is_p:
@@ -708,6 +746,7 @@ def _process_job(job: dict[str, Any]):
                         seg_len = len(dec['data'])
                         now_t = time.time()
                         with progress_lock:
+                            done_msgids.add(seg['msgid'])
                             downloaded_bytes += seg_len
                             rate_window_bytes += seg_len
                             elapsed = now_t - rate_window_start
@@ -743,6 +782,20 @@ def _process_job(job: dict[str, Any]):
                 if job.get('media_type') == 'movie' and job.get('media_id'):
                     db.update_movie_status(int(job['media_id']), 'wanted')
                 return
+            if job_id in _preempted_ids:
+                _preempted_ids.discard(job_id)
+                was_preempted = True
+
+        if was_preempted:
+            pct = min(99.0, (downloaded_bytes / total_bytes * 100.0)) if total_bytes > 0 else 0.0
+            db.update_download(job_id, status='queued', downloaded_bytes=downloaded_bytes, progress_pct=round(pct, 1))
+            try:
+                with open(done_segs_file, 'w', encoding='utf-8') as df:
+                    df.write('\n'.join(done_msgids))
+            except OSError:
+                pass
+            _activity_log('info', f"Paused & re-queued '{job['nzb_title']}' at {round(pct, 1)}% to prioritize new top download")
+            return
 
         if total_segments > 0 and missing_segments / total_segments > 0.25:
             raise RuntimeError(f"Too many missing articles ({missing_segments}/{total_segments})")
@@ -830,7 +883,8 @@ def _process_job(job: dict[str, Any]):
         with _state_lock:
             _live_state['download_rate_bps'] = 0
             _live_state['active_job_id'] = None
-        shutil.rmtree(work_dir, ignore_errors=True)
+        if not was_preempted:
+            shutil.rmtree(work_dir, ignore_errors=True)
 
 
 def _worker_loop():
