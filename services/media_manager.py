@@ -405,11 +405,23 @@ def sync_on_disk_shows() -> list[dict[str, Any]]:
 
 # ── Search, Select & Queue ───────────────────────────────────────────────────
 
+def _get_episode_airdate(show: dict[str, Any], season: int, episode: int) -> str | None:
+    """Look up the airdate ('YYYY-MM-DD') for a show's (season, episode) from TVMaze metadata."""
+    tvmaze_id = show.get('tvmaze_id')
+    if not tvmaze_id or int(tvmaze_id) <= 0:
+        return None
+    for ep in metadata.get_show_episodes(int(tvmaze_id)):
+        if int(ep['season']) == int(season) and int(ep['episode']) == int(episode):
+            return ep.get('airdate') or None
+    return None
+
+
 def queue_episode(
     show: dict[str, Any],
     season: int,
     episode: int,
     retry_count: int = 0,
+    airdate: str | None = None,
 ) -> tuple[bool, str]:
     """Search NZBgeek for a single episode, pick the best non-blocklisted release, and enqueue it."""
     show_title = show['title']
@@ -421,12 +433,14 @@ def queue_episode(
         if db.has_active_download('episode', show_title, season, episode):
             return False, f"{show_title} {tag} already queued"
 
+    ep_airdate = airdate or _get_episode_airdate(show, season, episode)
     candidates = nzbgeek.search_episode(
         show_title=show_title,
         season=season,
         episode=episode,
         tvdb_id=show.get('tvdb_id'),
         imdb_id=show.get('imdb_id'),
+        airdate=ep_airdate,
     )
     if not candidates:
         return False, f"No NZBgeek results for {show_title} {tag}"
@@ -435,7 +449,7 @@ def queue_episode(
     ranked = release_selector.select_releases(
         candidates=candidates,
         media_type='episode',
-        expected={'title': show_title, 'season': season, 'episode': episode},
+        expected={'title': show_title, 'season': season, 'episode': episode, 'airdate': ep_airdate},
         blocklisted_guids=blocked,
     )
     if not ranked:
@@ -911,18 +925,20 @@ def search_releases_for_episode(show_id: int, season: int, episode: int) -> dict
     show = db.get_show(show_id)
     if not show:
         return {'status': 'error', 'message': 'Show not found', 'releases': []}
+    ep_airdate = _get_episode_airdate(show, season, episode)
     candidates = nzbgeek.search_episode(
         show_title=show['title'],
         season=season,
         episode=episode,
         tvdb_id=show.get('tvdb_id'),
         imdb_id=show.get('imdb_id'),
+        airdate=ep_airdate,
     )
     blocked = db.get_blocklisted_guids()
     ranked = release_selector.select_releases(
         candidates=candidates,
         media_type='episode',
-        expected={'title': show['title'], 'season': season, 'episode': episode},
+        expected={'title': show['title'], 'season': season, 'episode': episode, 'airdate': ep_airdate},
         blocklisted_guids=set(),  # show even blocklisted ones with a flag in manual picker
     )
     out = []

@@ -121,42 +121,93 @@ def search_episode(
     episode: int,
     tvdb_id: int | None = None,
     imdb_id: str | None = None,
+    airdate: str | None = None,
 ) -> list[dict[str, Any]]:
     """
     Search NZBgeek for a specific TV episode.
-    Prefers TVDB ID lookup (exact, like Sonarr), falling back to text query.
+    Supports both Standard (SxxExx) and Sonarr Daily/Date-based (YYYY.MM.DD / season=YYYY&ep=MM/DD) shows
+    such as WWE Raw, SmackDown, and late-night/daily programs.
     """
     results: list[dict[str, Any]] = []
+    seen_guids: set[str] = set()
+
+    def _add_unique(items: list[dict[str, Any]]):
+        for it in items:
+            g = it.get('guid') or it.get('nzb_url') or it.get('title')
+            if g and g not in seen_guids:
+                seen_guids.add(g)
+                results.append(it)
+
+    clean_imdb = re.sub(r'^tt', '', str(imdb_id or '')).strip()
+    has_imdb = clean_imdb.isdigit()
+
+    # 1. Standard SxxExx Newznab tvsearch
     if tvdb_id:
-        results = _query({
+        _add_unique(_query({
             't': 'tvsearch',
             'tvdbid': int(tvdb_id),
             'season': int(season),
             'ep': int(episode),
-        })
-    if not results and imdb_id:
-        clean_imdb = re.sub(r'^tt', '', str(imdb_id))
-        if clean_imdb.isdigit():
-            results = _query({
-                't': 'tvsearch',
-                'imdbid': clean_imdb,
-                'season': int(season),
-                'ep': int(episode),
-            })
+        }))
+    if not results and has_imdb:
+        _add_unique(_query({
+            't': 'tvsearch',
+            'imdbid': clean_imdb,
+            'season': int(season),
+            'ep': int(episode),
+        }))
     if not results:
-        results = _query({
+        _add_unique(_query({
             't': 'tvsearch',
             'q': show_title,
             'season': int(season),
             'ep': int(episode),
-        })
+        }))
+
+    # 2. Sonarr Daily / Airdate Newznab search (season=YYYY, ep=MM/DD and text YYYY MM DD)
+    ad_match = re.match(r'^(\d{4})-(\d{2})-(\d{2})$', str(airdate or '').strip())
+    if not results and ad_match:
+        yyyy, mm, dd = ad_match.group(1), ad_match.group(2), ad_match.group(3)
+        ep_date = f"{mm}/{dd}"
+        if tvdb_id:
+            _add_unique(_query({
+                't': 'tvsearch',
+                'tvdbid': int(tvdb_id),
+                'season': yyyy,
+                'ep': ep_date,
+            }))
+        if not results and has_imdb:
+            _add_unique(_query({
+                't': 'tvsearch',
+                'imdbid': clean_imdb,
+                'season': yyyy,
+                'ep': ep_date,
+            }))
+        if not results:
+            _add_unique(_query({
+                't': 'tvsearch',
+                'q': show_title,
+                'season': yyyy,
+                'ep': ep_date,
+            }))
+        if not results:
+            _add_unique(_query({
+                't': 'search',
+                'q': f"{show_title} {yyyy} {mm} {dd}",
+            }))
+
+    # 3. Final free-text SxxExx search fallback
     if not results:
         ep_tag = f"S{int(season):02d}E{int(episode):02d}"
-        results = _query({
+        _add_unique(_query({
             't': 'search',
             'q': f"{show_title} {ep_tag}",
-        })
-    logger.info(f"[NZBgeek] Episode search '{show_title}' S{season:02d}E{episode:02d} -> {len(results)} candidate(s)")
+        }))
+
+    logger.info(
+        f"[NZBgeek] Episode search '{show_title}' S{season:02d}E{episode:02d} "
+        f"(airdate={airdate or 'none'}) -> {len(results)} candidate(s)"
+    )
     return results
 
 

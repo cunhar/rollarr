@@ -91,6 +91,23 @@ class TestReleaseSelector(unittest.TestCase):
         r4 = select_releases(c4, 'movie', {'title': 'Deadpool & Wolverine', 'year': 2024})
         self.assertEqual(len(r4), 1)
 
+    def test_daily_airdate_episode_matching(self):
+        p = parse_release('WWE.RAW.2026.11.23.NF.iNT.1080p.WEB-DL.HFR.H.265-PNiX')
+        self.assertEqual(p['airdate'], '2026-11-23')
+        self.assertEqual(p['resolution'], '1080p')
+        self.assertEqual(p['source'], 'webdl')
+
+        candidates = [
+            {'title': 'WWE.RAW.2026.11.23.NF.iNT.1080p.WEB-DL.HFR.H.265-PNiX', 'guid': 'raw_ok', 'nzb_url': 'u', 'size_bytes': 3 * 1024**3},
+            {'title': 'WWE.RAW.2026.11.16.NF.iNT.1080p.WEB-DL.HFR.H.265-PNiX', 'guid': 'raw_wrong_date', 'nzb_url': 'u', 'size_bytes': 3 * 1024**3},
+        ]
+        ranked = select_releases(
+            candidates, 'episode',
+            {'title': 'WWE Raw', 'season': 33, 'episode': 47, 'airdate': '2026-11-23'},
+            preferred_resolution='1080p', max_size_gb=8,
+        )
+        self.assertEqual([r['guid'] for r in ranked], ['raw_ok'])
+
 
 if __name__ == '__main__':
     unittest.main()

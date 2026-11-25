@@ -71,6 +71,10 @@ _RE_JUNK = re.compile(
 # Episode markers: S01E02, S01E02E03, 1x02
 _RE_EPISODE = re.compile(r'(?:^|[\.\s_\-])S(\d{1,2})E(\d{1,3})(?:[\-E](\d{1,3}))?(?:$|[\.\s_\-])', re.I)
 _RE_EPISODE_ALT = re.compile(r'(?:^|[\.\s_\-])(\d{1,2})x(\d{1,3})(?:$|[\.\s_\-])', re.I)
+# Daily / Date-based episode marker: YYYY.MM.DD, YYYY-MM-DD, YYYY_MM_DD
+_RE_AIRDATE = re.compile(
+    r'(?:^|[\.\s_\-])((?:19|20)\d{2})[\.\s_\-](0[1-9]|1[0-2])[\.\s_\-](0[1-9]|[12]\d|3[01])(?:$|[\.\s_\-])'
+)
 # Season pack marker (e.g. S01 without E01, or "Season 1", "Complete")
 _RE_SEASON_ONLY = re.compile(r'(?:^|[\.\s_\-])(?:S(\d{1,2})(?!E\d)|Season[\.\s_\-]?(\d{1,2})|Complete[\.\s_\-]?Series)(?:$|[\.\s_\-])', re.I)
 _RE_YEAR = re.compile(r'(?:^|[\.\s_\-\(\[])((?:19|20)\d{2})(?=$|[\.\s_\-\)\]])')
@@ -138,6 +142,8 @@ def parse_release(title: str) -> dict[str, Any]:
 
     years = [int(y) for y in _RE_YEAR.findall(t)]
     year = years[-1] if years else None
+    ad_m = _RE_AIRDATE.search(t)
+    airdate = f"{ad_m.group(1)}-{ad_m.group(2)}-{ad_m.group(3)}" if ad_m else None
 
     return {
         'resolution': resolution,
@@ -151,6 +157,7 @@ def parse_release(title: str) -> dict[str, Any]:
         'season': season,
         'episode': episode,
         'ep_end': ep_end,
+        'airdate': airdate,
         'is_season_pack': is_season_pack,
         'year': year,
         'years': years,
@@ -227,6 +234,7 @@ def is_junk_release(
             return True, 'season_pack'
         exp_s = expected.get('season')
         exp_e = expected.get('episode')
+        exp_ad = expected.get('airdate')
         if parsed['season'] is not None and exp_s is not None and parsed['season'] != int(exp_s):
             return True, f"wrong_season (S{parsed['season']:02d})"
         if parsed['episode'] is not None and exp_e is not None:
@@ -235,11 +243,15 @@ def is_junk_release(
             )
             if not ep_ok:
                 return True, f"wrong_episode (E{parsed['episode']:02d})"
+        if parsed.get('airdate') and exp_ad and parsed['airdate'] != exp_ad:
+            return True, f"wrong_airdate ({parsed['airdate']} != {exp_ad})"
+        if parsed['season'] is None and parsed['episode'] is None and not parsed.get('airdate'):
+            return True, 'missing_episode_or_date'
         if not _title_matches(rel_title, exp_title):
             return True, 'title_mismatch'
     else:
         # Movie checks
-        if parsed['season'] is not None or parsed['is_season_pack']:
+        if parsed['season'] is not None or parsed['is_season_pack'] or parsed.get('airdate'):
             return True, 'tv_release_for_movie'
         exp_year = expected.get('year')
         parsed_years = parsed.get('years') or ([parsed['year']] if parsed.get('year') else [])
