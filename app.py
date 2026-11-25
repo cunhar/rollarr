@@ -256,7 +256,7 @@ def api_library():
         for d in active_dls
         if d.get('media_type') == 'episode' and d.get('title')
     }
-    shows = db.list_shows()
+    shows = media_manager.sync_on_disk_shows()
     for s in shows:
         on_disk_cnt = len(media_manager._scan_show_episodes_on_disk(s['title']))
         s['on_disk_count'] = on_disk_cnt

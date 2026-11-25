@@ -120,6 +120,30 @@ class TestMediaManagerAndDb(unittest.TestCase):
             titles = [m['title'] for m in synced]
             self.assertIn('Nope', titles)
 
+            # Test sync_on_disk_shows auto-removes empty show folders and imports untracked show folders
+            empty_show = os.path.join(self.tv_dir, 'Empty Ghost Show')
+            os.makedirs(empty_show, exist_ok=True)
+            orphan_show = os.path.join(self.tv_dir, 'Orphan Show', 'Season 01')
+            os.makedirs(orphan_show, exist_ok=True)
+            with open(os.path.join(orphan_show, 'Orphan Show - S01E01.mkv'), 'wb') as f:
+                f.write(b'ep video')
+
+            with patch('services.media_manager.metadata.find_show_by_title', return_value=None):
+                synced_shows = media_manager.sync_on_disk_shows()
+            self.assertFalse(os.path.exists(empty_show))
+            show_titles = [s['title'] for s in synced_shows]
+            self.assertIn('Orphan Show', show_titles)
+
+            # Test sweep_orphaned_temp_dirs
+            from services import usenet_downloader
+            dl_dir = os.path.join(self.tmpdir.name, 'downloads')
+            stale_job_dir = os.path.join(dl_dir, 'tmp', 'job_9999')
+            os.makedirs(stale_job_dir, exist_ok=True)
+            with patch('services.usenet_downloader.get_config', return_value=dl_dir):
+                removed = usenet_downloader.sweep_orphaned_temp_dirs()
+            self.assertEqual(removed, 1)
+            self.assertFalse(os.path.exists(stale_job_dir))
+
             # Test manual_delete_episode & manual_delete_season
             show = db.upsert_show(tvmaze_id=123, title='Severance', tvdb_id=456, year=2022)
             os.makedirs(ep_dir, exist_ok=True)

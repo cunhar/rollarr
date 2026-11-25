@@ -128,21 +128,23 @@ function renderDownloadCard(d, mIdx, mTotal) {
 function renderDiskSpaceCell(d) {
     const badgeColor = d.status === 'ok' ? 'green' : (d.status === 'warning' ? 'amber' : 'red');
     const fillColor = d.status === 'critical' ? '#e05252' : (d.status === 'warning' ? '#e5a00d' : '#3ecf8e');
+    const folderFmt = d.folder_formatted || '0.0 GB';
+    const folderPct = d.folder_pct !== undefined ? d.folder_pct : 0;
     return `
     <div class="stat-cell" style="flex:1;">
         <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
             <span class="stat-label" style="font-weight:600; text-transform:uppercase;">${escapeHtml(d.label)}</span>
             <span class="badge badge-${badgeColor}">${d.free_pct}% Free</span>
         </div>
-        <div class="stat-value ${badgeColor}" style="margin-bottom:8px;">${escapeHtml(d.free_formatted)} <span style="font-size:13px; font-weight:normal; color:var(--text-sub);">free</span></div>
+        <div class="stat-value ${badgeColor}" style="margin-bottom:8px;">${escapeHtml(folderFmt)} <span style="font-size:13px; font-weight:normal; color:var(--text-sub);">in folder (${escapeHtml(d.free_formatted)} free)</span></div>
         
         <div class="idle-track" style="margin-bottom:8px;">
             <div class="idle-fill" style="width: ${d.used_pct}%; background: ${fillColor};"></div>
         </div>
         
         <div class="stat-sub">
-            <span>Used: ${escapeHtml(d.used_formatted)} (${d.used_pct}%)</span>
-            <span>Total: ${escapeHtml(d.total_formatted)}</span>
+            <span>Folder Share: ${folderPct}% of drive</span>
+            <span>Drive Used: ${escapeHtml(d.used_formatted)} / ${escapeHtml(d.total_formatted)}</span>
         </div>
         <div class="stat-sub" style="margin-top:8px;">
             <span>Path: <code>${escapeHtml(d.configured_path)}</code></span>
@@ -748,8 +750,9 @@ function deleteLibraryItem(type, id, btnEl) {
         btnEl.disabled = true;
     }
     Api.deleteLibraryItem(type, id).then(() => {
-        showToast('Removed from tracked library', 'info');
+        showToast('Removed from tracked library & disk', 'info');
         loadLibrary();
+        Api.fetchDiskSpace().then(d => { if (d) renderDiskSpace(d); });
     });
 }
 
@@ -1018,6 +1021,35 @@ function renderDiskSpace(data) {
     const grid = el('disk-grid');
     if (!grid || !data || !data.disks) return;
     grid.innerHTML = Object.entries(data.disks).map(([key, d]) => renderDiskSpaceCell(d)).join('');
+
+    const largestEl = el('disk-largest-container');
+    if (largestEl) {
+        const items = data.largest_items || [];
+        if (items.length === 0) {
+            largestEl.innerHTML = '<div class="no-logs">No media files found on disk.</div>';
+        } else {
+            largestEl.innerHTML = items.map(it => {
+                const badgeCls = it.type === 'tv' ? 'badge-blue' : 'badge-amber';
+                const badgeLbl = it.type === 'tv' ? 'TV' : 'MOVIE';
+                const delBtn = it.id
+                    ? `<button type="button" class="btn-clear btn-icon-trash" title="Delete from disk & library" onclick="deleteLibraryItem('${escapeHtml(it.type)}', ${it.id}, this)">${SVG_ICONS.trash}</button>`
+                    : '';
+                return `
+                <div class="library-row">
+                    <div style="display:flex; align-items:center; gap:10px; min-width:0;">
+                        <span class="badge ${badgeCls}">${badgeLbl}</span>
+                        <strong>${escapeHtml(it.title)}</strong>
+                        ${it.year ? `<span class="media-year">(${it.year})</span>` : ''}
+                        <span style="font-size:12px; color:var(--text-sub);">${escapeHtml(it.detail || '')}</span>
+                    </div>
+                    <div class="ep-controls-row" style="display:flex; align-items:center; gap:10px;">
+                        <span class="badge badge-dim" style="font-family:var(--mono);">${escapeHtml(it.size_formatted)} (${it.pct_of_disk}%)</span>
+                        ${delBtn}
+                    </div>
+                </div>`;
+            }).join('');
+        }
+    }
 }
 
 function updateActivityLog(logs) {

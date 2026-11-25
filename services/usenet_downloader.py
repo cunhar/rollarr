@@ -896,9 +896,39 @@ def _process_job(job: dict[str, Any]):
             shutil.rmtree(work_dir, ignore_errors=True)
 
 
+def sweep_orphaned_temp_dirs() -> int:
+    """Remove any /downloads/tmp/job_* directories that do not belong to an active download."""
+    dl_root = get_config('PATH_DOWNLOADS', '/downloads') or '/downloads'
+    tmp_root = os.path.join(dl_root, 'tmp')
+    if not os.path.isdir(tmp_root):
+        return 0
+
+    active_ids = {int(d['id']) for d in db.list_active_downloads() if d.get('id') is not None}
+    with _state_lock:
+        if _live_state.get('active_job_id') is not None:
+            active_ids.add(int(_live_state['active_job_id']))
+
+    removed = 0
+    for entry in os.listdir(tmp_root):
+        full = os.path.join(tmp_root, entry)
+        if not os.path.isdir(full):
+            continue
+        m = re.match(r'^job_(\d+)$', entry)
+        if m and int(m.group(1)) in active_ids:
+            continue
+        try:
+            shutil.rmtree(full, ignore_errors=True)
+            removed += 1
+            logger.info(f"[UsenetDL] Swept orphaned temp download directory: {full}")
+        except OSError:
+            pass
+    return removed
+
+
 def _worker_loop():
     logger.info("[UsenetDL] Background download worker started.")
     db.reset_interrupted_downloads()
+    sweep_orphaned_temp_dirs()
 
     while True:
         try:

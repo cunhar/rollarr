@@ -345,6 +345,64 @@ def sync_on_disk_movies() -> list[dict[str, Any]]:
     return db.list_movies() if added_any else tracked
 
 
+def sync_on_disk_shows() -> list[dict[str, Any]]:
+    """
+    Scan PATH_TV for any TV show directories on disk that are not yet tracked in SQLite:
+      - Removes empty/video-less orphaned show directories automatically.
+      - Auto-registers any untracked on-disk show into SQLite (via TVMaze or local fallback)
+        so it is visible and deletable in the UI.
+    Returns the updated list of tracked shows from SQLite.
+    """
+    tv_root = get_config('PATH_TV', '/tv') or '/tv'
+    tracked = db.list_shows()
+    if not os.path.isdir(tv_root):
+        return tracked
+
+    tracked_clean = {clean_title(s['title']) for s in tracked if s.get('title')}
+    added_any = False
+
+    for entry in sorted(os.listdir(tv_root)):
+        full = os.path.join(tv_root, entry)
+        if not os.path.isdir(full):
+            continue
+
+        has_video = False
+        for _, _, fnames in os.walk(full):
+            if any(os.path.splitext(fn)[1].lower() in VIDEO_EXTS for fn in fnames):
+                has_video = True
+                break
+
+        entry_clean = clean_title(entry)
+        if not has_video:
+            # Remove empty/sidecar-only untracked TV folders automatically
+            if entry_clean not in tracked_clean and is_safe_subpath(full, tv_root):
+                try:
+                    shutil.rmtree(full)
+                    logger.info(f"[MediaManager] Cleaned up empty TV directory: {full}")
+                except OSError:
+                    pass
+            continue
+
+        if not entry_clean or entry_clean in tracked_clean:
+            continue
+
+        resolved = resolve_or_track_show(entry)
+        if not resolved:
+            synthetic_id = -abs(hash(f"disk_tv:{entry_clean}")) % (10**9)
+            resolved = db.upsert_show(
+                tvmaze_id=synthetic_id,
+                title=entry.strip(),
+                status='active',
+            )
+        tracked_clean.add(entry_clean)
+        if resolved and resolved.get('title'):
+            tracked_clean.add(clean_title(resolved['title']))
+        added_any = True
+        logger.info(f"[MediaManager] Auto-imported untracked on-disk TV show: '{entry}'")
+
+    return db.list_shows() if added_any else tracked
+
+
 # ── Search, Select & Queue ───────────────────────────────────────────────────
 
 def queue_episode(

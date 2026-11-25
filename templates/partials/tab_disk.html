@@ -14,15 +14,15 @@
                 <span class="stat-label" style="font-weight:600; text-transform:uppercase;">{{ d.label }}</span>
                 <span class="badge badge-{{ 'green' if d.status == 'ok' else ('amber' if d.status == 'warning' else 'red') }}">{{ d.free_pct }}% Free</span>
             </div>
-            <div class="stat-value {{ status_class }}" style="margin-bottom:8px;">{{ d.free_formatted }} <span style="font-size:13px; font-weight:normal; color:var(--text-sub);">free</span></div>
+            <div class="stat-value {{ status_class }}" style="margin-bottom:8px;">{{ d.folder_formatted or '0.0 GB' }} <span style="font-size:13px; font-weight:normal; color:var(--text-sub);">in folder ({{ d.free_formatted }} free)</span></div>
             
             <div class="idle-track" style="margin-bottom:8px;">
                 <div class="idle-fill" style="width: {{ d.used_pct }}%; background: {{ '#e05252' if d.status == 'critical' else ('#e5a00d' if d.status == 'warning' else '#3ecf8e') }};"></div>
             </div>
             
             <div class="stat-sub">
-                <span>Used: {{ d.used_formatted }} ({{ d.used_pct }}%)</span>
-                <span>Total: {{ d.total_formatted }}</span>
+                <span>Folder Share: {{ d.folder_pct or 0 }}% of drive</span>
+                <span>Drive Used: {{ d.used_formatted }} / {{ d.total_formatted }}</span>
             </div>
             <div class="stat-sub" style="margin-top:8px;">
                 <span>Path: <code>{{ d.configured_path }}</code></span>
@@ -30,6 +30,15 @@
             </div>
         </div>
         {% endfor %}
+    </div>
+
+    <div class="dash-section">
+        <div class="dash-section-header">
+            <span class="section-title" style="margin-bottom:0;">Largest Media on Disk</span>
+        </div>
+        <div id="disk-largest-container" class="media-list">
+            <div class="no-logs">Loading on-disk storage breakdown...</div>
+        </div>
     </div>
 
 </div>
