@@ -748,11 +748,8 @@ def manual_delete_episode(show_id: int, season: int, episode: int) -> dict[str, 
     if not deleted_disk and not cancelled_dl:
         return {'status': 'warning', 'message': f"{show['title']} {tag} — {detail}"}
 
-    remaining_on_disk = _scan_show_episodes_on_disk(show['title'])
-    if remaining_on_disk:
+    if deleted_disk:
         db.update_show_watch_cursor(show['id'], season, episode)
-    else:
-        db.update_show_watch_cursor(show['id'], None, None, force=True)
 
     usenet_downloader._notify_media_servers()
     action = detail if deleted_disk else 'cancelled active download'
@@ -781,10 +778,7 @@ def manual_delete_season(show_id: int, season: int) -> dict[str, Any]:
         if ok:
             deleted_count += 1
 
-    remaining_on_disk = _scan_show_episodes_on_disk(show['title'])
-    if not remaining_on_disk:
-        db.update_show_watch_cursor(show['id'], None, None, force=True)
-    elif on_disk:
+    if on_disk:
         db.update_show_watch_cursor(show['id'], season, max(on_disk))
 
     usenet_downloader._notify_media_servers()

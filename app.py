@@ -261,15 +261,23 @@ def api_library():
         on_disk_cnt = len(media_manager._scan_show_episodes_on_disk(s['title']))
         s['on_disk_count'] = on_disk_cnt
         is_dl = media_manager.clean_title(s['title']) in active_show_titles
+        lw_s = s.get('last_watched_season')
+        lw_e = s.get('last_watched_episode')
         if is_dl:
             s['status'] = 'downloading'
         elif on_disk_cnt > 0:
             s['status'] = f"{on_disk_cnt} on disk"
+        elif lw_s is not None and lw_e is not None:
+            s['status'] = f"caught up (S{int(lw_s):02d}E{int(lw_e):02d})"
         else:
             s['status'] = 'idle'
 
     show_rank = lambda s: (
-        0 if s['status'] == 'downloading' else (1 if s.get('on_disk_count', 0) > 0 else 2),
+        0 if s['status'] == 'downloading' else (
+            1 if s.get('on_disk_count', 0) > 0 else (
+                2 if str(s.get('status') or '').startswith('caught up') else 3
+            )
+        ),
         (s.get('title') or '').lower(),
     )
     shows.sort(key=show_rank)

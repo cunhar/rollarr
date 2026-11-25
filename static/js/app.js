@@ -774,7 +774,7 @@ function loadLibrary() {
                 showsEl.innerHTML = shows.map(s => {
                     const st = (s.status || 'idle').toLowerCase();
                     const sBadge = st === 'downloading' ? 'badge-blue'
-                        : (st.includes('on disk') || st === 'active') ? 'badge-green'
+                        : (st.includes('on disk') || st === 'active' || st.startsWith('caught up')) ? 'badge-green'
                             : 'badge-dim';
                     return `
                     <details class="config-card" data-show-id="${s.id}" ${openIds.has(String(s.id)) ? 'open' : ''} ontoggle="onShowToggle(this, ${s.id})" style="margin-bottom:0;">
