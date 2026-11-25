@@ -573,6 +573,18 @@ function queueSingleEpisode(showId, season, episode, btnEl) {
         });
 }
 
+const _openSeasonsByShow = {};
+
+function onSeasonToggle(detailsEl, showId, seasonNum) {
+    const key = String(showId);
+    if (!_openSeasonsByShow[key]) _openSeasonsByShow[key] = new Set();
+    if (detailsEl.open) {
+        _openSeasonsByShow[key].add(String(seasonNum));
+    } else {
+        _openSeasonsByShow[key].delete(String(seasonNum));
+    }
+}
+
 function onShowToggle(detailsEl, showId) {
     if (detailsEl.open) {
         loadShowEpisodes(showId, false);
@@ -584,7 +596,9 @@ function loadShowEpisodes(showId, forceReload = false) {
     if (!body) return;
     if (!forceReload && body.dataset.loaded === '1') return;
 
-    const openSeasons = new Set();
+    const showKey = String(showId);
+    if (!_openSeasonsByShow[showKey]) _openSeasonsByShow[showKey] = new Set();
+    const openSeasons = _openSeasonsByShow[showKey];
     body.querySelectorAll('details.season-card[data-season]').forEach(d => {
         if (d.open) openSeasons.add(d.getAttribute('data-season'));
     });
@@ -604,7 +618,7 @@ function loadShowEpisodes(showId, forceReload = false) {
             return;
         }
         body.innerHTML = seasons.map(sec => `
-            <details class="season-card" data-season="${sec.season}" ${openSeasons.has(String(sec.season)) ? 'open' : ''}>
+            <details class="season-card" data-season="${sec.season}" ${openSeasons.has(String(sec.season)) ? 'open' : ''} ontoggle="onSeasonToggle(this, ${showId}, ${sec.season})">
                 <summary class="season-summary">
                     <span>Season ${sec.season}</span>
                     <span style="display:flex; align-items:center; gap:8px;">
@@ -677,7 +691,6 @@ function deleteEpisodeFile(showId, season, episode, btnEl) {
     Api.deleteSingleEpisode(showId, season, episode)
         .then(({ ok, data }) => {
             showToast((data && data.message) || 'Episode deleted', ok ? 'info' : 'err');
-            loadShowEpisodes(showId, true);
             loadLibrary();
             setTimeout(pollAll, 500);
         })
@@ -713,7 +726,6 @@ function deleteSeasonFiles(showId, season, btnEl) {
     Api.deleteSeasonEpisodes(showId, season)
         .then(({ ok, data }) => {
             showToast((data && data.message) || 'Season files deleted', ok ? 'info' : 'err');
-            loadShowEpisodes(showId, true);
             loadLibrary();
             setTimeout(pollAll, 500);
         })
@@ -769,7 +781,13 @@ function loadLibrary() {
             } else {
                 const openIds = new Set();
                 showsEl.querySelectorAll('details[data-show-id]').forEach(d => {
-                    if (d.open) openIds.add(d.getAttribute('data-show-id'));
+                    const sid = d.getAttribute('data-show-id');
+                    if (d.open) openIds.add(sid);
+                    const openSec = new Set();
+                    d.querySelectorAll('details.season-card[data-season]').forEach(sd => {
+                        if (sd.open) openSec.add(sd.getAttribute('data-season'));
+                    });
+                    if (openSec.size > 0) _openSeasonsByShow[String(sid)] = openSec;
                 });
                 showsEl.innerHTML = shows.map(s => {
                     const st = (s.status || 'idle').toLowerCase();
@@ -1006,6 +1024,7 @@ window.addLibraryItem = addLibraryItem;
 window.queueShowFrom = queueShowFrom;
 window.queueSingleEpisode = queueSingleEpisode;
 window.onShowToggle = onShowToggle;
+window.onSeasonToggle = onSeasonToggle;
 window.deleteLibraryItem = deleteLibraryItem;
 window.loadLibrary = loadLibrary;
 window.openMoviePicker = openMoviePicker;
