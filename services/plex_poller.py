@@ -338,6 +338,11 @@ def trigger_plex_refresh() -> bool:
                 )
                 if r.status_code in (200, 204):
                     refreshed = True
+                requests.put(
+                    f"{plex_url}/library/sections/{sec['key']}/emptyTrash",
+                    params={'X-Plex-Token': plex_token},
+                    timeout=10,
+                )
             except Exception as exc:
                 logger.warning(f"[PlexPoller] Failed refreshing Plex section {sec.get('key')}: {exc}")
     return refreshed

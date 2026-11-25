@@ -225,7 +225,7 @@ def api_search():
 
 @app.route('/api/library')
 def api_library():
-    movies = db.list_movies()
+    movies = media_manager.sync_on_disk_movies()
     for m in movies:
         fpath = m.get('file_path')
         disk_path = fpath if (fpath and os.path.isfile(fpath)) else media_manager.find_movie_file_on_disk(m['title'], m.get('year'))
@@ -374,8 +374,9 @@ def api_library_delete(media_type: str, item_id: int):
             for d in db.list_active_downloads():
                 if d.get('media_type') == 'movie' and (d.get('media_id') == item_id or media_manager.clean_title(d.get('title') or '') == media_manager.clean_title(mov['title'])):
                     usenet_downloader.cancel_download(int(d['id']))
-            media_manager.delete_movie_file(mov['title'], mov.get('year'), reported_path=mov.get('file_path'))
+            deleted_disk, detail = media_manager.delete_movie_file(mov['title'], mov.get('year'), reported_path=mov.get('file_path'))
             usenet_downloader._notify_media_servers()
+            activity_log.log_call('info', f"Removed movie '{mov['title']}' ({detail})")
         ok = db.delete_movie(item_id)
     elif media_type == 'tv':
         show = db.get_show(item_id)
@@ -383,9 +384,9 @@ def api_library_delete(media_type: str, item_id: int):
             for d in db.list_active_downloads():
                 if d.get('media_type') == 'episode' and (d.get('media_id') == item_id or media_manager.clean_title(d.get('title') or '') == media_manager.clean_title(show['title'])):
                     usenet_downloader.cancel_download(int(d['id']))
-            for s_num, ep_num in list(media_manager._scan_show_episodes_on_disk(show['title'])):
-                media_manager.delete_episode_file(show['title'], s_num, ep_num)
+            _, detail = media_manager.delete_show_directory(show['title'])
             usenet_downloader._notify_media_servers()
+            activity_log.log_call('info', f"Removed TV show '{show['title']}' ({detail})")
         ok = db.delete_show(item_id)
     else:
         return jsonify({'status': 'error', 'message': 'Invalid media type'}), 400

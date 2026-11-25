@@ -91,10 +91,34 @@ class TestMediaManagerAndDb(unittest.TestCase):
             self.assertFalse(os.path.exists(ep_file))
             self.assertFalse(os.path.exists(ep_dir))  # empty season folder cleaned up
 
+            mov_dir = os.path.join(self.movies_dir, 'Inception (2010)')
+            os.makedirs(mov_dir, exist_ok=True)
+            mov_file = os.path.join(mov_dir, 'Inception (2010).mkv')
+            mov_vtt = os.path.join(mov_dir, 'Inception (2010)._emb_0.vtt')
+            with open(mov_file, 'wb') as f:
+                f.write(b'movie')
+            with open(mov_vtt, 'wb') as f:
+                f.write(b'WEBVTT')
+
             ok_m, _ = media_manager.delete_movie_file('Inception', 2010)
             self.assertTrue(ok_m)
             self.assertFalse(os.path.exists(mov_file))
-            self.assertFalse(os.path.exists(mov_dir))  # empty movie folder cleaned up
+            self.assertFalse(os.path.exists(mov_vtt))
+            self.assertFalse(os.path.exists(mov_dir))  # movie folder + .vtt sidecar cleaned up
+
+            # Test sync_on_disk_movies auto-imports untracked movie folders and removes empty ones
+            orphan_dir = os.path.join(self.movies_dir, 'Nope (2022)')
+            os.makedirs(orphan_dir, exist_ok=True)
+            orphan_mkv = os.path.join(orphan_dir, 'Nope.2022.2160p.mkv')
+            with open(orphan_mkv, 'wb') as f:
+                f.write(b'orphan movie')
+            empty_dir = os.path.join(self.movies_dir, 'Empty Ghost (2026)')
+            os.makedirs(empty_dir, exist_ok=True)
+
+            synced = media_manager.sync_on_disk_movies()
+            self.assertFalse(os.path.exists(empty_dir))
+            titles = [m['title'] for m in synced]
+            self.assertIn('Nope', titles)
 
             # Test manual_delete_episode & manual_delete_season
             show = db.upsert_show(tvmaze_id=123, title='Severance', tvdb_id=456, year=2022)

@@ -23,10 +23,10 @@ def now_str() -> str:
 
 
 def clean_title(t: str) -> str:
-    """Sanitize title by removing year suffix (e.g. '(2023)') and non-alphanumeric characters."""
+    """Sanitize title by removing year suffix (e.g. '(2023)' or '[2023]') and non-alphanumeric characters."""
     if not t:
         return ""
-    t = re.sub(r'\s*\(\d{4}\)\s*$', '', t)
+    t = re.sub(r'\s*[\(\[]\d{4}[\)\]]\s*$', '', t)
     return re.sub(r'[^a-z0-9]', '', t.lower())
 
 

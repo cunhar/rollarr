@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import os
 import re
+import shutil
 import time
 import datetime
 import threading
@@ -67,14 +68,34 @@ def episode_exists_on_disk(show_title: str, season: int, episode: int) -> bool:
     return find_episode_file_on_disk(show_title, season, episode) is not None
 
 
+SIDECAR_EXTS = ('.srt', '.vtt', '.ass', '.ssa', '.sub', '.idx', '.nfo')
+
+
+def _remap_container_path(reported_path: str | None, local_root: str, remote_prefixes: tuple[str, ...]) -> str | None:
+    """Translate a path reported by Jellyfin/Plex (e.g. /data/movies/...) into Rolarr's mount path."""
+    if not reported_path:
+        return None
+    if os.path.exists(reported_path):
+        return reported_path
+    norm = reported_path.replace('\\', '/')
+    for prefix in remote_prefixes:
+        p = prefix.rstrip('/') + '/'
+        if norm.startswith(p):
+            candidate = os.path.join(local_root, norm[len(p):])
+            if os.path.exists(candidate):
+                return candidate
+    return reported_path
+
+
 def _remove_companion_subtitles(video_path: str, base_dir: str):
-    """Remove any sidecar .srt subtitle files sharing the same basename stem."""
+    """Remove any sidecar subtitle/metadata files (.srt, .vtt, .nfo, etc.) sharing the same basename stem."""
     parent = os.path.dirname(video_path)
     stem = os.path.splitext(os.path.basename(video_path))[0]
     if not os.path.isdir(parent):
         return
     for fname in os.listdir(parent):
-        if fname.lower().endswith('.srt') and fname.startswith(stem):
+        low = fname.lower()
+        if low.endswith(SIDECAR_EXTS) and fname.startswith(stem):
             sub_path = os.path.join(parent, fname)
             if is_safe_subpath(sub_path, base_dir):
                 try:
@@ -89,6 +110,19 @@ def _remove_empty_parents(file_path: str, stop_dir: str):
     real_stop = os.path.realpath(stop_dir)
     while cur and os.path.realpath(cur) != real_stop and is_safe_subpath(cur, stop_dir):
         try:
+            entries = os.listdir(cur)
+            # If only sidecar/junk files remain with no video files or subdirs, clean them up too
+            has_video_or_dir = any(
+                os.path.isdir(os.path.join(cur, e)) or os.path.splitext(e)[1].lower() in VIDEO_EXTS
+                for e in entries
+            )
+            if not has_video_or_dir:
+                for e in entries:
+                    if e.lower().endswith(SIDECAR_EXTS):
+                        try:
+                            os.remove(os.path.join(cur, e))
+                        except OSError:
+                            pass
             if not os.listdir(cur):
                 os.rmdir(cur)
                 cur = os.path.dirname(cur)
@@ -108,8 +142,9 @@ def delete_episode_file(
     tv_root = get_config('PATH_TV', '/tv') or '/tv'
     target = None
 
-    if reported_path and os.path.isfile(reported_path) and is_safe_subpath(reported_path, tv_root):
-        target = reported_path
+    remapped = _remap_container_path(reported_path, tv_root, ('/data/tvshows', '/data/tv', '/tv'))
+    if remapped and os.path.isfile(remapped) and is_safe_subpath(remapped, tv_root):
+        target = remapped
     else:
         target = find_episode_file_on_disk(show_title, season, episode)
 
@@ -125,31 +160,83 @@ def delete_episode_file(
     return True, f"deleted {os.path.basename(target)}"
 
 
+def delete_show_directory(show_title: str) -> tuple[bool, str]:
+    """Safely delete an entire TV show directory (and all seasons/episodes/sidecars) from PATH_TV."""
+    tv_root = get_config('PATH_TV', '/tv') or '/tv'
+    show_dir = _find_show_dir(show_title)
+    if show_dir and os.path.isdir(show_dir) and is_safe_subpath(show_dir, tv_root):
+        shutil.rmtree(show_dir)
+        logger.info(f"[MediaManager] Deleted show directory: {show_dir}")
+        return True, f"deleted folder {os.path.basename(show_dir)}"
+
+    deleted_any = False
+    for s_num, ep_num in list(_scan_show_episodes_on_disk(show_title)):
+        ok, _ = delete_episode_file(show_title, s_num, ep_num)
+        if ok:
+            deleted_any = True
+    return deleted_any, 'deleted episode files' if deleted_any else 'no files on disk'
+
+
+def _find_movie_dir_on_disk(title: str, year: int | None = None) -> str | None:
+    """Locate a movie folder under PATH_MOVIES matching title (and optionally year)."""
+    movies_root = get_config('PATH_MOVIES', '/movies') or '/movies'
+    if not os.path.isdir(movies_root):
+        return None
+    target_clean = clean_title(title)
+    if not target_clean:
+        return None
+
+    # 1. Exact clean_title match
+    for entry in os.listdir(movies_root):
+        full = os.path.join(movies_root, entry)
+        if os.path.isdir(full) and clean_title(entry) == target_clean:
+            return full
+
+    # 2. Fallback: substring match when year matches (e.g. punctuation/subtitle differences)
+    if year:
+        year_str = str(year)
+        for entry in os.listdir(movies_root):
+            full = os.path.join(movies_root, entry)
+            if not os.path.isdir(full) or year_str not in entry:
+                continue
+            entry_clean = clean_title(entry)
+            if len(target_clean) >= 3 and (target_clean in entry_clean or entry_clean in target_clean):
+                return full
+    return None
+
+
 def find_movie_file_on_disk(title: str, year: int | None = None) -> str | None:
     """Locate a movie video file under PATH_MOVIES matching title (and optionally year)."""
     movies_root = get_config('PATH_MOVIES', '/movies') or '/movies'
     if not os.path.isdir(movies_root):
         return None
     target_clean = clean_title(title)
+    if not target_clean:
+        return None
+
+    movie_dir = _find_movie_dir_on_disk(title, year)
+    if movie_dir:
+        best = None
+        best_sz = -1
+        for dirpath, _, fnames in os.walk(movie_dir):
+            for fn in fnames:
+                if os.path.splitext(fn)[1].lower() in VIDEO_EXTS and 'sample' not in fn.lower():
+                    fp = os.path.join(dirpath, fn)
+                    try:
+                        sz = os.path.getsize(fp)
+                    except OSError:
+                        sz = 0
+                    if sz > best_sz:
+                        best_sz = sz
+                        best = fp
+        if best:
+            return best
 
     for entry in os.listdir(movies_root):
         full = os.path.join(movies_root, entry)
         if os.path.isfile(full) and os.path.splitext(entry)[1].lower() in VIDEO_EXTS:
             if target_clean in clean_title(entry):
                 return full
-        elif os.path.isdir(full) and clean_title(entry) == target_clean:
-            best = None
-            best_sz = 0
-            for dirpath, _, fnames in os.walk(full):
-                for fn in fnames:
-                    if os.path.splitext(fn)[1].lower() in VIDEO_EXTS and 'sample' not in fn.lower():
-                        fp = os.path.join(dirpath, fn)
-                        sz = os.path.getsize(fp)
-                        if sz > best_sz:
-                            best_sz = sz
-                            best = fp
-            if best:
-                return best
     return None
 
 
@@ -158,14 +245,27 @@ def delete_movie_file(
     year: int | None = None,
     reported_path: str | None = None,
 ) -> tuple[bool, str]:
-    """Safely delete a watched movie file (and its empty folder) from PATH_MOVIES."""
+    """Safely delete a movie file and its entire movie folder (including .vtt/.srt sidecars) from PATH_MOVIES."""
     movies_root = get_config('PATH_MOVIES', '/movies') or '/movies'
     target = None
 
-    if reported_path and os.path.isfile(reported_path) and is_safe_subpath(reported_path, movies_root):
-        target = reported_path
+    remapped = _remap_container_path(reported_path, movies_root, ('/data/movies', '/movies'))
+    if remapped and os.path.isfile(remapped) and is_safe_subpath(remapped, movies_root):
+        target = remapped
     else:
         target = find_movie_file_on_disk(title, year)
+
+    movie_dir = _find_movie_dir_on_disk(title, year)
+    if not movie_dir and target:
+        parent = os.path.dirname(target)
+        if os.path.realpath(parent) != os.path.realpath(movies_root) and is_safe_subpath(parent, movies_root):
+            movie_dir = parent
+
+    # If the movie lives inside its own folder under PATH_MOVIES, remove the entire folder cleanly
+    if movie_dir and os.path.isdir(movie_dir) and is_safe_subpath(movie_dir, movies_root):
+        shutil.rmtree(movie_dir)
+        logger.info(f"[MediaManager] Deleted movie folder: {movie_dir}")
+        return True, f"deleted {os.path.basename(movie_dir)}"
 
     if not target or not os.path.isfile(target):
         return False, 'file already absent from disk'
@@ -177,6 +277,72 @@ def delete_movie_file(
     _remove_empty_parents(target, movies_root)
     logger.info(f"[MediaManager] Deleted movie file: {target}")
     return True, f"deleted {os.path.basename(target)}"
+
+
+def sync_on_disk_movies() -> list[dict[str, Any]]:
+    """
+    Scan PATH_MOVIES for any movie directories/files on disk that are not yet tracked in SQLite:
+      - Removes empty/video-less orphaned movie directories automatically.
+      - Auto-registers any untracked on-disk movie into SQLite so it is visible and deletable in the UI.
+    Returns the updated list of tracked movies from SQLite.
+    """
+    movies_root = get_config('PATH_MOVIES', '/movies') or '/movies'
+    tracked = db.list_movies()
+    if not os.path.isdir(movies_root):
+        return tracked
+
+    tracked_clean = {clean_title(m['title']) for m in tracked if m.get('title')}
+    tracked_paths = {os.path.realpath(m['file_path']) for m in tracked if m.get('file_path') and os.path.exists(m['file_path'])}
+    added_any = False
+
+    for entry in sorted(os.listdir(movies_root)):
+        full = os.path.join(movies_root, entry)
+        if os.path.isdir(full):
+            # Find largest video file inside this movie folder
+            best_video = None
+            best_sz = -1
+            for dirpath, _, fnames in os.walk(full):
+                for fn in fnames:
+                    if os.path.splitext(fn)[1].lower() in VIDEO_EXTS and 'sample' not in fn.lower():
+                        fp = os.path.join(dirpath, fn)
+                        try:
+                            sz = os.path.getsize(fp)
+                        except OSError:
+                            sz = 0
+                        if sz > best_sz:
+                            best_sz = sz
+                            best_video = fp
+            if not best_video:
+                # Orphaned directory with no video files -> remove empty/sidecar-only ghost folder
+                if is_safe_subpath(full, movies_root):
+                    try:
+                        shutil.rmtree(full)
+                        logger.info(f"[MediaManager] Cleaned up empty movie directory: {full}")
+                    except OSError:
+                        pass
+                continue
+
+            entry_clean = clean_title(entry)
+            if not entry_clean or entry_clean in tracked_clean or os.path.realpath(best_video) in tracked_paths:
+                continue
+            # Also check substring match against tracked movies with same year
+            m_year = re.search(r'[\(\[](\d{4})[\)\]]', entry)
+            parsed_year = int(m_year.group(1)) if m_year else None
+            raw_title = re.sub(r'\s*[\(\[]\d{4}[\)\]]\s*$', '', entry).strip() or entry
+
+            synthetic_id = -abs(hash(f"disk:{entry_clean}:{parsed_year}")) % (10**9)
+            db.upsert_movie(
+                tmdb_id=synthetic_id,
+                title=raw_title,
+                year=parsed_year,
+                status='downloaded',
+                file_path=best_video,
+            )
+            tracked_clean.add(entry_clean)
+            added_any = True
+            logger.info(f"[MediaManager] Auto-imported untracked on-disk movie: '{raw_title}' ({parsed_year}) -> {best_video}")
+
+    return db.list_movies() if added_any else tracked
 
 
 # ── Search, Select & Queue ───────────────────────────────────────────────────
