@@ -422,6 +422,27 @@ def api_releases_grab():
     return jsonify(res), 200 if res.get('status') == 'success' else 400
 
 
+@app.route('/api/releases/blocklist', methods=['POST', 'DELETE'])
+def api_releases_blocklist():
+    data = request.json or {}
+    nzb_guid = (data.get('nzb_guid') or '').strip()
+    nzb_title = (data.get('nzb_title') or '').strip() or nzb_guid
+    if not nzb_guid:
+        return jsonify({'status': 'error', 'message': 'Missing nzb_guid'}), 400
+
+    if request.method == 'DELETE' or data.get('blocklisted') is False:
+        db.remove_from_blocklist(nzb_guid)
+        msg = f"Unblocklisted release '{nzb_title}'"
+        activity_log.log_call('info', msg)
+        return jsonify({'status': 'success', 'blocklisted': False, 'message': msg}), 200
+
+    reason = (data.get('reason') or 'Manually blocklisted by user').strip()
+    db.add_to_blocklist(nzb_guid, nzb_title, reason)
+    msg = f"Blocklisted release '{nzb_title}'"
+    activity_log.log_call('warning', msg)
+    return jsonify({'status': 'success', 'blocklisted': True, 'message': msg}), 200
+
+
 @app.route('/api/calendar')
 def api_calendar():
     return jsonify({'upcoming': media_manager.get_airing_this_week(7)}), 200

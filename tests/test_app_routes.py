@@ -53,6 +53,26 @@ class TestAppRoutes(unittest.TestCase):
         self.assertEqual(r_sw.status_code, 200)
         self.assertEqual(r_sw.headers.get('Service-Worker-Allowed'), '/')
 
+    def test_manual_blocklist_release_endpoint(self):
+        guid = 'test-manual-blocklist-guid-123'
+        title = 'Show.S01E01.1080p.WEB-DL-GRP'
+
+        r_add = self.client.post('/api/releases/blocklist', json={
+            'nzb_guid': guid,
+            'nzb_title': title,
+        })
+        self.assertEqual(r_add.status_code, 200)
+        self.assertTrue(r_add.get_json()['blocklisted'])
+        self.assertIn(guid, rolarr_app.db.get_blocklisted_guids())
+
+        r_del = self.client.delete('/api/releases/blocklist', json={
+            'nzb_guid': guid,
+            'nzb_title': title,
+        })
+        self.assertEqual(r_del.status_code, 200)
+        self.assertFalse(r_del.get_json()['blocklisted'])
+        self.assertNotIn(guid, rolarr_app.db.get_blocklisted_guids())
+
 
 if __name__ == '__main__':
     unittest.main()

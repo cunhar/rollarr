@@ -28,19 +28,19 @@
         </div>
     </div>
 
-    <script src="{{ url_for('static', filename='js/api.js') }}?v=20261125c"></script>
-    <script src="{{ url_for('static', filename='js/app.js') }}?v=20261125c"></script>
-    <script src="{{ url_for('static', filename='js/tv-nav.js') }}?v=20261125c"></script>
+    <script src="{{ url_for('static', filename='js/api.js') }}?v=20261125d"></script>
+    <script src="{{ url_for('static', filename='js/app.js') }}?v=20261125d"></script>
+    <script src="{{ url_for('static', filename='js/tv-nav.js') }}?v=20261125d"></script>
     <script>
-    updatePillLinks({
-        PLEX_URL:     "{{ cfg.PLEX_URL | safe }}",
-        JELLYFIN_URL: "{{ cfg.JELLYFIN_URL | safe }}"
-    });
-    if ('serviceWorker' in navigator) {
-        window.addEventListener('load', () => {
-            navigator.serviceWorker.register('/sw.js', { scope: '/' }).catch(() => {});
+        updatePillLinks({
+            PLEX_URL: "{{ cfg.PLEX_URL | safe }}",
+            JELLYFIN_URL: "{{ cfg.JELLYFIN_URL | safe }}"
         });
-    }
+        if ('serviceWorker' in navigator) {
+            window.addEventListener('load', () => {
+                navigator.serviceWorker.register('/sw.js', { scope: '/' }).catch(() => { });
+            });
+        }
     </script>
 </body>
 

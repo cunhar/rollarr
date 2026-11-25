@@ -140,6 +140,15 @@ const Api = {
         return { ok: res.ok, data: await res.json() };
     },
 
+    async toggleBlocklistRelease(payload, blocklist = true) {
+        const res = await fetch('/api/releases/blocklist', {
+            method: blocklist ? 'POST' : 'DELETE',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload)
+        });
+        return { ok: res.ok, data: await res.json() };
+    },
+
     async fetchCalendar() {
         const res = await fetch('/api/calendar');
         return res.ok ? await res.json() : null;

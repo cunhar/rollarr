@@ -874,7 +874,10 @@ function _renderPickerModal(data) {
                     ${r.blocklisted ? '<span class="badge badge-red">BLOCKLISTED</span>' : ''}
                 </div>
             </div>
-            <button class="btn-clear" onclick="grabPickedRelease(${idx}, this)">Grab</button>
+            <div style="display:flex; align-items:center; gap:8px; flex-shrink:0;">
+                <button class="btn-clear" onclick="toggleBlocklistPickedRelease(${idx}, this)">${r.blocklisted ? 'Unblock' : 'Blocklist'}</button>
+                <button class="btn-clear" onclick="grabPickedRelease(${idx}, this)">Grab</button>
+            </div>
         </div>
     `).join('');
 }
@@ -946,6 +949,40 @@ function grabPickedRelease(idx, btnEl) {
         } else if (btnEl) {
             btnEl.disabled = false;
             btnEl.textContent = 'Grab';
+        }
+    });
+}
+
+function toggleBlocklistPickedRelease(idx, btnEl) {
+    if (!_pickerContext || !_pickerContext.releases || !_pickerContext.releases[idx]) return;
+    const r = _pickerContext.releases[idx];
+    const shouldBlock = !r.blocklisted;
+    const origText = btnEl ? btnEl.textContent : '';
+    if (btnEl) {
+        btnEl.disabled = true;
+        btnEl.textContent = '...';
+    }
+    Api.toggleBlocklistRelease({
+        nzb_guid: r.nzb_guid || r.nzb_url || r.nzb_title,
+        nzb_title: r.nzb_title
+    }, shouldBlock).then(({ ok, data }) => {
+        if (ok && data && data.status === 'success') {
+            r.blocklisted = Boolean(data.blocklisted);
+            showToast(data.message || (r.blocklisted ? 'Release blocklisted' : 'Release unblocklisted'), r.blocklisted ? 'warn' : 'info');
+            _renderPickerModal(_pickerContext);
+            setTimeout(pollAll, 500);
+        } else {
+            showToast((data && data.message) || 'Failed to update blocklist', 'err');
+            if (btnEl) {
+                btnEl.disabled = false;
+                btnEl.textContent = origText;
+            }
+        }
+    }).catch(() => {
+        showToast('Failed to update blocklist', 'err');
+        if (btnEl) {
+            btnEl.disabled = false;
+            btnEl.textContent = origText;
         }
     });
 }
@@ -1030,6 +1067,7 @@ window.loadLibrary = loadLibrary;
 window.openMoviePicker = openMoviePicker;
 window.openEpisodePicker = openEpisodePicker;
 window.grabPickedRelease = grabPickedRelease;
+window.toggleBlocklistPickedRelease = toggleBlocklistPickedRelease;
 window.closeReleaseModal = closeReleaseModal;
 window.runAutoGrab = runAutoGrab;
 

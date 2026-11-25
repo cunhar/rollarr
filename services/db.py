@@ -466,6 +466,14 @@ def add_to_blocklist(nzb_guid: str, nzb_title: str = '', reason: str = ''):
         )
 
 
+def remove_from_blocklist(nzb_guid: str) -> bool:
+    if not nzb_guid:
+        return False
+    with _conn() as c:
+        cur = c.execute("DELETE FROM blocklist WHERE nzb_guid = ?", (nzb_guid,))
+        return cur.rowcount > 0
+
+
 def get_blocklisted_guids() -> set[str]:
     with _conn() as c:
         rows = c.execute("SELECT nzb_guid FROM blocklist").fetchall()
