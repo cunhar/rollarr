@@ -122,11 +122,12 @@ def search_episode(
     tvdb_id: int | None = None,
     imdb_id: str | None = None,
     airdate: str | None = None,
+    include_season_packs: bool = False,
 ) -> list[dict[str, Any]]:
     """
     Search NZBgeek for a specific TV episode.
-    Supports both Standard (SxxExx) and Sonarr Daily/Date-based (YYYY.MM.DD / season=YYYY&ep=MM/DD) shows
-    such as WWE Raw, SmackDown, and late-night/daily programs.
+    Supports Standard (SxxExx), Sonarr Daily/Date-based (YYYY.MM.DD / season=YYYY&ep=MM/DD),
+    and optional Season Pack fallback queries.
     """
     results: list[dict[str, Any]] = []
     seen_guids: set[str] = set()
@@ -196,6 +197,21 @@ def search_episode(
             't': 'search',
             'q': f"{show_title} {ep_tag}",
         }))
+
+    # 4. Season pack search (when explicitly requested or when no single-episode release exists)
+    if include_season_packs or not results:
+        if tvdb_id:
+            _add_unique(_query({
+                't': 'tvsearch',
+                'tvdbid': int(tvdb_id),
+                'season': int(season),
+            }))
+        else:
+            _add_unique(_query({
+                't': 'tvsearch',
+                'q': show_title,
+                'season': int(season),
+            }))
 
     logger.info(
         f"[NZBgeek] Episode search '{show_title}' S{season:02d}E{episode:02d} "

@@ -947,6 +947,9 @@ function loadLibrary() {
                         : st === 'wanted' ? 'badge-amber'
                             : st === 'downloading' ? 'badge-blue'
                                 : 'badge-dim';
+                    const availBadge = m.availability_label
+                        ? `<span class="badge ${m.availability_stage === 'released' ? 'badge-blue' : 'badge-dim'}">${escapeHtml(m.availability_label)}</span>`
+                        : '';
                     return `
                     <div class="library-row" data-movie-id="${m.id}">
                         <div style="display:flex; align-items:center; gap:10px; flex-wrap:wrap;">
@@ -955,6 +958,7 @@ function loadLibrary() {
                             ${m.year ? `<span class="media-year">(${m.year})</span>` : ''}
                             ${m.resolution ? `<span class="badge badge-blue">${escapeHtml(m.resolution)}</span>` : ''}
                             <span class="badge ${badgeCls}">${escapeHtml(m.status || 'wanted')}</span>
+                            ${availBadge}
                         </div>
                         <div class="ep-controls-row">
                             ${st === 'wanted' ? `<button class="btn-clear btn-ep" onclick="queueSingleMovie(${m.id}, this)">Get</button>` : ''}
@@ -991,6 +995,7 @@ function _renderPickerModal(data) {
                     <span class="badge badge-blue">${escapeHtml(r.resolution)}</span>
                     <span class="badge badge-dim">${escapeHtml(r.source)}</span>
                     <span class="badge badge-dim">${escapeHtml(r.audio)}</span>
+                    ${r.is_season_pack ? '<span class="badge badge-amber">SEASON PACK</span>' : ''}
                     <span>${r.size_mb >= 1024 ? (r.size_mb / 1024).toFixed(2) + ' GB' : r.size_mb + ' MB'}</span>
                     <span>Score: ${r.score}</span>
                     ${r.grabs ? `<span>Grabs: ${r.grabs}</span>` : ''}

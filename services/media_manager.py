@@ -50,17 +50,26 @@ def _find_show_dir(show_title: str) -> str | None:
     return None
 
 
+_RE_DISK_EP = re.compile(r'(?:^|[\.\s_\-])S0*(\d{1,2})E0*(\d{1,3})(?:[\-E]E?0*(\d{1,3}))?(?:$|[\.\s_\-])', re.I)
+
+
 def find_episode_file_on_disk(show_title: str, season: int, episode: int) -> str | None:
-    """Locate an episode video file under PATH_TV matching show_title and SxxExx."""
+    """Locate an episode video file under PATH_TV matching show_title and SxxExx (including multi-episode SxxExx-Eyy)."""
     show_dir = _find_show_dir(show_title)
     if not show_dir:
         return None
-    ep_pat = re.compile(rf'(?:^|[\.\s_\-])S0*{int(season)}E0*{int(episode)}(?:$|[\.\s_\-])', re.I)
+    target_s = int(season)
+    target_e = int(episode)
     for dirpath, _, filenames in os.walk(show_dir):
         for fname in filenames:
             if os.path.splitext(fname)[1].lower() not in VIDEO_EXTS:
                 continue
-            if ep_pat.search(fname):
+            m = _RE_DISK_EP.search(fname)
+            if not m or int(m.group(1)) != target_s:
+                continue
+            e_start = int(m.group(2))
+            e_end = int(m.group(3)) if (m.group(3) and int(m.group(3)) >= e_start and int(m.group(3)) - e_start <= 6) else e_start
+            if e_start <= target_e <= e_end:
                 return os.path.join(dirpath, fname)
     return None
 
@@ -452,6 +461,7 @@ def queue_episode(
         media_type='episode',
         expected={'title': show_title, 'season': season, 'episode': episode, 'airdate': ep_airdate},
         blocklisted_guids=blocked,
+        allow_season_packs=True,
     )
     if not ranked:
         return False, f"No suitable release for {show_title} {tag} after junk/blocklist filter"
@@ -639,19 +649,23 @@ def add_show(tvmaze_id: int, auto_queue: bool = False, start_season: int = 1, st
 
 
 def _scan_show_episode_files_on_disk(show_title: str) -> dict[tuple[int, int], str]:
-    """Return a dict mapping (season, episode) -> full file path for on-disk episodes of a show."""
+    """Return a dict mapping (season, episode) -> full file path for on-disk episodes of a show (supports multi-episode SxxExx-Eyy)."""
     found: dict[tuple[int, int], str] = {}
     show_dir = _find_show_dir(show_title)
     if not show_dir:
         return found
-    ep_pat = re.compile(r'(?:^|[\.\s_\-])S0*(\d{1,2})E0*(\d{1,3})(?:$|[\.\s_\-])', re.I)
     for dirpath, _, filenames in os.walk(show_dir):
         for fname in filenames:
             if os.path.splitext(fname)[1].lower() not in VIDEO_EXTS:
                 continue
-            m = ep_pat.search(fname)
+            m = _RE_DISK_EP.search(fname)
             if m:
-                found[(int(m.group(1)), int(m.group(2)))] = os.path.join(dirpath, fname)
+                s_num = int(m.group(1))
+                e_start = int(m.group(2))
+                e_end = int(m.group(3)) if (m.group(3) and int(m.group(3)) >= e_start and int(m.group(3)) - e_start <= 6) else e_start
+                full = os.path.join(dirpath, fname)
+                for ep_num in range(e_start, e_end + 1):
+                    found[(s_num, ep_num)] = full
     return found
 
 
@@ -937,6 +951,106 @@ def queue_show_from(show_id: int, start_season: int = 1, start_episode: int = 1)
     }
 
 
+_SHORT_MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
+
+
+def _fmt_short_date(iso_date: str | None) -> str:
+    if not iso_date or len(str(iso_date)) < 10:
+        return ''
+    try:
+        dt = datetime.date.fromisoformat(str(iso_date)[:10])
+        return f"{_SHORT_MONTHS[dt.month - 1]} {dt.day}, {dt.year}"
+    except ValueError:
+        return str(iso_date)[:10]
+
+
+def get_movie_availability(movie: dict[str, Any], fetch_missing: bool = False) -> dict[str, Any]:
+    """
+    Determine a movie's theatrical & digital/physical release status:
+      - Returns {'available': bool, 'label': str | None, 'stage': str, 'in_cinemas': str | None, 'digital_release': str | None}
+      - Pre-release guard: returns available=False if the movie has not yet hit cinemas or is in its
+        first 21 theatrical days with no digital/physical release date.
+    """
+    in_cin = (movie.get('in_cinemas') or '')[:10] or None
+    dig_rel = (movie.get('digital_release') or '')[:10] or None
+
+    if fetch_missing and not in_cin and not dig_rel and (movie.get('status') or 'wanted').lower() == 'wanted':
+        dates = metadata.get_movie_release_dates(movie.get('tmdb_id'), movie.get('title') or '', movie.get('year'))
+        in_cin = dates.get('in_cinemas')
+        dig_rel = dates.get('digital_release')
+        if (in_cin or dig_rel) and movie.get('id'):
+            db.update_movie_release_dates(int(movie['id']), in_cin, dig_rel)
+            movie['in_cinemas'] = in_cin
+            movie['digital_release'] = dig_rel
+
+    today = datetime.date.today()
+    today_str = today.isoformat()
+
+    if dig_rel:
+        if dig_rel <= today_str:
+            return {
+                'available': True,
+                'label': f"Digital {_fmt_short_date(dig_rel)}",
+                'stage': 'released',
+                'in_cinemas': in_cin,
+                'digital_release': dig_rel,
+            }
+        if in_cin and in_cin <= today_str:
+            return {
+                'available': False,
+                'label': f"In Cinemas • Digital {_fmt_short_date(dig_rel)}",
+                'stage': 'in_cinemas',
+                'in_cinemas': in_cin,
+                'digital_release': dig_rel,
+            }
+        return {
+            'available': False,
+            'label': f"Digital {_fmt_short_date(dig_rel)}",
+            'stage': 'unreleased',
+            'in_cinemas': in_cin,
+            'digital_release': dig_rel,
+        }
+
+    if in_cin:
+        if in_cin > today_str:
+            return {
+                'available': False,
+                'label': f"In Cinemas {_fmt_short_date(in_cin)}",
+                'stage': 'unreleased',
+                'in_cinemas': in_cin,
+                'digital_release': None,
+            }
+        try:
+            days_in_cin = (today - datetime.date.fromisoformat(in_cin)).days
+        except ValueError:
+            days_in_cin = 99
+        return {
+            'available': days_in_cin >= 21,
+            'label': f"In Cinemas ({_fmt_short_date(in_cin)})",
+            'stage': 'in_cinemas',
+            'in_cinemas': in_cin,
+            'digital_release': None,
+        }
+
+    year = movie.get('year')
+    if year and int(year) > today.year:
+        return {
+            'available': False,
+            'label': f"Unreleased ({year})",
+            'stage': 'unreleased',
+            'in_cinemas': None,
+            'digital_release': None,
+        }
+
+    return {
+        'available': True,
+        'label': None,
+        'stage': 'released',
+        'in_cinemas': in_cin,
+        'digital_release': dig_rel,
+    }
+
+
 def add_movie(
     tmdb_id: int | None = None,
     title: str | None = None,
@@ -944,7 +1058,7 @@ def add_movie(
     imdb_id: str | None = None,
     poster_url: str | None = None,
 ) -> dict[str, Any]:
-    """Add a movie (via TMDB ID or keyless IMDb metadata) and immediately queue from NZBgeek."""
+    """Add a movie (via TMDB ID or keyless IMDb metadata) and immediately queue from NZBgeek if released."""
     info = None
     if tmdb_id and int(tmdb_id) > 0:
         info = metadata.get_movie_details(int(tmdb_id))
@@ -968,6 +1082,7 @@ def add_movie(
             'poster_url': poster_url or '',
         }
 
+    rel_dates = metadata.get_movie_release_dates(info.get('tmdb_id'), info['title'], info.get('year'))
     existing_file = find_movie_file_on_disk(info['title'], info.get('year'))
     initial_status = 'downloaded' if existing_file else 'wanted'
 
@@ -979,12 +1094,22 @@ def add_movie(
         poster_url=info.get('poster_url'),
         status=initial_status,
         file_path=existing_file,
+        in_cinemas=rel_dates.get('in_cinemas'),
+        digital_release=rel_dates.get('digital_release'),
     )
 
     if existing_file:
         return {
             'status': 'success',
             'message': f"Added '{movie['title']}' — already on disk",
+            'movie': movie,
+        }
+
+    avail = get_movie_availability(movie, fetch_missing=False)
+    if not avail['available']:
+        return {
+            'status': 'success',
+            'message': f"Added '{movie['title']}' — waiting for release ({avail.get('label') or 'Unreleased'})",
             'movie': movie,
         }
 
@@ -1020,7 +1145,7 @@ def resolve_or_track_show(show_title: str) -> dict[str, Any] | None:
 # ── Manual Release Search, Airing Calendar & Auto-Grabber ────────────────────
 
 def search_releases_for_episode(show_id: int, season: int, episode: int) -> dict[str, Any]:
-    """Return top ranked NZBgeek candidates for manual selection."""
+    """Return top ranked NZBgeek candidates for manual selection (including season packs)."""
     show = db.get_show(show_id)
     if not show:
         return {'status': 'error', 'message': 'Show not found', 'releases': []}
@@ -1032,6 +1157,7 @@ def search_releases_for_episode(show_id: int, season: int, episode: int) -> dict
         tvdb_id=show.get('tvdb_id'),
         imdb_id=show.get('imdb_id'),
         airdate=ep_airdate,
+        include_season_packs=True,
     )
     blocked = db.get_blocklisted_guids()
     ranked = release_selector.select_releases(
@@ -1039,6 +1165,7 @@ def search_releases_for_episode(show_id: int, season: int, episode: int) -> dict
         media_type='episode',
         expected={'title': show['title'], 'season': season, 'episode': episode, 'airdate': ep_airdate},
         blocklisted_guids=set(),  # show even blocklisted ones with a flag in manual picker
+        allow_season_packs=True,
     )
     out = []
     for r in ranked[:15]:
@@ -1051,6 +1178,7 @@ def search_releases_for_episode(show_id: int, season: int, episode: int) -> dict
             'resolution': r['parsed']['resolution'],
             'audio': r['parsed']['audio'],
             'source': r['parsed']['source'],
+            'is_season_pack': bool(r['parsed'].get('is_season_pack')),
             'score': r['score'],
             'grabs': r.get('grabs', 0),
             'blocklisted': r['guid'] in blocked,
@@ -1202,13 +1330,113 @@ def _ag_log(status: str, msg: str):
             pass
 
 
+def _try_upgrade_movie(movie: dict[str, Any], cur_res: str, pref_res: str) -> tuple[bool, str]:
+    """Search NZBgeek for a strictly higher-resolution release for an already downloaded movie."""
+    tiers = release_selector.RES_TIERS
+    if cur_res not in tiers or pref_res not in tiers or tiers.index(cur_res) >= tiers.index(pref_res):
+        return False, ''
+    title = movie['title']
+    year = movie.get('year')
+    if db.has_active_download('movie', title):
+        return False, ''
+    imdb_id = _resolve_movie_imdb_id(movie)
+    candidates = nzbgeek.search_movie(title=title, year=year, imdb_id=imdb_id)
+    if not candidates:
+        return False, ''
+    blocked = db.get_blocklisted_guids()
+    ranked = release_selector.select_releases(
+        candidates=candidates,
+        media_type='movie',
+        expected={'title': title, 'year': year},
+        blocklisted_guids=blocked,
+    )
+    upgrades = [
+        r for r in ranked
+        if r['parsed']['resolution'] in tiers
+        and tiers.index(r['parsed']['resolution']) > tiers.index(cur_res)
+        and tiers.index(r['parsed']['resolution']) <= tiers.index(pref_res)
+    ]
+    if not upgrades:
+        return False, ''
+    best = upgrades[0]
+    db.enqueue_download(
+        media_type='movie',
+        media_id=movie.get('id'),
+        title=title,
+        year=year,
+        nzb_title=best['title'],
+        nzb_url=best['nzb_url'],
+        nzb_guid=best['guid'],
+        size_bytes=best.get('size_bytes', 0),
+        retry_count=0,
+    )
+    if movie.get('id'):
+        db.update_movie_status(movie['id'], 'downloading')
+    usenet_downloader.notify_queue()
+    return True, best['parsed']['resolution']
+
+
+def _try_upgrade_episode(show: dict[str, Any], season: int, episode: int, cur_res: str, pref_res: str) -> tuple[bool, str]:
+    """Search NZBgeek for a strictly higher-resolution release for an already downloaded TV episode."""
+    tiers = release_selector.RES_TIERS
+    if cur_res not in tiers or pref_res not in tiers or tiers.index(cur_res) >= tiers.index(pref_res):
+        return False, ''
+    show_title = show['title']
+    if db.has_active_download('episode', show_title, season, episode):
+        return False, ''
+    ep_airdate = _get_episode_airdate(show, season, episode)
+    candidates = nzbgeek.search_episode(
+        show_title=show_title,
+        season=season,
+        episode=episode,
+        tvdb_id=show.get('tvdb_id'),
+        imdb_id=show.get('imdb_id'),
+        airdate=ep_airdate,
+    )
+    if not candidates:
+        return False, ''
+    blocked = db.get_blocklisted_guids()
+    ranked = release_selector.select_releases(
+        candidates=candidates,
+        media_type='episode',
+        expected={'title': show_title, 'season': season, 'episode': episode, 'airdate': ep_airdate},
+        blocklisted_guids=blocked,
+    )
+    upgrades = [
+        r for r in ranked
+        if r['parsed']['resolution'] in tiers
+        and tiers.index(r['parsed']['resolution']) > tiers.index(cur_res)
+        and tiers.index(r['parsed']['resolution']) <= tiers.index(pref_res)
+    ]
+    if not upgrades:
+        return False, ''
+    best = upgrades[0]
+    db.enqueue_download(
+        media_type='episode',
+        media_id=show.get('id'),
+        title=show_title,
+        year=show.get('year'),
+        season=int(season),
+        episode=int(episode),
+        nzb_title=best['title'],
+        nzb_url=best['nzb_url'],
+        nzb_guid=best['guid'],
+        size_bytes=best.get('size_bytes', 0),
+        retry_count=0,
+    )
+    usenet_downloader.notify_queue()
+    return True, best['parsed']['resolution']
+
+
 def run_auto_grab() -> dict[str, Any]:
     """
     Periodic auto-grabber:
       1. Skips if Disk Space Guard is active or NZBgeek/NNTP not configured.
-      2. Searches & queues WANTED movies (released on or before current year).
+      2. Searches & queues WANTED movies (skipping pre-release/unreleased movies),
+         and checks DOWNLOADED movies below PREFERRED_RESOLUTION for quality upgrades.
       3. For active TV shows (with at least 1 episode on disk or a watch cursor),
-         queues newly aired episodes to keep ROLLING_WINDOW full.
+         queues newly aired episodes to keep ROLLING_WINDOW full and checks on-disk
+         episodes below PREFERRED_RESOLUTION for quality upgrades.
     """
     if not _autograb_lock.acquire(blocking=False):
         return {'status': 'info', 'message': 'Auto-grab already running'}
@@ -1224,30 +1452,53 @@ def run_auto_grab() -> dict[str, Any]:
             return {'status': 'info', 'message': 'NZBgeek or NNTP not configured'}
 
         cur_year = datetime.date.today().year
+        pref_res = (get_config('PREFERRED_RESOLUTION', '1080p') or '1080p').lower()
+        tiers = release_selector.RES_TIERS
         queued_items: list[str] = []
 
-        # 1. Check WANTED movies
+        # 1. Check WANTED movies (with pre-release guard) & DOWNLOADED movies for quality upgrades
         for m in db.list_movies():
-            if (m.get('status') or '').lower() != 'wanted':
-                continue
-            if m.get('year') and int(m['year']) > cur_year:
-                continue
-            if db.has_active_download('movie', m['title']):
-                continue
-            ok, _ = queue_movie(m)
-            if ok:
-                queued_items.append(f"Movie: {m['title']}")
+            st = (m.get('status') or '').lower()
+            if st == 'wanted':
+                if m.get('year') and int(m['year']) > cur_year:
+                    continue
+                if db.has_active_download('movie', m['title']):
+                    continue
+                avail = get_movie_availability(m, fetch_missing=True)
+                if not avail['available']:
+                    continue
+                ok, _ = queue_movie(m)
+                if ok:
+                    queued_items.append(f"Movie: {m['title']}")
+            elif st == 'downloaded' and pref_res in tiers:
+                fpath = m.get('file_path')
+                disk_path = fpath if (fpath and os.path.isfile(fpath)) else find_movie_file_on_disk(m['title'], m.get('year'))
+                cur_res = get_video_resolution(disk_path) if disk_path else None
+                if cur_res in tiers and tiers.index(cur_res) < tiers.index(pref_res):
+                    ok_up, new_res = _try_upgrade_movie(m, cur_res, pref_res)
+                    if ok_up:
+                        queued_items.append(f"Movie Upgrade: {m['title']} ({cur_res} -> {new_res})")
 
-        # 2. Check active TV shows for newly aired episodes within rolling window
+        # 2. Check active TV shows for newly aired episodes & quality upgrades within rolling window
         window_size = get_rolling_window()
         for show in db.list_shows():
-            on_disk = _scan_show_episodes_on_disk(show['title'])
+            on_disk_files = _scan_show_episode_files_on_disk(show['title'])
+            on_disk = set(on_disk_files.keys())
             lw_s, lw_e = show.get('last_watched_season'), show.get('last_watched_episode')
             explicit_cursor = (int(lw_s), int(lw_e)) if (lw_s is not None and lw_e is not None) else None
 
             # Only auto-grab shows the user has actually started (on disk or watch cursor set)
             if not on_disk and not explicit_cursor:
                 continue
+
+            # Check existing on-disk episodes for quality upgrades
+            if pref_res in tiers:
+                for (s_num, e_num), fp in sorted(on_disk_files.items()):
+                    cur_res = get_video_resolution(fp)
+                    if cur_res in tiers and tiers.index(cur_res) < tiers.index(pref_res):
+                        ok_up, new_res = _try_upgrade_episode(show, s_num, e_num, cur_res, pref_res)
+                        if ok_up:
+                            queued_items.append(f"{show['title']} S{s_num:02d}E{e_num:02d} ({cur_res} -> {new_res})")
 
             queued_set = {
                 (int(d['season']), int(d['episode']))

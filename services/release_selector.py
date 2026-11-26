@@ -68,8 +68,8 @@ _RE_JUNK = re.compile(
     re.I,
 )
 
-# Episode markers: S01E02, S01E02E03, 1x02
-_RE_EPISODE = re.compile(r'(?:^|[\.\s_\-])S(\d{1,2})E(\d{1,3})(?:[\-E](\d{1,3}))?(?:$|[\.\s_\-])', re.I)
+# Episode markers: S01E02, S01E02E03, S01E02-E03, S01E02-03, 1x02
+_RE_EPISODE = re.compile(r'(?:^|[\.\s_\-])S(\d{1,2})E(\d{1,3})(?:[\-E]E?(\d{1,3}))?(?:$|[\.\s_\-])', re.I)
 _RE_EPISODE_ALT = re.compile(r'(?:^|[\.\s_\-])(\d{1,2})x(\d{1,3})(?:$|[\.\s_\-])', re.I)
 # Daily / Date-based episode marker: YYYY.MM.DD, YYYY-MM-DD, YYYY_MM_DD
 _RE_AIRDATE = re.compile(
@@ -137,8 +137,13 @@ def parse_release(title: str) -> dict[str, Any]:
         if alt_m:
             season = int(alt_m.group(1))
             episode = int(alt_m.group(2))
-        elif _RE_SEASON_ONLY.search(t):
-            is_season_pack = True
+        else:
+            s_m = _RE_SEASON_ONLY.search(t)
+            if s_m:
+                is_season_pack = True
+                s_num = s_m.group(1) or s_m.group(2)
+                if s_num and s_num.isdigit():
+                    season = int(s_num)
 
     years = [int(y) for y in _RE_YEAR.findall(t)]
     year = years[-1] if years else None
@@ -199,6 +204,7 @@ def is_junk_release(
     max_size_gb: float,
     reject_dv_without_hdr: bool = True,
     reject_keywords: list[str] | None = None,
+    allow_season_packs: bool = False,
 ) -> tuple[bool, str]:
     """Return (True, reason) if the candidate should be hard-rejected."""
     guid = candidate.get('guid') or ''
@@ -221,16 +227,18 @@ def is_junk_release(
 
     size_bytes = int(candidate.get('size_bytes') or 0)
     min_mb = 80 if media_type == 'episode' else 300
+    is_pack = bool(media_type == 'episode' and parsed.get('is_season_pack'))
+    effective_max_gb = (max_size_gb * 12.0) if (is_pack and allow_season_packs) else max_size_gb
     if size_bytes > 0:
         if size_bytes < min_mb * 1024 * 1024:
             return True, f'too_small ({size_bytes // (1024*1024)} MB)'
-        if max_size_gb > 0 and size_bytes > max_size_gb * (1024 ** 3):
+        if effective_max_gb > 0 and size_bytes > effective_max_gb * (1024 ** 3):
             return True, f'too_large ({size_bytes / (1024**3):.1f} GB)'
 
     exp_title = expected.get('title') or ''
 
     if media_type == 'episode':
-        if parsed['is_season_pack']:
+        if parsed['is_season_pack'] and not allow_season_packs:
             return True, 'season_pack'
         exp_s = expected.get('season')
         exp_e = expected.get('episode')
@@ -321,6 +329,10 @@ def score_release(
     if grabs > 0:
         score += min(10.0, math.log10(grabs + 1) * 4.0)
 
+    # 6. Prefer single-episode releases over full season packs when both match
+    if parsed.get('is_season_pack'):
+        score -= 25.0
+
     return round(score, 2)
 
 
@@ -334,6 +346,7 @@ def select_releases(
     max_size_gb: float | None = None,
     reject_dv_without_hdr: bool | None = None,
     reject_keywords: str | list[str] | None = None,
+    allow_season_packs: bool = False,
 ) -> list[dict[str, Any]]:
     """
     Filter out junk/blocklisted releases and return remaining candidates sorted
@@ -366,6 +379,7 @@ def select_releases(
             cand, parsed, media_type, expected, blocked, max_size_gb,
             reject_dv_without_hdr=reject_dv_without_hdr,
             reject_keywords=kw_list,
+            allow_season_packs=allow_season_packs,
         )
         if junk:
             logger.debug(f"[ReleaseSelector] Rejected '{cand.get('title')}' ({reason})")

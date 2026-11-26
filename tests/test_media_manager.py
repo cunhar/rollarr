@@ -165,6 +165,24 @@ class TestMediaManagerAndDb(unittest.TestCase):
             self.assertFalse(os.path.exists(ep2))
             self.assertFalse(os.path.exists(ep3))
 
+            # Test multi-episode file scanning (S01E01-E02 covers both E01 and E02)
+            os.makedirs(ep_dir, exist_ok=True)
+            multi_ep = os.path.join(ep_dir, 'Severance - S01E01-E02.mkv')
+            with open(multi_ep, 'wb') as f:
+                f.write(b'multi video')
+            self.assertTrue(media_manager.episode_exists_on_disk('Severance', 1, 1))
+            self.assertTrue(media_manager.episode_exists_on_disk('Severance', 1, 2))
+            self.assertEqual(media_manager._scan_show_episodes_on_disk('Severance'), {(1, 1), (1, 2)})
+
+            # Test movie release availability pre-release guard
+            unrel_movie = db.upsert_movie(
+                tmdb_id=9991, title='Future Film', year=2027,
+                status='wanted', in_cinemas='2027-06-15',
+            )
+            avail = media_manager.get_movie_availability(unrel_movie, fetch_missing=False)
+            self.assertFalse(avail['available'])
+            self.assertIn('In Cinemas', avail['label'])
+
 
 if __name__ == '__main__':
     unittest.main()

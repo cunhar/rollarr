@@ -583,7 +583,55 @@ def _find_largest_video(search_dirs: list[str]) -> str | None:
     return best_path
 
 
-def _move_to_library(job: dict[str, Any], video_path: str) -> str:
+_RE_EP_FILE = re.compile(r'(?:^|[\.\s_\-])S0*(\d{1,2})E0*(\d{1,3})(?:[\-E]E?0*(\d{1,3}))?(?:$|[\.\s_\-])', re.I)
+
+
+def _find_season_pack_episode_videos(search_dirs: list[str], season: int) -> dict[int, tuple[str, int, int]]:
+    """
+    Scan extracted directories for episode video files belonging to `season`.
+    Returns {ep_num: (video_path, ep_start, ep_end)}.
+    """
+    found: dict[int, tuple[str, int, int, int]] = {}
+    for root_dir in search_dirs:
+        if not os.path.isdir(root_dir):
+            continue
+        for dirpath, _, filenames in os.walk(root_dir):
+            for fname in filenames:
+                ext = os.path.splitext(fname)[1].lower()
+                if ext not in VIDEO_EXTS or 'sample' in fname.lower():
+                    continue
+                m = _RE_EP_FILE.search(fname)
+                if not m or int(m.group(1)) != int(season):
+                    continue
+                e_start = int(m.group(2))
+                e_end = int(m.group(3)) if (m.group(3) and int(m.group(3)) >= e_start and int(m.group(3)) - e_start <= 6) else e_start
+                full = os.path.join(dirpath, fname)
+                try:
+                    sz = os.path.getsize(full)
+                except OSError:
+                    continue
+                for ep_num in range(e_start, e_end + 1):
+                    prev = found.get(ep_num)
+                    if not prev or sz > prev[3]:
+                        found[ep_num] = (full, e_start, e_end, sz)
+    return {k: (v[0], v[1], v[2]) for k, v in found.items()}
+
+
+def _parse_job_episode_span(job: dict[str, Any], video_path: str) -> tuple[int, int]:
+    """Determine (ep_start, ep_end) for an episode download job from video filename or nzb_title."""
+    req_season = int(job['season'])
+    req_ep = int(job['episode'])
+    for candidate_name in (os.path.basename(video_path), job.get('nzb_title') or ''):
+        m = _RE_EP_FILE.search(candidate_name)
+        if m and int(m.group(1)) == req_season:
+            e_start = int(m.group(2))
+            e_end = int(m.group(3)) if m.group(3) else e_start
+            if e_end > e_start and (e_end - e_start) <= 6 and (e_start <= req_ep <= e_end):
+                return e_start, e_end
+    return req_ep, req_ep
+
+
+def _move_to_library(job: dict[str, Any], video_path: str, ep_span: tuple[int, int] | None = None) -> str:
     """Rename cleanly and move the completed video into PATH_TV or PATH_MOVIES."""
     ext = os.path.splitext(video_path)[1].lower() or '.mkv'
     safe_title = sanitize_filename(job['title'])
@@ -591,9 +639,12 @@ def _move_to_library(job: dict[str, Any], video_path: str) -> str:
     if job['media_type'] == 'episode':
         base_tv = get_config('PATH_TV', '/tv') or '/tv'
         season = int(job['season'])
-        episode = int(job['episode'])
+        e_start, e_end = ep_span if ep_span else _parse_job_episode_span(job, video_path)
         dest_dir = os.path.join(base_tv, safe_title, f"Season {season:02d}")
-        dest_name = f"{safe_title} - S{season:02d}E{episode:02d}{ext}"
+        if e_end > e_start:
+            dest_name = f"{safe_title} - S{season:02d}E{e_start:02d}-E{e_end:02d}{ext}"
+        else:
+            dest_name = f"{safe_title} - S{season:02d}E{e_start:02d}{ext}"
     else:
         base_movies = get_config('PATH_MOVIES', '/movies') or '/movies'
         year = job.get('year')
@@ -846,8 +897,64 @@ def _process_job(job: dict[str, Any]):
         if not video_path:
             raise RuntimeError("No video file found after extraction")
 
-        dest_path = _move_to_library(job, video_path)
+        covered_episodes: set[int] = set()
+        dest_path = None
+        if job['media_type'] == 'episode':
+            req_season = int(job['season'])
+            req_ep = int(job['episode'])
+            pack_map = _find_season_pack_episode_videos([extract_dir, work_dir], req_season)
+            if len(pack_map) > 1:
+                # Season Pack: extract requested episode + any active/queued rolling-window episodes in this season
+                rolling_win = max(1, int(get_config('ROLLING_WINDOW', 3) or 3))
+                wanted_eps = set(range(req_ep, req_ep + rolling_win))
+                for adl in db.list_active_downloads():
+                    if (
+                        adl.get('media_type') == 'episode'
+                        and int(adl.get('season') or -1) == req_season
+                        and sanitize_filename(adl.get('title') or '').lower() == sanitize_filename(job['title']).lower()
+                        and adl.get('episode') is not None
+                    ):
+                        wanted_eps.add(int(adl['episode']))
+                moved_sources: set[str] = set()
+                for ep_num in sorted(wanted_eps):
+                    if ep_num not in pack_map:
+                        continue
+                    vpath, e_start, e_end = pack_map[ep_num]
+                    if vpath in moved_sources or not os.path.isfile(vpath):
+                        continue
+                    moved_sources.add(vpath)
+                    imported_p = _move_to_library(job, vpath, ep_span=(e_start, e_end))
+                    if ep_num == req_ep or dest_path is None:
+                        dest_path = imported_p
+                    for c_ep in range(e_start, e_end + 1):
+                        covered_episodes.add(c_ep)
+            elif req_ep in pack_map:
+                vpath, e_start, e_end = pack_map[req_ep]
+                dest_path = _move_to_library(job, vpath, ep_span=(e_start, e_end))
+                for c_ep in range(e_start, e_end + 1):
+                    covered_episodes.add(c_ep)
+
+        if not dest_path:
+            if job['media_type'] == 'episode':
+                e_start, e_end = _parse_job_episode_span(job, video_path)
+                dest_path = _move_to_library(job, video_path, ep_span=(e_start, e_end))
+                for c_ep in range(e_start, e_end + 1):
+                    covered_episodes.add(c_ep)
+            else:
+                dest_path = _move_to_library(job, video_path)
+
         db.update_download(job_id, status='completed', progress_pct=100.0, downloaded_bytes=total_bytes or downloaded_bytes)
+        if job['media_type'] == 'episode' and len(covered_episodes) > 1:
+            # Complete any sibling queued downloads that were satisfied by a multi-episode file or season pack
+            for adl in db.list_active_downloads():
+                if (
+                    int(adl['id']) != int(job_id)
+                    and adl.get('media_type') == 'episode'
+                    and int(adl.get('season') or -1) == int(job['season'])
+                    and int(adl.get('episode') or -1) in covered_episodes
+                    and sanitize_filename(adl.get('title') or '').lower() == sanitize_filename(job['title']).lower()
+                ):
+                    db.update_download(int(adl['id']), status='completed', progress_pct=100.0)
         if job['media_type'] == 'movie' and job.get('media_id'):
             db.update_movie_status(job['media_id'], 'downloaded', file_path=dest_path)
 

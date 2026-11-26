@@ -108,6 +108,28 @@ class TestReleaseSelector(unittest.TestCase):
         )
         self.assertEqual([r['guid'] for r in ranked], ['raw_ok'])
 
+    def test_multi_episode_and_season_pack_selection(self):
+        p_multi = parse_release('Severance.S01E01-E02.1080p.WEB-DL.DDP5.1.H.264-GRP')
+        self.assertEqual(p_multi['season'], 1)
+        self.assertEqual(p_multi['episode'], 1)
+        self.assertEqual(p_multi['ep_end'], 2)
+
+        p_pack = parse_release('Severance.S01.1080p.ATVP.WEB-DL.DDP5.1.H.264-GRP')
+        self.assertTrue(p_pack['is_season_pack'])
+        self.assertEqual(p_pack['season'], 1)
+
+        candidates = [
+            {'title': 'Severance.S01.1080p.ATVP.WEB-DL.DDP5.1.H.264-GRP', 'guid': 'pack_s01', 'nzb_url': 'u', 'size_bytes': 25 * 1024**3},
+            {'title': 'Severance.S02.1080p.ATVP.WEB-DL.DDP5.1.H.264-GRP', 'guid': 'pack_s02', 'nzb_url': 'u', 'size_bytes': 25 * 1024**3},
+        ]
+        # Rejected when allow_season_packs=False
+        r_no_pack = select_releases(candidates, 'episode', {'title': 'Severance', 'season': 1, 'episode': 1}, max_size_gb=8)
+        self.assertEqual(len(r_no_pack), 0)
+
+        # Accepted (only S01, not S02) when allow_season_packs=True
+        r_pack = select_releases(candidates, 'episode', {'title': 'Severance', 'season': 1, 'episode': 1}, max_size_gb=8, allow_season_packs=True)
+        self.assertEqual([r['guid'] for r in r_pack], ['pack_s01'])
+
 
 if __name__ == '__main__':
     unittest.main()

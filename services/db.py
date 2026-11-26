@@ -122,6 +122,12 @@ def init_db():
         if 'queue_order' not in dl_cols:
             c.execute("ALTER TABLE downloads ADD COLUMN queue_order INTEGER")
             c.execute("UPDATE downloads SET queue_order = id WHERE queue_order IS NULL")
+
+        mov_cols = {r['name'] for r in c.execute("PRAGMA table_info(movies)").fetchall()}
+        if 'in_cinemas' not in mov_cols:
+            c.execute("ALTER TABLE movies ADD COLUMN in_cinemas TEXT")
+        if 'digital_release' not in mov_cols:
+            c.execute("ALTER TABLE movies ADD COLUMN digital_release TEXT")
     logger.info(f"[DB] Initialized SQLite database at {DB_PATH}")
 
 
@@ -213,25 +219,42 @@ def upsert_movie(
     poster_url: str | None = None,
     status: str = 'wanted',
     file_path: str | None = None,
+    in_cinemas: str | None = None,
+    digital_release: str | None = None,
 ) -> dict[str, Any]:
     ts = now_str()
     with _conn() as c:
         c.execute(
             """
-            INSERT INTO movies (tmdb_id, imdb_id, title, year, poster_url, status, file_path, added_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            INSERT INTO movies (tmdb_id, imdb_id, title, year, poster_url, status, file_path, in_cinemas, digital_release, added_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ON CONFLICT(tmdb_id) DO UPDATE SET
-                imdb_id    = COALESCE(excluded.imdb_id, movies.imdb_id),
-                title      = excluded.title,
-                year       = COALESCE(excluded.year, movies.year),
-                poster_url = COALESCE(excluded.poster_url, movies.poster_url),
-                status     = excluded.status,
-                file_path  = COALESCE(excluded.file_path, movies.file_path)
+                imdb_id         = COALESCE(excluded.imdb_id, movies.imdb_id),
+                title           = excluded.title,
+                year            = COALESCE(excluded.year, movies.year),
+                poster_url      = COALESCE(excluded.poster_url, movies.poster_url),
+                status          = excluded.status,
+                file_path       = COALESCE(excluded.file_path, movies.file_path),
+                in_cinemas      = COALESCE(excluded.in_cinemas, movies.in_cinemas),
+                digital_release = COALESCE(excluded.digital_release, movies.digital_release)
             """,
-            (tmdb_id, imdb_id, title, year, poster_url, status, file_path, ts),
+            (tmdb_id, imdb_id, title, year, poster_url, status, file_path, in_cinemas, digital_release, ts),
         )
         row = c.execute("SELECT * FROM movies WHERE tmdb_id = ?", (tmdb_id,)).fetchone()
         return dict(row)
+
+
+def update_movie_release_dates(movie_id: int, in_cinemas: str | None, digital_release: str | None):
+    with _conn() as c:
+        c.execute(
+            """
+            UPDATE movies
+            SET in_cinemas = COALESCE(?, in_cinemas),
+                digital_release = COALESCE(?, digital_release)
+            WHERE id = ?
+            """,
+            (in_cinemas, digital_release, movie_id),
+        )
 
 
 def list_movies() -> list[dict[str, Any]]:

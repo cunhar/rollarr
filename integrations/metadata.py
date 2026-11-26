@@ -160,6 +160,9 @@ def search_movies_radarr_proxy(query: str) -> list[dict[str, Any]]:
                     break
             tmdb_id = m.get('TmdbId')
             imdb_id = m.get('ImdbId') or ''
+            in_cinemas = ((m.get('InCinema') or m.get('Premier') or '')[:10]) or None
+            dig_dates = [d[:10] for d in (m.get('DigitalRelease'), m.get('PhysicalRelease')) if d and len(str(d)) >= 10]
+            digital_release = min(dig_dates) if dig_dates else None
             results.append({
                 'type': 'movie',
                 'id': tmdb_id or imdb_id,
@@ -169,11 +172,47 @@ def search_movies_radarr_proxy(query: str) -> list[dict[str, Any]]:
                 'year': m.get('Year'),
                 'poster_url': poster,
                 'overview': m.get('Overview') or '',
+                'in_cinemas': in_cinemas,
+                'digital_release': digital_release,
             })
         return results
     except Exception as exc:
         logger.warning(f"[Metadata] Public movie search failed for '{q}': {exc}")
         return []
+
+
+_movie_dates_cache: dict[str, tuple[float, dict[str, str | None]]] = {}
+
+
+def get_movie_release_dates(tmdb_id: int | None = None, title: str = '', year: int | None = None) -> dict[str, str | None]:
+    """Fetch theatrical (in_cinemas) and digital/physical release dates via Radarr's public metadata proxy."""
+    cache_key = f"tmdb:{tmdb_id}" if (tmdb_id and int(tmdb_id) > 0) else f"title:{clean_title(title)}:{year}"
+    now_ts = time.time()
+    cached = _movie_dates_cache.get(cache_key)
+    if cached and (now_ts - cached[0]) < 21600:
+        return cached[1]
+
+    out: dict[str, str | None] = {'in_cinemas': None, 'digital_release': None}
+    try:
+        if tmdb_id and int(tmdb_id) > 0:
+            resp = requests.get(f"https://api.radarr.video/v1/movie/{int(tmdb_id)}", timeout=8)
+            if resp.ok:
+                m = resp.json() or {}
+                out['in_cinemas'] = ((m.get('InCinema') or m.get('Premier') or '')[:10]) or None
+                dig_dates = [d[:10] for d in (m.get('DigitalRelease'), m.get('PhysicalRelease')) if d and len(str(d)) >= 10]
+                out['digital_release'] = min(dig_dates) if dig_dates else None
+        if not out['in_cinemas'] and not out['digital_release'] and title:
+            q = f"{title} {year}".strip() if year else title
+            for cand in search_movies_radarr_proxy(q):
+                if (tmdb_id and int(tmdb_id) > 0 and cand.get('tmdb_id') == int(tmdb_id)) or clean_title(cand.get('title') or '') == clean_title(title):
+                    out['in_cinemas'] = cand.get('in_cinemas')
+                    out['digital_release'] = cand.get('digital_release')
+                    break
+    except Exception as exc:
+        logger.debug(f"[Metadata] Movie release dates lookup failed ({cache_key}): {exc}")
+
+    _movie_dates_cache[cache_key] = (now_ts, out)
+    return out
 
 
 def search_movies_imdb(query: str) -> list[dict[str, Any]]:

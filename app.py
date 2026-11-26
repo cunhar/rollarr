@@ -277,6 +277,13 @@ def api_library():
             m['status'] = 'wanted'
             db.update_movie_status(m['id'], 'wanted')
         m['resolution'] = media_manager.get_video_resolution(disk_path) if disk_path else None
+        if (m.get('status') or 'wanted').lower() == 'wanted':
+            avail = media_manager.get_movie_availability(m, fetch_missing=True)
+            m['availability_label'] = avail.get('label')
+            m['availability_stage'] = avail.get('stage')
+        else:
+            m['availability_label'] = None
+            m['availability_stage'] = 'released'
 
     status_rank = {'downloaded': 0, 'downloading': 1, 'wanted': 2}
     movies.sort(key=lambda m: (
