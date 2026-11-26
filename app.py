@@ -201,6 +201,36 @@ def api_downloads_move(download_id: int):
 
 # ── Search & Library Endpoints ───────────────────────────────────────────────
 
+def _annotate_search_with_library(movies: list, tv: list):
+    """Attach library_id to search results that are already tracked in SQLite."""
+    if tv:
+        tracked_shows = db.list_shows()
+        by_tvmaze = {int(s['tvmaze_id']): s['id'] for s in tracked_shows if s.get('tvmaze_id')}
+        by_title = {media_manager.clean_title(s['title']): s['id'] for s in tracked_shows if s.get('title')}
+        for item in tv:
+            tid = item.get('tvmaze_id') or item.get('id')
+            lid = by_tvmaze.get(int(tid)) if str(tid or '').lstrip('-').isdigit() else None
+            if not lid and item.get('title'):
+                lid = by_title.get(media_manager.clean_title(item['title']))
+            if lid:
+                item['library_id'] = lid
+
+    if movies:
+        tracked_movies = db.list_movies()
+        by_tmdb = {int(m['tmdb_id']): m['id'] for m in tracked_movies if m.get('tmdb_id')}
+        by_imdb = {str(m['imdb_id']).strip(): m['id'] for m in tracked_movies if m.get('imdb_id')}
+        by_title = {media_manager.clean_title(m['title']): m['id'] for m in tracked_movies if m.get('title')}
+        for item in movies:
+            tmid = item.get('tmdb_id') or item.get('id')
+            lid = by_tmdb.get(int(tmid)) if str(tmid or '').lstrip('-').isdigit() else None
+            if not lid and item.get('imdb_id'):
+                lid = by_imdb.get(str(item['imdb_id']).strip())
+            if not lid and item.get('title'):
+                lid = by_title.get(media_manager.clean_title(item['title']))
+            if lid:
+                item['library_id'] = lid
+
+
 @app.route('/api/search')
 def api_search():
     media_type = (request.args.get('type') or 'all').lower()
@@ -210,9 +240,11 @@ def api_search():
 
     if media_type == 'movie':
         movies = metadata.search_movies(query)
+        _annotate_search_with_library(movies, [])
         return jsonify({'results': movies, 'movies': movies, 'tv': []}), 200
     if media_type == 'tv':
         tv = metadata.search_tv(query)
+        _annotate_search_with_library([], tv)
         return jsonify({'results': tv, 'tv': tv, 'movies': []}), 200
 
     with concurrent.futures.ThreadPoolExecutor(max_workers=2) as ex:
@@ -220,6 +252,7 @@ def api_search():
         f_tv = ex.submit(metadata.search_tv, query)
         movies = f_movies.result()
         tv = f_tv.result()
+    _annotate_search_with_library(movies, tv)
     return jsonify({'movies': movies, 'tv': tv, 'results': movies + tv}), 200
 
 

@@ -414,9 +414,21 @@ window.moveDownload = moveDownload;
 
 let _lastSearchResults = [];
 
+function _renderSearchCardActions(item, idx) {
+    const isTv = item.type === 'tv';
+    if (item.library_id) {
+        const goLabel = isTv ? 'Go to Show' : 'Go to Movie';
+        return `
+            <button class="btn-clear" onclick="goToSearchLibraryItem(${idx})">${goLabel}</button>
+            <button type="button" class="btn-clear btn-icon-trash" title="Remove from Library" onclick="removeSearchLibraryItem(${idx}, this)">${SVG_ICONS.trash}<span>Remove</span></button>
+        `;
+    }
+    const btnLabel = isTv ? 'Add Show' : 'Add Movie';
+    return `<button class="btn-clear" onclick="addLibraryItem('${escapeHtml(item.type)}', ${idx}, this)">${btnLabel}</button>`;
+}
+
 function _renderSearchCard(item, idx) {
     const isTv = item.type === 'tv';
-    const btnLabel = isTv ? 'Add Show' : 'Add & Download';
     const typeBadge = isTv
         ? '<span class="badge badge-blue" style="margin-left:6px;">TV</span>'
         : '<span class="badge badge-amber" style="margin-left:6px;">MOVIE</span>';
@@ -426,7 +438,9 @@ function _renderSearchCard(item, idx) {
             <div class="media-card-info">
                 <div class="media-card-title">${escapeHtml(item.title)} ${item.year ? `<span class="media-year">(${item.year})</span>` : ''}${typeBadge}</div>
                 <div class="media-card-overview">${escapeHtml((item.overview || '').slice(0, 120))}</div>
-                <button class="btn-clear" onclick="addLibraryItem('${escapeHtml(item.type)}', ${idx}, this)">${btnLabel}</button>
+                <div id="search-card-actions-${idx}" style="display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
+                    ${_renderSearchCardActions(item, idx)}
+                </div>
             </div>
         </div>`;
 }
@@ -517,8 +531,17 @@ function addLibraryItem(type, idx, btnEl) {
             const isSuccess = ok && data && data.status === 'success';
             const toastType = isSuccess ? 'ok' : (ok && data && data.status === 'warning' ? 'warn' : 'err');
             showToast(data.message || 'Added to library', toastType);
-            if (btnEl) btnEl.textContent = ok ? 'Added ✓' : 'Retry';
-            if (btnEl && !ok) btnEl.disabled = false;
+            if (ok && data) {
+                const addedObj = data.show || data.movie || null;
+                item.library_id = (addedObj && addedObj.id) ? addedObj.id : true;
+                const actionsWrap = el(`search-card-actions-${idx}`);
+                if (actionsWrap) {
+                    actionsWrap.innerHTML = _renderSearchCardActions(item, idx);
+                }
+            } else if (btnEl) {
+                btnEl.disabled = false;
+                btnEl.textContent = 'Retry';
+            }
             loadLibrary();
             setTimeout(pollAll, 500);
         })
@@ -526,9 +549,79 @@ function addLibraryItem(type, idx, btnEl) {
             showToast('Failed to add media', 'err');
             if (btnEl) {
                 btnEl.disabled = false;
-                btnEl.textContent = 'Add & Download';
+                btnEl.textContent = item.type === 'tv' ? 'Add Show' : 'Add Movie';
             }
         });
+}
+
+function goToSearchLibraryItem(idx) {
+    const item = _lastSearchResults[idx];
+    if (!item) return;
+    const isTv = item.type === 'tv';
+    const targetTab = isTv ? 'shows' : 'movies';
+
+    document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+    document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
+    const btn = document.getElementById('tab-' + targetTab);
+    const panel = document.getElementById('panel-' + targetTab);
+    if (btn) btn.classList.add('active');
+    if (panel) panel.classList.add('active');
+    if (window.location.hash !== '#' + targetTab) {
+        history.pushState(null, null, '#' + targetTab);
+    }
+
+    loadLibrary().then(() => {
+        if (isTv && item.library_id && item.library_id !== true) {
+            const det = document.querySelector(`#library-shows-container details[data-show-id="${item.library_id}"]`);
+            if (det) {
+                det.open = true;
+                loadShowEpisodes(item.library_id, false);
+                det.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            }
+        } else if (!isTv && item.library_id && item.library_id !== true) {
+            const row = document.querySelector(`#library-movies-container .library-row[data-movie-id="${item.library_id}"]`);
+            if (row) {
+                row.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            }
+        }
+    });
+}
+
+function removeSearchLibraryItem(idx, btnEl) {
+    const item = _lastSearchResults[idx];
+    if (!item || !item.library_id) return;
+    if (btnEl && btnEl.dataset.confirming !== '1') {
+        const origHtml = btnEl.innerHTML;
+        btnEl.dataset.confirming = '1';
+        btnEl.dataset.origHtml = origHtml;
+        btnEl.innerHTML = `${SVG_ICONS.trash}<span>Confirm?</span>`;
+        btnEl.style.background = 'var(--red-dim)';
+        btnEl.style.borderColor = 'var(--red)';
+        btnEl.style.color = 'var(--red)';
+        btnEl.style.fontWeight = '600';
+        btnEl._confirmTimer = setTimeout(() => {
+            btnEl.dataset.confirming = '';
+            btnEl.innerHTML = btnEl.dataset.origHtml || `${SVG_ICONS.trash}<span>Remove</span>`;
+            btnEl.style.background = '';
+            btnEl.style.borderColor = '';
+            btnEl.style.color = '';
+            btnEl.style.fontWeight = '';
+        }, 5000);
+        return;
+    }
+    if (btnEl && btnEl._confirmTimer) clearTimeout(btnEl._confirmTimer);
+    if (btnEl) btnEl.disabled = true;
+
+    Api.deleteLibraryItem(item.type, item.library_id).then(() => {
+        showToast('Removed from tracked library & disk', 'info');
+        item.library_id = null;
+        const actionsWrap = el(`search-card-actions-${idx}`);
+        if (actionsWrap) {
+            actionsWrap.innerHTML = _renderSearchCardActions(item, idx);
+        }
+        loadLibrary();
+        Api.fetchDiskSpace().then(d => { if (d) renderDiskSpace(d); });
+    });
 }
 
 function queueShowFrom(showId, startSeason, startEpisode, btnEl) {
@@ -769,7 +862,7 @@ function deleteLibraryItem(type, id, btnEl) {
 }
 
 function loadLibrary() {
-    Api.fetchLibrary().then(data => {
+    return Api.fetchLibrary().then(data => {
         if (!data) return;
         const showsEl = el('library-shows-container');
         const moviesEl = el('library-movies-container');
@@ -827,7 +920,7 @@ function loadLibrary() {
                             : st === 'downloading' ? 'badge-blue'
                                 : 'badge-dim';
                     return `
-                    <div class="library-row">
+                    <div class="library-row" data-movie-id="${m.id}">
                         <div style="display:flex; align-items:center; gap:10px;">
                             ${m.poster_url ? `<img class="lib-thumb" src="${escapeHtml(m.poster_url)}" alt="">` : `<span class="lib-thumb lib-thumb-placeholder">MOV</span>`}
                             <strong>${escapeHtml(m.title)}</strong>
