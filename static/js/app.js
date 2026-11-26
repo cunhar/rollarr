@@ -419,12 +419,12 @@ function _renderSearchCardActions(item, idx) {
     if (item.library_id) {
         const goLabel = isTv ? 'Go to Show' : 'Go to Movie';
         return `
-            <button class="btn-clear" onclick="goToSearchLibraryItem(${idx})">${goLabel}</button>
-            <button type="button" class="btn-clear btn-icon-trash" title="Remove from Library" onclick="removeSearchLibraryItem(${idx}, this)">${SVG_ICONS.trash}<span>Remove</span></button>
+            <button class="btn-clear btn-ep" onclick="goToSearchLibraryItem(${idx})">${goLabel}</button>
+            <button type="button" class="btn-clear btn-ep btn-icon-trash" title="Remove from Library" onclick="removeSearchLibraryItem(${idx}, this)">${SVG_ICONS.trash}<span>Remove</span></button>
         `;
     }
     const btnLabel = isTv ? 'Add Show' : 'Add Movie';
-    return `<button class="btn-clear" onclick="addLibraryItem('${escapeHtml(item.type)}', ${idx}, this)">${btnLabel}</button>`;
+    return `<button class="btn-clear btn-ep" onclick="addLibraryItem('${escapeHtml(item.type)}', ${idx}, this)">${btnLabel}</button>`;
 }
 
 function _renderSearchCard(item, idx) {
@@ -438,7 +438,7 @@ function _renderSearchCard(item, idx) {
             <div class="media-card-info">
                 <div class="media-card-title">${escapeHtml(item.title)} ${item.year ? `<span class="media-year">(${item.year})</span>` : ''}${typeBadge}</div>
                 <div class="media-card-overview">${escapeHtml((item.overview || '').slice(0, 120))}</div>
-                <div id="search-card-actions-${idx}" style="display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
+                <div id="search-card-actions-${idx}" style="display:flex; align-items:center; gap:8px; flex-wrap:nowrap;">
                     ${_renderSearchCardActions(item, idx)}
                 </div>
             </div>
