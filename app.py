@@ -276,6 +276,7 @@ def api_library():
             # Recover movies stuck in 'downloading' when no active download job exists
             m['status'] = 'wanted'
             db.update_movie_status(m['id'], 'wanted')
+        m['resolution'] = media_manager.get_video_resolution(disk_path) if disk_path else None
 
     status_rank = {'downloaded': 0, 'downloading': 1, 'wanted': 2}
     movies.sort(key=lambda m: (
@@ -291,8 +292,10 @@ def api_library():
     }
     shows = media_manager.sync_on_disk_shows()
     for s in shows:
-        on_disk_cnt = len(media_manager._scan_show_episodes_on_disk(s['title']))
+        ep_files = media_manager._scan_show_episode_files_on_disk(s['title'])
+        on_disk_cnt = len(ep_files)
         s['on_disk_count'] = on_disk_cnt
+        s['resolution'] = media_manager.get_show_on_disk_resolutions(s['title'], ep_files) if on_disk_cnt > 0 else None
         is_dl = media_manager.clean_title(s['title']) in active_show_titles
         lw_s = s.get('last_watched_season')
         lw_e = s.get('last_watched_episode')

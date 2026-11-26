@@ -667,27 +667,80 @@ function queueSingleEpisode(showId, season, episode, btnEl) {
 }
 
 const _openSeasonsByShow = {};
+const _showSeasonsCache = {};
+
+function _renderEpisodeRowsHtml(showId, episodes) {
+    return (episodes || []).map(ep => {
+        const tag = `S${String(ep.season).padStart(2, '0')}E${String(ep.episode).padStart(2, '0')}`;
+        const st = ep.status;
+        const badgeCls = st === 'downloaded' ? 'badge-green'
+            : st === 'queued' ? 'badge-blue'
+                : st === 'missing' ? 'badge-amber'
+                    : 'badge-dim';
+        const badgeTxt = st === 'downloaded' ? 'ON DISK' : st.toUpperCase();
+        const resBadge = ep.resolution ? `<span class="badge badge-blue">${escapeHtml(ep.resolution)}</span>` : '';
+        let actions = '';
+        if (st === 'downloaded') {
+            actions = `<button class="btn-clear btn-ep" onclick="openEpisodePicker(${showId}, ${ep.season}, ${ep.episode})">Pick</button>
+                       <button type="button" class="btn-clear btn-icon-trash" title="Delete episode file from disk" onclick="deleteEpisodeFile(${showId}, ${ep.season}, ${ep.episode}, this)">${SVG_ICONS.trash}</button>`;
+        } else if (st === 'queued') {
+            actions = `<button type="button" class="btn-clear btn-icon-trash" title="Cancel queued episode download" onclick="deleteEpisodeFile(${showId}, ${ep.season}, ${ep.episode}, this)">${SVG_ICONS.trash}</button>`;
+        } else if (st === 'missing' || st === 'watched' || st === 'upcoming') {
+            actions = `<button class="btn-clear btn-ep" onclick="queueSingleEpisode(${showId}, ${ep.season}, ${ep.episode}, this)">Get</button>
+                       <button class="btn-clear btn-ep" onclick="openEpisodePicker(${showId}, ${ep.season}, ${ep.episode})">Pick</button>
+                       <button class="btn-clear btn-ep" onclick="queueShowFrom(${showId}, ${ep.season}, ${ep.episode}, this)">Start Here</button>`;
+        }
+        return `
+            <div class="ep-row" data-ep-key="S${ep.season}E${ep.episode}">
+                <div class="ep-row-left">
+                    <span class="ep-tag">${tag}</span>
+                    <span class="ep-title">${escapeHtml(ep.title)}</span>
+                    ${ep.airdate ? `<span class="ep-airdate">${escapeHtml(formatDate(ep.airdate))}</span>` : ''}
+                </div>
+                <div class="ep-row-right">
+                    ${resBadge}
+                    <span class="badge ${badgeCls}">${badgeTxt}</span>
+                    ${actions}
+                </div>
+            </div>`;
+    }).join('');
+}
 
 function onSeasonToggle(detailsEl, showId, seasonNum) {
     const key = String(showId);
+    const sKey = String(seasonNum);
     if (!_openSeasonsByShow[key]) _openSeasonsByShow[key] = new Set();
+    const epWrap = el(`season-episodes-${showId}-${seasonNum}`);
     if (detailsEl.open) {
-        _openSeasonsByShow[key].add(String(seasonNum));
+        _openSeasonsByShow[key].add(sKey);
+        if (epWrap && !epWrap.innerHTML.trim()) {
+            const sec = (_showSeasonsCache[key] || {})[sKey];
+            if (sec) {
+                epWrap.innerHTML = _renderEpisodeRowsHtml(showId, sec.episodes);
+            }
+        }
     } else {
-        _openSeasonsByShow[key].delete(String(seasonNum));
+        _openSeasonsByShow[key].delete(sKey);
+        if (epWrap) {
+            epWrap.innerHTML = '';
+        }
     }
 }
 
 function onShowToggle(detailsEl, showId) {
+    const body = el(`show-episodes-${showId}`);
     if (detailsEl.open) {
         loadShowEpisodes(showId, false);
+    } else if (body) {
+        body.innerHTML = '';
+        body.dataset.loaded = '';
     }
 }
 
 function loadShowEpisodes(showId, forceReload = false) {
     const body = el(`show-episodes-${showId}`);
-    if (!body) return;
-    if (!forceReload && body.dataset.loaded === '1') return;
+    if (!body) return Promise.resolve();
+    if (!forceReload && body.dataset.loaded === '1') return Promise.resolve();
 
     const showKey = String(showId);
     if (!_openSeasonsByShow[showKey]) _openSeasonsByShow[showKey] = new Set();
@@ -697,9 +750,9 @@ function loadShowEpisodes(showId, forceReload = false) {
     });
 
     if (!forceReload) {
-        body.innerHTML = '<div style="font-size:11px; color:var(--text-sub); font-family:var(--mono); padding:6px 0;">Loading seasons & episodes...</div>';
+        body.innerHTML = '<div style="font-size:11px; color:var(--text-sub); font-family:var(--mono); padding:6px 0;">Loading seasons...</div>';
     }
-    Api.fetchShowEpisodes(showId).then(data => {
+    return Api.fetchShowEpisodes(showId).then(data => {
         if (!data || data.status !== 'success') {
             body.innerHTML = '<div style="font-size:11px; color:var(--red);">Failed to load episodes.</div>';
             return;
@@ -710,8 +763,14 @@ function loadShowEpisodes(showId, forceReload = false) {
             body.innerHTML = '<div style="font-size:11px; color:var(--text-sub);">No episodes found on TVMaze.</div>';
             return;
         }
-        body.innerHTML = seasons.map(sec => `
-            <details class="season-card" data-season="${sec.season}" ${openSeasons.has(String(sec.season)) ? 'open' : ''} ontoggle="onSeasonToggle(this, ${showId}, ${sec.season})">
+        const bySeason = {};
+        seasons.forEach(sec => { bySeason[String(sec.season)] = sec; });
+        _showSeasonsCache[showKey] = bySeason;
+
+        body.innerHTML = seasons.map(sec => {
+            const isOpen = openSeasons.has(String(sec.season));
+            return `
+            <details class="season-card" data-season="${sec.season}" ${isOpen ? 'open' : ''} ontoggle="onSeasonToggle(this, ${showId}, ${sec.season})">
                 <summary class="season-summary">
                     <span>Season ${sec.season}</span>
                     <span style="display:flex; align-items:center; gap:8px;">
@@ -719,42 +778,10 @@ function loadShowEpisodes(showId, forceReload = false) {
                         ${sec.downloaded > 0 ? `<button type="button" class="btn-clear btn-icon-trash" title="Delete all on-disk episodes in Season ${sec.season}" onclick="event.preventDefault(); event.stopPropagation(); deleteSeasonFiles(${showId}, ${sec.season}, this)">${SVG_ICONS.trash}</button>` : ''}
                     </span>
                 </summary>
-                <div class="season-episodes">
-                    ${sec.episodes.map(ep => {
-            const tag = `S${String(ep.season).padStart(2, '0')}E${String(ep.episode).padStart(2, '0')}`;
-            const st = ep.status;
-            const badgeCls = st === 'downloaded' ? 'badge-green'
-                : st === 'queued' ? 'badge-blue'
-                    : st === 'missing' ? 'badge-amber'
-                        : 'badge-dim';
-            const badgeTxt = st === 'downloaded' ? 'ON DISK' : st.toUpperCase();
-            let actions = '';
-            if (st === 'downloaded') {
-                actions = `<button class="btn-clear btn-ep" onclick="openEpisodePicker(${showId}, ${ep.season}, ${ep.episode})">Pick</button>
-                           <button type="button" class="btn-clear btn-icon-trash" title="Delete episode file from disk" onclick="deleteEpisodeFile(${showId}, ${ep.season}, ${ep.episode}, this)">${SVG_ICONS.trash}</button>`;
-            } else if (st === 'queued') {
-                actions = `<button type="button" class="btn-clear btn-icon-trash" title="Cancel queued episode download" onclick="deleteEpisodeFile(${showId}, ${ep.season}, ${ep.episode}, this)">${SVG_ICONS.trash}</button>`;
-            } else if (st === 'missing' || st === 'watched' || st === 'upcoming') {
-                actions = `<button class="btn-clear btn-ep" onclick="queueSingleEpisode(${showId}, ${ep.season}, ${ep.episode}, this)">Get</button>
-                           <button class="btn-clear btn-ep" onclick="openEpisodePicker(${showId}, ${ep.season}, ${ep.episode})">Pick</button>
-                           <button class="btn-clear btn-ep" onclick="queueShowFrom(${showId}, ${ep.season}, ${ep.episode}, this)">Start Here</button>`;
-            }
-            return `
-                        <div class="ep-row">
-                            <div class="ep-row-left">
-                                <span class="ep-tag">${tag}</span>
-                                <span class="ep-title">${escapeHtml(ep.title)}</span>
-                                ${ep.airdate ? `<span class="ep-airdate">${escapeHtml(formatDate(ep.airdate))}</span>` : ''}
-                            </div>
-                            <div class="ep-row-right">
-                                <span class="badge ${badgeCls}">${badgeTxt}</span>
-                                ${actions}
-                            </div>
-                        </div>`;
-        }).join('')}
-                </div>
+                <div class="season-episodes" id="season-episodes-${showId}-${sec.season}">${isOpen ? _renderEpisodeRowsHtml(showId, sec.episodes) : ''}</div>
             </details>
-        `).join('');
+        `;
+        }).join('');
     });
 }
 
@@ -890,10 +917,11 @@ function loadLibrary() {
                     return `
                     <details class="config-card" data-show-id="${s.id}" ${openIds.has(String(s.id)) ? 'open' : ''} ontoggle="onShowToggle(this, ${s.id})" style="margin-bottom:0;">
                         <summary class="config-card-summary">
-                            <span style="display:flex; align-items:center; gap:10px; min-width:0;">
+                            <span style="display:flex; align-items:center; gap:10px; min-width:0; flex-wrap:wrap;">
                                 ${s.poster_url ? `<img class="lib-thumb" src="${escapeHtml(s.poster_url)}" alt="">` : `<span class="lib-thumb lib-thumb-placeholder">TV</span>`}
                                 <strong>${escapeHtml(s.title)}</strong>
                                 ${s.year ? `<span class="media-year">(${s.year})</span>` : ''}
+                                ${s.resolution ? `<span class="badge badge-blue">${escapeHtml(s.resolution)}</span>` : ''}
                                 <span class="badge ${sBadge}">${escapeHtml(s.status || 'idle')}</span>
                             </span>
                             <button type="button" class="btn-clear btn-icon-trash" style="margin-left:auto; margin-right:12px;" title="Remove Show" onclick="event.preventDefault(); event.stopPropagation(); deleteLibraryItem('tv', ${s.id}, this)">${SVG_ICONS.trash}</button>
@@ -921,10 +949,11 @@ function loadLibrary() {
                                 : 'badge-dim';
                     return `
                     <div class="library-row" data-movie-id="${m.id}">
-                        <div style="display:flex; align-items:center; gap:10px;">
+                        <div style="display:flex; align-items:center; gap:10px; flex-wrap:wrap;">
                             ${m.poster_url ? `<img class="lib-thumb" src="${escapeHtml(m.poster_url)}" alt="">` : `<span class="lib-thumb lib-thumb-placeholder">MOV</span>`}
                             <strong>${escapeHtml(m.title)}</strong>
                             ${m.year ? `<span class="media-year">(${m.year})</span>` : ''}
+                            ${m.resolution ? `<span class="badge badge-blue">${escapeHtml(m.resolution)}</span>` : ''}
                             <span class="badge ${badgeCls}">${escapeHtml(m.status || 'wanted')}</span>
                         </div>
                         <div class="ep-controls-row">
@@ -1086,6 +1115,75 @@ function closeReleaseModal() {
     if (modal) modal.style.display = 'none';
 }
 
+function goToLibraryItemById(type, id) {
+    if (!id) return;
+    const isTv = type === 'tv';
+    const targetTab = isTv ? 'shows' : 'movies';
+
+    document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+    document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
+    const btn = document.getElementById('tab-' + targetTab);
+    const panel = document.getElementById('panel-' + targetTab);
+    if (btn) btn.classList.add('active');
+    if (panel) panel.classList.add('active');
+    if (window.location.hash !== '#' + targetTab) {
+        history.pushState(null, null, '#' + targetTab);
+    }
+
+    loadLibrary().then(() => {
+        if (isTv) {
+            const det = document.querySelector(`#library-shows-container details[data-show-id="${id}"]`);
+            if (det) {
+                det.open = true;
+                loadShowEpisodes(id, false);
+                det.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            }
+        } else {
+            const row = document.querySelector(`#library-movies-container .library-row[data-movie-id="${id}"]`);
+            if (row) {
+                row.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            }
+        }
+    });
+}
+
+function goToShowEpisode(showId, season, episode) {
+    if (!showId) return;
+    const showKey = String(showId);
+    if (!_openSeasonsByShow[showKey]) _openSeasonsByShow[showKey] = new Set();
+    _openSeasonsByShow[showKey].add(String(season));
+
+    document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+    document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
+    const btn = document.getElementById('tab-shows');
+    const panel = document.getElementById('panel-shows');
+    if (btn) btn.classList.add('active');
+    if (panel) panel.classList.add('active');
+    if (window.location.hash !== '#shows') {
+        history.pushState(null, null, '#shows');
+    }
+
+    loadLibrary().then(() => {
+        const det = document.querySelector(`#library-shows-container details[data-show-id="${showId}"]`);
+        if (!det) return;
+        det.open = true;
+        loadShowEpisodes(showId, true).then(() => {
+            const secDet = det.querySelector(`details.season-card[data-season="${season}"]`);
+            if (secDet && !secDet.open) {
+                secDet.open = true;
+            }
+            const epRow = det.querySelector(`.ep-row[data-ep-key="S${season}E${episode}"]`);
+            if (epRow) {
+                epRow.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            } else if (secDet) {
+                secDet.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            } else {
+                det.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            }
+        });
+    });
+}
+
 function loadCalendar() {
     const container = el('calendar-container');
     if (!container) return;
@@ -1100,12 +1198,12 @@ function loadCalendar() {
             const when = it.days_away === 0 ? 'Today' : (it.days_away === 1 ? 'Tomorrow' : `In ${it.days_away}d`);
             const whenCls = it.days_away === 0 ? 'badge-green' : (it.days_away === 1 ? 'badge-amber' : 'badge-dim');
             return `
-            <div class="cal-row">
+            <div class="cal-row clickable-row" onclick="goToShowEpisode(${it.show_id}, ${it.season}, ${it.episode})" title="Open ${escapeHtml(it.show_title)} ${tag}">
                 <div style="display:flex; align-items:center; gap:10px; min-width:0;">
                     ${it.poster_url ? `<img class="lib-thumb" src="${escapeHtml(it.poster_url)}" alt="">` : `<span class="lib-thumb lib-thumb-placeholder">TV</span>`}
                     <div style="min-width:0;">
-                        <div><strong>${escapeHtml(it.show_title)}</strong> <span class="ep-tag">${tag}</span></div>
-                        <div class="cal-sub">${escapeHtml(it.ep_title)}</div>
+                        <div><strong class="clickable-title">${escapeHtml(it.show_title)}</strong> <span class="ep-tag">${tag}</span></div>
+                        <div class="cal-sub clickable-title">${escapeHtml(it.ep_title)}</div>
                     </div>
                 </div>
                 <div style="display:flex; align-items:center; gap:8px; flex-shrink:0;">
@@ -1183,13 +1281,16 @@ function renderDiskSpace(data) {
                 const badgeCls = it.type === 'tv' ? 'badge-blue' : 'badge-amber';
                 const badgeLbl = it.type === 'tv' ? 'TV' : 'MOVIE';
                 const delBtn = it.id
-                    ? `<button type="button" class="btn-clear btn-icon-trash" title="Delete from disk & library" onclick="deleteLibraryItem('${escapeHtml(it.type)}', ${it.id}, this)">${SVG_ICONS.trash}</button>`
+                    ? `<button type="button" class="btn-clear btn-icon-trash" title="Delete from disk & library" onclick="event.stopPropagation(); deleteLibraryItem('${escapeHtml(it.type)}', ${it.id}, this)">${SVG_ICONS.trash}</button>`
+                    : '';
+                const clickAttr = it.id
+                    ? `onclick="goToLibraryItemById('${escapeHtml(it.type)}', ${it.id})" title="Go to ${escapeHtml(it.title)}"`
                     : '';
                 return `
-                <div class="library-row">
+                <div class="library-row ${it.id ? 'clickable-row' : ''}" ${clickAttr}>
                     <div style="display:flex; align-items:center; gap:10px; min-width:0;">
                         <span class="badge ${badgeCls}">${badgeLbl}</span>
-                        <strong>${escapeHtml(it.title)}</strong>
+                        <strong class="${it.id ? 'clickable-title' : ''}">${escapeHtml(it.title)}</strong>
                         ${it.year ? `<span class="media-year">(${it.year})</span>` : ''}
                         <span style="font-size:12px; color:var(--text-sub);">${escapeHtml(it.detail || '')}</span>
                     </div>

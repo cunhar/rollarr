@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import os
 import re
+import struct
 import shutil
 import time
 import datetime
@@ -637,21 +638,111 @@ def add_show(tvmaze_id: int, auto_queue: bool = False, start_season: int = 1, st
     }
 
 
-def _scan_show_episodes_on_disk(show_title: str) -> set[tuple[int, int]]:
-    """Return a set of (season, episode) tuples currently present on disk for a show."""
-    found: set[tuple[int, int]] = set()
+def _scan_show_episode_files_on_disk(show_title: str) -> dict[tuple[int, int], str]:
+    """Return a dict mapping (season, episode) -> full file path for on-disk episodes of a show."""
+    found: dict[tuple[int, int], str] = {}
     show_dir = _find_show_dir(show_title)
     if not show_dir:
         return found
     ep_pat = re.compile(r'(?:^|[\.\s_\-])S0*(\d{1,2})E0*(\d{1,3})(?:$|[\.\s_\-])', re.I)
-    for _, _, filenames in os.walk(show_dir):
+    for dirpath, _, filenames in os.walk(show_dir):
         for fname in filenames:
             if os.path.splitext(fname)[1].lower() not in VIDEO_EXTS:
                 continue
             m = ep_pat.search(fname)
             if m:
-                found.add((int(m.group(1)), int(m.group(2))))
+                found[(int(m.group(1)), int(m.group(2)))] = os.path.join(dirpath, fname)
     return found
+
+
+def _scan_show_episodes_on_disk(show_title: str) -> set[tuple[int, int]]:
+    """Return a set of (season, episode) tuples currently present on disk for a show."""
+    return set(_scan_show_episode_files_on_disk(show_title).keys())
+
+
+_resolution_cache: dict[str, tuple[float, str | None]] = {}
+
+
+def get_video_resolution(fpath: str | None) -> str | None:
+    """Detect video resolution ('2160p', '1080p', '720p', '480p') from filename or MKV/MP4 header."""
+    if not fpath or not os.path.isfile(fpath):
+        return None
+    try:
+        mtime = os.path.getmtime(fpath)
+    except OSError:
+        return None
+    cached = _resolution_cache.get(fpath)
+    if cached and cached[0] == mtime:
+        return cached[1]
+
+    res = None
+    parsed = release_selector.parse_release(os.path.basename(fpath))
+    if parsed['resolution'] != 'unknown':
+        res = parsed['resolution']
+    else:
+        try:
+            w, h = 0, 0
+            with open(fpath, 'rb') as f:
+                buf = f.read(131072)
+                if buf.startswith(b'\x1a\x45\xdf\xa3'):
+                    # Matroska EBML PixelWidth (\xb0\x82) and PixelHeight (\xba\x82)
+                    m = re.search(b'\xb0\x82(..)(?:.{0,32}?)\xba\x82(..)', buf, re.S)
+                    if m:
+                        w, h = struct.unpack('>H', m.group(1))[0], struct.unpack('>H', m.group(2))[0]
+                    else:
+                        m2 = re.search(b'\xba\x82(..)(?:.{0,32}?)\xb0\x82(..)', buf, re.S)
+                        if m2:
+                            h, w = struct.unpack('>H', m2.group(1))[0], struct.unpack('>H', m2.group(2))[0]
+                else:
+                    # MP4 top-level box traversal to moov atom
+                    sz = os.path.getsize(fpath)
+                    pos = 0
+                    while pos + 8 <= sz:
+                        f.seek(pos)
+                        hdr = f.read(16)
+                        if len(hdr) < 8:
+                            break
+                        box_sz, box_type = struct.unpack('>I4s', hdr[:8])
+                        if box_sz == 1 and len(hdr) >= 16:
+                            box_sz = struct.unpack('>Q', hdr[8:16])[0]
+                        elif box_sz == 0:
+                            box_sz = sz - pos
+                        if box_type == b'moov':
+                            moov = f.read(min(box_sz, 524288))
+                            m = re.search(b'(?:avc1|hvc1|hev1|vp09|av01)\x00{6}\x00\x01.{16}(..)(..)', moov, re.S)
+                            if m:
+                                w, h = struct.unpack('>HH', m.group(1) + m.group(2))
+                            break
+                        if box_sz < 8:
+                            break
+                        pos += box_sz
+            if w >= 3200 or h >= 1800:
+                res = '2160p'
+            elif w >= 1800 or h >= 1000:
+                res = '1080p'
+            elif w >= 1200 or h >= 680:
+                res = '720p'
+            elif w > 0 or h > 0:
+                res = '480p'
+        except Exception:
+            res = None
+
+    _resolution_cache[fpath] = (mtime, res)
+    return res
+
+
+def get_show_on_disk_resolutions(show_title: str, ep_files: dict[tuple[int, int], str] | None = None) -> str | None:
+    """Summarize the resolution(s) of on-disk episode files for a show (e.g. '1080p' or '2160p / 1080p')."""
+    files_map = ep_files if ep_files is not None else _scan_show_episode_files_on_disk(show_title)
+    if not files_map:
+        return None
+    found_res = {get_video_resolution(fp) for fp in files_map.values()}
+    found_res.discard(None)
+    if not found_res:
+        return None
+    order = ['2160p', '1080p', '720p', '480p']
+    sorted_res = sorted(found_res, key=lambda r: order.index(r) if r in order else 99)
+    return ' / '.join(sorted_res)
 
 
 def get_show_episodes_status(show_id: int) -> dict[str, Any]:
@@ -661,7 +752,8 @@ def get_show_episodes_status(show_id: int) -> dict[str, Any]:
         return {'status': 'error', 'message': f'Show #{show_id} not found'}
 
     episodes = metadata.get_show_episodes(show['tvmaze_id'])
-    on_disk = _scan_show_episodes_on_disk(show['title'])
+    on_disk_files = _scan_show_episode_files_on_disk(show['title'])
+    on_disk = set(on_disk_files.keys())
     queued_set = {
         (int(d['season']), int(d['episode']))
         for d in db.list_active_downloads()
@@ -684,8 +776,10 @@ def get_show_episodes_status(show_id: int) -> dict[str, Any]:
     for ep in episodes:
         s_num, e_num = ep['season'], ep['episode']
         cur_key = (s_num, e_num)
+        ep_res = None
         if cur_key in on_disk:
             ep_status = 'downloaded'
+            ep_res = get_video_resolution(on_disk_files.get(cur_key))
         elif cur_key in queued_set:
             ep_status = 'queued'
         elif not ep['aired']:
@@ -704,11 +798,12 @@ def get_show_episodes_status(show_id: int) -> dict[str, Any]:
             'airdate': ep['airdate'],
             'aired': ep['aired'],
             'status': ep_status,
+            'resolution': ep_res,
         })
 
     seasons = []
     for s_num in sorted(seasons_map.keys(), reverse=True):
-        eps = seasons_map[s_num]
+        eps = sorted(seasons_map[s_num], key=lambda e: e['episode'], reverse=True)
         seasons.append({
             'season': s_num,
             'total': len(eps),
@@ -1054,7 +1149,7 @@ def grab_manual_release(data: dict[str, Any]) -> dict[str, Any]:
 
 
 def get_airing_this_week(days: int = 7) -> list[dict[str, Any]]:
-    """Return tracked TV show episodes airing between today and today + `days`."""
+    """Return the next upcoming episode (at most 1 per show) airing between today and today + `days`."""
     today = datetime.date.today()
     end = today + datetime.timedelta(days=days)
     today_str = today.isoformat()
@@ -1083,6 +1178,7 @@ def get_airing_this_week(days: int = 7) -> list[dict[str, Any]]:
                 'days_away': days_away,
                 'on_disk': (ep['season'], ep['episode']) in on_disk,
             })
+            break
 
     upcoming.sort(key=lambda x: (x['airdate'], x['show_title'], x['season'], x['episode']))
     return upcoming
