@@ -1245,21 +1245,24 @@ body {
 }
 
 .btn-sm,
-.btn-ep {
-    padding: 5px 11px;
+.btn-ep,
+.btn-icon-trash {
+    height: 26px;
+    padding: 0 11px;
     font-size: 11px;
+    box-sizing: border-box;
 }
 
 .ui-icon {
-    width: 14px;
-    height: 14px;
+    width: 13px;
+    height: 13px;
     flex-shrink: 0;
     display: inline-block;
     vertical-align: middle;
 }
 
 .btn-icon-trash {
-    padding: 6px 10px;
+    padding: 0 9px;
     color: var(--text-sub);
 }
 
@@ -1483,9 +1486,20 @@ body {
     }
 
     .btn-sm,
-    .btn-ep {
+    .btn-ep,
+    .btn-icon-trash {
+        height: 30px;
         font-size: 14px;
-        padding: 6px 14px;
+        padding: 0 14px;
+    }
+
+    .btn-icon-trash {
+        padding: 0 11px;
+    }
+
+    .ui-icon {
+        width: 15px;
+        height: 15px;
     }
 
     .badge {
@@ -1625,9 +1639,20 @@ body {
     }
 
     .btn-sm,
-    .btn-ep {
+    .btn-ep,
+    .btn-icon-trash {
+        height: 34px;
         font-size: 15px;
-        padding: 7px 16px;
+        padding: 0 16px;
+    }
+
+    .btn-icon-trash {
+        padding: 0 12px;
+    }
+
+    .ui-icon {
+        width: 16px;
+        height: 16px;
     }
 
     .badge {
@@ -1920,9 +1945,20 @@ body {
     }
 
     .btn-sm,
-    .btn-ep {
+    .btn-ep,
+    .btn-icon-trash {
+        height: 38px;
         font-size: 16px;
-        padding: 8px 18px;
+        padding: 0 18px;
+    }
+
+    .btn-icon-trash {
+        padding: 0 14px;
+    }
+
+    .ui-icon {
+        width: 17px;
+        height: 17px;
     }
 
     .badge {
@@ -2119,9 +2155,20 @@ body {
     }
 
     .btn-sm,
-    .btn-ep {
+    .btn-ep,
+    .btn-icon-trash {
+        height: 40px;
         font-size: 16px;
-        padding: 8px 16px;
+        padding: 0 18px;
+    }
+
+    .btn-icon-trash {
+        padding: 0 14px;
+    }
+
+    .ui-icon {
+        width: 18px;
+        height: 18px;
     }
 
     .badge {
