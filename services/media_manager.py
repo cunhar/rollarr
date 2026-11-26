@@ -814,21 +814,31 @@ def queue_show_from(show_id: int, start_season: int = 1, start_episode: int = 1)
             'skipped': [],
         }
 
-    queued, skipped = [], []
+    queued, already_present, not_found = [], [], []
     for ep in window:
         tag = f"S{ep['season']:02d}E{ep['episode']:02d}"
-        ok, _ = queue_episode(show, ep['season'], ep['episode'])
+        ok, reason = queue_episode(show, ep['season'], ep['episode'], airdate=ep.get('airdate'))
         if ok:
             queued.append(tag)
+        elif 'already on disk' in reason or 'already queued' in reason:
+            already_present.append(tag)
         else:
-            skipped.append(tag)
+            not_found.append(tag)
+
+    skipped = already_present + not_found
+    details = []
+    if already_present:
+        details.append(f"already present/queued: {', '.join(already_present)}")
+    if not_found:
+        details.append(f"not on NZBgeek yet: {', '.join(not_found)}")
+    detail_suffix = f" ({'; '.join(details)})" if details else ''
 
     return {
         'status': 'success' if queued else 'warning',
-        'message': f"{show['title']} from S{int(start_season):02d}E{int(start_episode):02d} — queued: {', '.join(queued) if queued else 'none'}"
-                   + (f" (already present/queued: {', '.join(skipped)})" if skipped else ''),
+        'message': f"{show['title']} from S{int(start_season):02d}E{int(start_episode):02d} — queued: {', '.join(queued) if queued else 'none'}{detail_suffix}",
         'queued': queued,
         'skipped': skipped,
+        'not_found': not_found,
     }
 
 

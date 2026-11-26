@@ -141,7 +141,7 @@ def search_episode(
     clean_imdb = re.sub(r'^tt', '', str(imdb_id or '')).strip()
     has_imdb = clean_imdb.isdigit()
 
-    # 1. Standard SxxExx Newznab tvsearch
+    # 1. Standard SxxExx Newznab tvsearch (prefer exact TVDB ID, else IMDb ID, then title tvsearch)
     if tvdb_id:
         _add_unique(_query({
             't': 'tvsearch',
@@ -149,7 +149,7 @@ def search_episode(
             'season': int(season),
             'ep': int(episode),
         }))
-    if not results and has_imdb:
+    elif has_imdb:
         _add_unique(_query({
             't': 'tvsearch',
             'imdbid': clean_imdb,
@@ -176,17 +176,10 @@ def search_episode(
                 'season': yyyy,
                 'ep': ep_date,
             }))
-        if not results and has_imdb:
+        elif has_imdb:
             _add_unique(_query({
                 't': 'tvsearch',
                 'imdbid': clean_imdb,
-                'season': yyyy,
-                'ep': ep_date,
-            }))
-        if not results:
-            _add_unique(_query({
-                't': 'tvsearch',
-                'q': show_title,
                 'season': yyyy,
                 'ep': ep_date,
             }))
@@ -196,8 +189,8 @@ def search_episode(
                 'q': f"{show_title} {yyyy} {mm} {dd}",
             }))
 
-    # 3. Final free-text SxxExx search fallback
-    if not results:
+    # 3. Final free-text SxxExx search fallback (only when no tvdb_id/airdate matched)
+    if not results and not tvdb_id:
         ep_tag = f"S{int(season):02d}E{int(episode):02d}"
         _add_unique(_query({
             't': 'search',
