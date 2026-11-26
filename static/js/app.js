@@ -928,7 +928,8 @@ function loadLibrary() {
                             <span class="badge ${badgeCls}">${escapeHtml(m.status || 'wanted')}</span>
                         </div>
                         <div class="ep-controls-row">
-                            ${st === 'wanted' ? `<button class="btn-clear btn-ep" onclick="queueSingleMovie(${m.id}, this)">Get</button><button class="btn-clear btn-ep" onclick="openMoviePicker(${m.id})">Pick</button>` : ''}
+                            ${st === 'wanted' ? `<button class="btn-clear btn-ep" onclick="queueSingleMovie(${m.id}, this)">Get</button>` : ''}
+                            <button class="btn-clear btn-ep" onclick="openMoviePicker(${m.id})">Pick</button>
                             <button type="button" class="btn-clear btn-icon-trash" title="Remove Movie" onclick="deleteLibraryItem('movie', ${m.id}, this)">${SVG_ICONS.trash}</button>
                         </div>
                     </div>`;

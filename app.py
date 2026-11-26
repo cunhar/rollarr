@@ -263,15 +263,15 @@ def api_library():
         fpath = m.get('file_path')
         disk_path = fpath if (fpath and os.path.isfile(fpath)) else media_manager.find_movie_file_on_disk(m['title'], m.get('year'))
         cur_status = (m.get('status') or 'wanted').lower()
-        if disk_path:
+        if db.has_active_download('movie', m['title']):
+            if cur_status != 'downloading':
+                m['status'] = 'downloading'
+                db.update_movie_status(m['id'], 'downloading')
+        elif disk_path:
             if cur_status != 'downloaded':
                 m['status'] = 'downloaded'
                 m['file_path'] = disk_path
                 db.update_movie_status(m['id'], 'downloaded', file_path=disk_path)
-        elif db.has_active_download('movie', m['title']):
-            if cur_status != 'downloading':
-                m['status'] = 'downloading'
-                db.update_movie_status(m['id'], 'downloading')
         elif cur_status == 'downloading':
             # Recover movies stuck in 'downloading' when no active download job exists
             m['status'] = 'wanted'

@@ -602,6 +602,13 @@ def _move_to_library(job: dict[str, Any], video_path: str) -> str:
         dest_name = f"{folder_name}{ext}"
 
     os.makedirs(dest_dir, exist_ok=True)
+    stem_prefix = os.path.splitext(dest_name)[0]
+    for existing_fn in os.listdir(dest_dir):
+        if existing_fn.startswith(stem_prefix) and os.path.splitext(existing_fn)[1].lower() in VIDEO_EXTS:
+            try:
+                os.remove(os.path.join(dest_dir, existing_fn))
+            except OSError:
+                pass
     dest_path = os.path.join(dest_dir, dest_name)
     shutil.move(video_path, dest_path)
     return dest_path
