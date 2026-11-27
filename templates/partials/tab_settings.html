@@ -184,6 +184,16 @@
                         <label class="form-label">Plex Token (X-Plex-Token)</label>
                         <input type="password" class="form-input" id="cfg-PLEX_TOKEN" value="{{ '••••••••' if cfg.PLEX_TOKEN else '' }}" placeholder="X-Plex-Token">
                     </div>
+                    <div class="form-group" style="grid-column: 1 / -1;">
+                        <label class="form-label">Plex Watchlist Auto-Import</label>
+                        <select class="form-input" id="cfg-PLEX_WATCHLIST_SYNC">
+                            <option value="true" {{ 'selected' if cfg.PLEX_WATCHLIST_SYNC else '' }}>Enabled — auto-add Watchlisted Movies &amp; TV Shows to Rolarr and remove from Watchlist</option>
+                            <option value="false" {{ 'selected' if not cfg.PLEX_WATCHLIST_SYNC else '' }}>Disabled</option>
+                        </select>
+                        <span class="form-hint">
+                            Monitors your Plex Watchlist using your Plex Token, queues new Movies and TV Shows (from S01E01), and clears them from your Watchlist once added.
+                        </span>
+                    </div>
                 </div>
                 <div style="margin-top:14px; display:flex; justify-content:flex-end;">
                     <button type="button" class="btn-clear" id="btn-test-plex" onclick="testConnection('plex')">Test Connection</button>

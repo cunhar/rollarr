@@ -17,6 +17,7 @@ import time
 import threading
 import logging
 import datetime
+from typing import Any
 
 import requests
 
@@ -112,6 +113,9 @@ def sync_watched_now() -> int:
 
 
 # ── Plex API helpers ──────────────────────────────────────────────────────────
+
+PLEX_DISCOVER_BASE = 'https://discover.provider.plex.tv'
+
 
 def _plex_get(path: str, params: dict = None) -> dict | None:
     plex_url, plex_token = get_plex_credentials()
@@ -211,6 +215,210 @@ def _enrich_metadata(item: dict) -> dict:
             if hit:
                 item = {**item, **hit}
     return item
+
+
+# ── Plex Watchlist Auto-Import & Auto-Removal ─────────────────────────────────
+
+def _parse_plex_guids(item: dict) -> dict[str, Any]:
+    """Extract imdb_id, tmdb_id, and tvdb_id from Plex Guid array or primary guid string."""
+    ids: dict[str, Any] = {'imdb_id': None, 'tmdb_id': None, 'tvdb_id': None}
+    raw_guids = []
+    for g in (item.get('Guid') or []):
+        if isinstance(g, dict) and g.get('id'):
+            raw_guids.append(str(g['id']))
+    if item.get('guid'):
+        raw_guids.append(str(item['guid']))
+
+    for gid in raw_guids:
+        low = gid.lower()
+        if 'imdb://' in low:
+            val = gid.split('imdb://', 1)[1].split('?')[0].strip('/')
+            if val.startswith('tt'):
+                ids['imdb_id'] = val
+        elif 'tmdb://' in low:
+            val = gid.split('tmdb://', 1)[1].split('?')[0].strip('/')
+            if val.isdigit():
+                ids['tmdb_id'] = int(val)
+        elif 'tvdb://' in low or 'thetvdb://' in low:
+            sep = 'thetvdb://' if 'thetvdb://' in low else 'tvdb://'
+            val = gid.split(sep, 1)[1].split('?')[0].strip('/')
+            if val.isdigit():
+                ids['tvdb_id'] = int(val)
+    return ids
+
+
+def _fetch_plex_watchlist() -> list[dict] | None:
+    """Fetch all items currently on the user's Plex Watchlist from discover.provider.plex.tv."""
+    _, plex_token = get_plex_credentials()
+    if not plex_token:
+        return None
+    try:
+        r = requests.get(
+            f"{PLEX_DISCOVER_BASE}/library/sections/watchlist/all",
+            headers={'Accept': 'application/json', 'X-Plex-Token': plex_token},
+            params={
+                'X-Plex-Token': plex_token,
+                'includeGuids': 1,
+                'X-Plex-Container-Start': 0,
+                'X-Plex-Container-Size': 200,
+            },
+            timeout=10,
+        )
+        r.raise_for_status()
+        data = r.json() or {}
+        return data.get('MediaContainer', {}).get('Metadata') or []
+    except Exception as exc:
+        logger.warning(f"[PlexPoller] Plex Watchlist fetch failed: {exc}")
+        return None
+
+
+def _enrich_watchlist_item(item: dict) -> dict:
+    """Fetch full Discover metadata for a watchlist item if inline external GUIDs are absent."""
+    parsed = _parse_plex_guids(item)
+    if parsed['imdb_id'] or parsed['tmdb_id'] or parsed['tvdb_id']:
+        return item
+    rating_key = item.get('ratingKey')
+    _, plex_token = get_plex_credentials()
+    if not rating_key or not plex_token:
+        return item
+    try:
+        r = requests.get(
+            f"{PLEX_DISCOVER_BASE}/library/metadata/{rating_key}",
+            headers={'Accept': 'application/json', 'X-Plex-Token': plex_token},
+            params={'X-Plex-Token': plex_token, 'includeGuids': 1},
+            timeout=10,
+        )
+        if r.ok:
+            hit = ((r.json() or {}).get('MediaContainer', {}).get('Metadata') or [None])[0]
+            if hit:
+                item = {**item, **hit}
+    except Exception as exc:
+        logger.debug(f"[PlexPoller] Watchlist metadata enrich failed (ratingKey={rating_key}): {exc}")
+    return item
+
+
+def _remove_from_plex_watchlist(rating_key: str | None) -> bool:
+    """Remove an imported item from the user's Plex Watchlist via discover.provider.plex.tv."""
+    _, plex_token = get_plex_credentials()
+    if not rating_key or not plex_token:
+        return False
+    try:
+        r = requests.put(
+            f"{PLEX_DISCOVER_BASE}/actions/removeFromWatchlist",
+            headers={'Accept': 'application/json', 'X-Plex-Token': plex_token},
+            params={'ratingKey': rating_key, 'X-Plex-Token': plex_token},
+            timeout=10,
+        )
+        if r.status_code in (200, 204):
+            logger.info(f"[PlexPoller] Removed ratingKey={rating_key} from Plex Watchlist")
+            return True
+        logger.warning(f"[PlexPoller] Plex Watchlist removal returned HTTP {r.status_code} for ratingKey={rating_key}")
+        return False
+    except Exception as exc:
+        logger.warning(f"[PlexPoller] Failed removing ratingKey={rating_key} from Plex Watchlist: {exc}")
+        return False
+
+
+def sync_plex_watchlist() -> int:
+    """
+    Poll the user's Plex Watchlist, automatically add any new Movies or TV Shows to Rolarr,
+    and immediately remove them from the Plex Watchlist.
+    """
+    if not bool(get_config('PLEX_WATCHLIST_SYNC', True)):
+        return 0
+    _, plex_token = get_plex_credentials()
+    if not plex_token:
+        return 0
+
+    wl_items = _fetch_plex_watchlist()
+    if not wl_items:
+        return 0
+
+    tracked_movies = db.list_movies()
+    movies_by_tmdb = {int(m['tmdb_id']): m for m in tracked_movies if m.get('tmdb_id') and int(m['tmdb_id']) > 0}
+    movies_by_imdb = {str(m['imdb_id']).strip(): m for m in tracked_movies if m.get('imdb_id')}
+    movies_by_clean = {media_manager.clean_title(m['title']): m for m in tracked_movies if m.get('title')}
+
+    tracked_shows = db.list_shows()
+    shows_by_tvmaze = {int(s['tvmaze_id']): s for s in tracked_shows if s.get('tvmaze_id') and int(s['tvmaze_id']) > 0}
+    shows_by_clean = {media_manager.clean_title(s['title']): s for s in tracked_shows if s.get('title')}
+
+    imported_count = 0
+    for raw_item in wl_items:
+        try:
+            item = _enrich_watchlist_item(raw_item)
+            rating_key = item.get('ratingKey')
+            itype = str(item.get('type') or '').lower()
+            title = (item.get('title') or '').strip()
+            year = item.get('year')
+            thumb = item.get('thumb') or ''
+            guids = _parse_plex_guids(item)
+
+            if not title:
+                continue
+
+            if itype == 'movie':
+                already = (
+                    (guids['tmdb_id'] and guids['tmdb_id'] in movies_by_tmdb)
+                    or (guids['imdb_id'] and guids['imdb_id'] in movies_by_imdb)
+                    or (media_manager.clean_title(title) in movies_by_clean)
+                )
+                if already:
+                    _remove_from_plex_watchlist(rating_key)
+                    continue
+
+                res = media_manager.add_movie(
+                    tmdb_id=guids['tmdb_id'],
+                    title=title,
+                    year=year,
+                    imdb_id=guids['imdb_id'],
+                    poster_url=thumb,
+                )
+                if res.get('status') in ('success', 'warning'):
+                    removed = _remove_from_plex_watchlist(rating_key)
+                    rm_note = ' & removed from Plex Watchlist' if removed else ''
+                    _activity_log(res['status'], f"[Watchlist] {res.get('message', f'Added {title}')}{rm_note}")
+                    imported_count += 1
+                    mov = res.get('movie') or {}
+                    if mov.get('tmdb_id') and int(mov['tmdb_id']) > 0:
+                        movies_by_tmdb[int(mov['tmdb_id'])] = mov
+                    if mov.get('imdb_id'):
+                        movies_by_imdb[str(mov['imdb_id']).strip()] = mov
+                    movies_by_clean[media_manager.clean_title(title)] = mov
+
+            elif itype == 'show':
+                info = metadata.find_show_by_external_id(
+                    imdb_id=guids['imdb_id'],
+                    tvdb_id=guids['tvdb_id'],
+                    title=title,
+                    year=year,
+                )
+                if not info or not info.get('tvmaze_id'):
+                    _activity_log('warning', f"[Watchlist] Could not resolve TV show '{title}' on TVMaze — skipped")
+                    continue
+
+                tvmaze_id = int(info['tvmaze_id'])
+                already = (
+                    tvmaze_id in shows_by_tvmaze
+                    or media_manager.clean_title(info['title']) in shows_by_clean
+                    or media_manager.clean_title(title) in shows_by_clean
+                )
+                if already:
+                    _remove_from_plex_watchlist(rating_key)
+                    continue
+
+                res = media_manager.add_show(tvmaze_id, auto_queue=True, start_season=1, start_episode=1)
+                if res.get('status') in ('success', 'warning'):
+                    removed = _remove_from_plex_watchlist(rating_key)
+                    rm_note = ' & removed from Plex Watchlist' if removed else ''
+                    _activity_log(res['status'], f"[Watchlist] {res.get('message', f'Added {title}')}{rm_note}")
+                    imported_count += 1
+                    shows_by_tvmaze[tvmaze_id] = res.get('show') or info
+                    shows_by_clean[media_manager.clean_title(info['title'])] = res.get('show') or info
+        except Exception as exc:
+            logger.warning(f"[PlexPoller] Failed processing Watchlist item '{raw_item.get('title')}': {exc}")
+
+    return imported_count
 
 
 # ── Jellyfin API helpers ──────────────────────────────────────────────────────
@@ -510,6 +718,10 @@ def _execute_poll() -> int:
     scanned_sources = []
 
     if plex_configured:
+        try:
+            sync_plex_watchlist()
+        except Exception as wl_exc:
+            logger.warning(f"[PlexPoller] Watchlist sync error: {wl_exc}")
         logger.info("[PlexPoller] Scanning Plex library for all watched items (viewCount > 0)...")
         plex_items = _fetch_all_watched_from_library()
         if plex_items is None:

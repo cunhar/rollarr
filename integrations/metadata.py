@@ -96,6 +96,41 @@ def find_show_by_title(title: str) -> dict[str, Any] | None:
     return results[0]
 
 
+def find_show_by_external_id(
+    imdb_id: str | None = None,
+    tvdb_id: int | str | None = None,
+    title: str = '',
+    year: int | None = None,
+) -> dict[str, Any] | None:
+    """Resolve a TV show on TVMaze by IMDb ID or TheTVDB ID first, falling back to title search."""
+    for param_name, raw_val in (('imdb', imdb_id), ('thetvdb', tvdb_id)):
+        val = str(raw_val or '').strip()
+        if not val:
+            continue
+        try:
+            resp = requests.get(
+                f"{TVMAZE_BASE}/lookup/shows",
+                params={param_name: val},
+                timeout=10,
+            )
+            if resp.status_code == 200:
+                data = resp.json()
+                if data and data.get('id'):
+                    return _format_tvmaze_show(data)
+        except Exception as exc:
+            logger.debug(f"[Metadata] TVMaze external lookup ({param_name}={val}) failed: {exc}")
+
+    if title:
+        if year:
+            results = search_tv(title)
+            target_clean = clean_title(title)
+            for s in results:
+                if clean_title(s['title']) == target_clean and s.get('year') == int(year):
+                    return s
+        return find_show_by_title(title)
+    return None
+
+
 def get_show_episodes(tvmaze_id: int, force_refresh: bool = False) -> list[dict[str, Any]]:
     """
     Fetch regular episodes (season > 0) for a TVMaze show ID, sorted by (season, episode).

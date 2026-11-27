@@ -71,6 +71,7 @@ DEFAULT_CONFIG = {
     'SUBTITLE_LANGUAGES': 'en, pt',
     'PLEX_URL': 'http://plex:32400',
     'PLEX_TOKEN': '',
+    'PLEX_WATCHLIST_SYNC': True,
     'JELLYFIN_URL': 'http://jellyfin:8096',
     'JELLYFIN_API_KEY': '',
     'PLEX_WATCH_INTERVAL': 3600,

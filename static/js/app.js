@@ -1512,6 +1512,7 @@ function saveConfiguration() {
         DELETE_WATCHED_EPISODES: el('cfg-DELETE_WATCHED_EPISODES').value === 'true',
         PLEX_URL: el('cfg-PLEX_URL').value,
         PLEX_TOKEN: el('cfg-PLEX_TOKEN').value,
+        PLEX_WATCHLIST_SYNC: el('cfg-PLEX_WATCHLIST_SYNC') ? el('cfg-PLEX_WATCHLIST_SYNC').value === 'true' : true,
         JELLYFIN_URL: el('cfg-JELLYFIN_URL').value,
         JELLYFIN_API_KEY: el('cfg-JELLYFIN_API_KEY').value,
         PLEX_WATCH_INTERVAL: parseInt(el('cfg-PLEX_WATCH_INTERVAL').value) || 3600,

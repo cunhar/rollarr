@@ -259,6 +259,68 @@ class TestMediaManagerAndDb(unittest.TestCase):
         self.assertTrue(obsolete_del)
         self.assertIn('deleted', reason_del)
 
+    def test_plex_watchlist_auto_import_and_removal(self):
+        from services import plex_poller
+
+        watchlist_payload = [
+            {
+                'ratingKey': 'wl-movie-1',
+                'type': 'movie',
+                'title': 'Dune: Part Two',
+                'year': 2024,
+                'thumb': 'https://image.tmdb.org/poster.jpg',
+                'Guid': [{'id': 'imdb://tt15239678'}, {'id': 'tmdb://693134'}],
+            },
+            {
+                'ratingKey': 'wl-show-1',
+                'type': 'show',
+                'title': 'Severance',
+                'year': 2022,
+                'Guid': [{'id': 'imdb://tt11280740'}, {'id': 'tvdb://371980'}],
+            },
+        ]
+
+        fake_tvmaze_show = {
+            'type': 'tv',
+            'id': 44933,
+            'tvmaze_id': 44933,
+            'tvdb_id': 371980,
+            'imdb_id': 'tt11280740',
+            'title': 'Severance',
+            'year': 2022,
+            'poster_url': 'https://tvmaze/sev.jpg',
+        }
+        fake_episodes = [
+            {'season': 1, 'episode': 1, 'title': 'Ep 1', 'airdate': '2022-02-18', 'aired': True},
+            {'season': 1, 'episode': 2, 'title': 'Ep 2', 'airdate': '2022-02-25', 'aired': True},
+        ]
+
+        removed_keys = []
+
+        def fake_remove(rk):
+            removed_keys.append(rk)
+            return True
+
+        with patch('services.plex_poller.get_config', return_value=True), \
+             patch('services.plex_poller.get_plex_credentials', return_value=('http://plex:32400', 'tok-123')), \
+             patch('services.plex_poller._fetch_plex_watchlist', return_value=watchlist_payload), \
+             patch('services.plex_poller._remove_from_plex_watchlist', side_effect=fake_remove), \
+             patch('services.media_manager.metadata.get_movie_details', return_value=None), \
+             patch('services.media_manager.metadata.get_movie_release_dates', return_value={'in_cinemas': '2024-03-01', 'digital_release': '2024-04-15'}), \
+             patch('services.media_manager.queue_movie', return_value=(True, 'Queued Dune.Part.Two.1080p')), \
+             patch('services.plex_poller.metadata.find_show_by_external_id', return_value=fake_tvmaze_show), \
+             patch('services.media_manager.metadata.get_show_by_id', return_value=fake_tvmaze_show), \
+             patch('services.media_manager.metadata.get_show_episodes', return_value=fake_episodes), \
+             patch('services.media_manager.queue_episode', return_value=(True, 'Queued Severance S01E01')):
+            imported = plex_poller.sync_plex_watchlist()
+
+        self.assertEqual(imported, 2)
+        self.assertEqual(removed_keys, ['wl-movie-1', 'wl-show-1'])
+        self.assertEqual(len(db.list_movies()), 1)
+        self.assertEqual(db.list_movies()[0]['title'], 'Dune: Part Two')
+        self.assertEqual(len(db.list_shows()), 1)
+        self.assertEqual(db.list_shows()[0]['title'], 'Severance')
+
 
 if __name__ == '__main__':
     unittest.main()
