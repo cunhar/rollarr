@@ -35,6 +35,12 @@ def get_rolling_window() -> int:
 
 # ── Disk Inspection & Safe Deletion ──────────────────────────────────────────
 
+def _strip_leading_the(cleaned: str) -> str:
+    if cleaned.startswith('the') and len(cleaned) >= 7:
+        return cleaned[3:]
+    return cleaned
+
+
 def _find_show_dir(show_title: str) -> str | None:
     tv_root = get_config('PATH_TV', '/tv') or '/tv'
     if not os.path.isdir(tv_root):
@@ -43,9 +49,16 @@ def _find_show_dir(show_title: str) -> str | None:
     if os.path.isdir(direct):
         return direct
     target_clean = clean_title(show_title)
+    if not target_clean:
+        return None
     for entry in os.listdir(tv_root):
         full = os.path.join(tv_root, entry)
         if os.path.isdir(full) and clean_title(entry) == target_clean:
+            return full
+    target_no_the = _strip_leading_the(target_clean)
+    for entry in os.listdir(tv_root):
+        full = os.path.join(tv_root, entry)
+        if os.path.isdir(full) and _strip_leading_the(clean_title(entry)) == target_no_the:
             return full
     return None
 
@@ -584,13 +597,23 @@ def retry_failed_download(failed_job: dict[str, Any]) -> tuple[bool, str]:
     """Re-search and enqueue the next-best non-blocklisted release after a download failure."""
     next_retry = int(failed_job.get('retry_count') or 0) + 1
     if failed_job['media_type'] == 'episode':
-        show = db.get_show(failed_job['media_id']) if failed_job.get('media_id') else None
-        if not show:
+        if failed_job.get('media_id'):
+            show = db.get_show(int(failed_job['media_id']))
+            if not show:
+                return False, 'Show was deleted from library'
+        else:
             show = {'id': None, 'title': failed_job['title'], 'year': failed_job.get('year')}
+        lw_s, lw_e = show.get('last_watched_season'), show.get('last_watched_episode')
+        if lw_s is not None and lw_e is not None:
+            if (int(failed_job['season']), int(failed_job['episode'])) <= (int(lw_s), int(lw_e)):
+                return False, 'Episode already marked as watched'
         return queue_episode(show, failed_job['season'], failed_job['episode'], retry_count=next_retry)
     else:
-        movie = db.get_movie(failed_job['media_id']) if failed_job.get('media_id') else None
-        if not movie:
+        if failed_job.get('media_id'):
+            movie = db.get_movie(int(failed_job['media_id']))
+            if not movie:
+                return False, 'Movie was removed from library'
+        else:
             movie = {'id': None, 'title': failed_job['title'], 'year': failed_job.get('year')}
         return queue_movie(movie, retry_count=next_retry)
 
@@ -1124,9 +1147,15 @@ def add_movie(
 def resolve_or_track_show(show_title: str) -> dict[str, Any] | None:
     """Find a show in SQLite by title, or auto-resolve & save it via TVMaze."""
     target_clean = clean_title(show_title)
-    for s in db.list_shows():
+    shows = db.list_shows()
+    for s in shows:
         if clean_title(s['title']) == target_clean:
             return s
+    target_no_the = _strip_leading_the(target_clean)
+    if target_no_the:
+        for s in shows:
+            if _strip_leading_the(clean_title(s['title'])) == target_no_the:
+                return s
 
     info = metadata.find_show_by_title(show_title)
     if not info:
@@ -1335,6 +1364,8 @@ def _try_upgrade_movie(movie: dict[str, Any], cur_res: str, pref_res: str) -> tu
     tiers = release_selector.RES_TIERS
     if cur_res not in tiers or pref_res not in tiers or tiers.index(cur_res) >= tiers.index(pref_res):
         return False, ''
+    if movie.get('id') and db.get_movie(int(movie['id'])) is None:
+        return False, ''
     title = movie['title']
     year = movie.get('year')
     if db.has_active_download('movie', title):
@@ -1357,6 +1388,8 @@ def _try_upgrade_movie(movie: dict[str, Any], cur_res: str, pref_res: str) -> tu
         and tiers.index(r['parsed']['resolution']) <= tiers.index(pref_res)
     ]
     if not upgrades:
+        return False, ''
+    if movie.get('id') and db.get_movie(int(movie['id'])) is None:
         return False, ''
     best = upgrades[0]
     db.enqueue_download(
@@ -1381,7 +1414,17 @@ def _try_upgrade_episode(show: dict[str, Any], season: int, episode: int, cur_re
     tiers = release_selector.RES_TIERS
     if cur_res not in tiers or pref_res not in tiers or tiers.index(cur_res) >= tiers.index(pref_res):
         return False, ''
+    if show.get('id'):
+        fresh_show = db.get_show(int(show['id']))
+        if not fresh_show:
+            return False, ''
+        show = fresh_show
+    lw_s, lw_e = show.get('last_watched_season'), show.get('last_watched_episode')
+    if lw_s is not None and lw_e is not None and (int(season), int(episode)) <= (int(lw_s), int(lw_e)):
+        return False, ''
     show_title = show['title']
+    if not episode_exists_on_disk(show_title, season, episode):
+        return False, ''
     if db.has_active_download('episode', show_title, season, episode):
         return False, ''
     ep_airdate = _get_episode_airdate(show, season, episode)
@@ -1410,6 +1453,16 @@ def _try_upgrade_episode(show: dict[str, Any], season: int, episode: int, cur_re
     ]
     if not upgrades:
         return False, ''
+    # Re-verify show still exists, file is still on disk, and episode was not marked watched during search
+    if show.get('id'):
+        fresh_show = db.get_show(int(show['id']))
+        if not fresh_show:
+            return False, ''
+        lw_s, lw_e = fresh_show.get('last_watched_season'), fresh_show.get('last_watched_episode')
+        if lw_s is not None and lw_e is not None and (int(season), int(episode)) <= (int(lw_s), int(lw_e)):
+            return False, ''
+    if not episode_exists_on_disk(show_title, season, episode):
+        return False, ''
     best = upgrades[0]
     db.enqueue_download(
         media_type='episode',
@@ -1431,12 +1484,14 @@ def _try_upgrade_episode(show: dict[str, Any], season: int, episode: int, cur_re
 def run_auto_grab() -> dict[str, Any]:
     """
     Periodic auto-grabber:
+      0. Syncs watched status from Plex/Jellyfin first so newly watched episodes/movies
+         are deleted before scanning on-disk files for quality upgrades.
       1. Skips if Disk Space Guard is active or NZBgeek/NNTP not configured.
       2. Searches & queues WANTED movies (skipping pre-release/unreleased movies),
          and checks DOWNLOADED movies below PREFERRED_RESOLUTION for quality upgrades.
       3. For active TV shows (with at least 1 episode on disk or a watch cursor),
-         queues newly aired episodes to keep ROLLING_WINDOW full and checks on-disk
-         episodes below PREFERRED_RESOLUTION for quality upgrades.
+         queues newly aired episodes to keep ROLLING_WINDOW full and checks un-watched
+         on-disk episodes below PREFERRED_RESOLUTION for quality upgrades.
     """
     if not _autograb_lock.acquire(blocking=False):
         return {'status': 'info', 'message': 'Auto-grab already running'}
@@ -1450,6 +1505,13 @@ def run_auto_grab() -> dict[str, Any]:
 
         if not nzbgeek.get_nzbgeek_api_key() or not usenet_downloader.is_nntp_configured():
             return {'status': 'info', 'message': 'NZBgeek or NNTP not configured'}
+
+        # Sync watched items from Plex/Jellyfin first so watched-but-not-yet-deleted files are cleaned up
+        try:
+            from services import plex_poller
+            plex_poller.sync_watched_now()
+        except Exception as poll_exc:
+            logger.debug(f"[AutoGrab] Pre-grab watch sync skipped: {poll_exc}")
 
         cur_year = datetime.date.today().year
         pref_res = (get_config('PREFERRED_RESOLUTION', '1080p') or '1080p').lower()
@@ -1491,9 +1553,11 @@ def run_auto_grab() -> dict[str, Any]:
             if not on_disk and not explicit_cursor:
                 continue
 
-            # Check existing on-disk episodes for quality upgrades
+            # Check existing un-watched on-disk episodes for quality upgrades
             if pref_res in tiers:
                 for (s_num, e_num), fp in sorted(on_disk_files.items()):
+                    if explicit_cursor and (s_num, e_num) <= explicit_cursor:
+                        continue
                     cur_res = get_video_resolution(fp)
                     if cur_res in tiers and tiers.index(cur_res) < tiers.index(pref_res):
                         ok_up, new_res = _try_upgrade_episode(show, s_num, e_num, cur_res, pref_res)

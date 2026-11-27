@@ -322,8 +322,9 @@ def cancel_download(download_id: int) -> bool:
     if not job:
         return False
     with _state_lock:
-        _cancelled_ids.add(download_id)
         _preempted_ids.discard(download_id)
+        if job['status'] != 'queued':
+            _cancelled_ids.add(download_id)
     if job['status'] == 'queued':
         db.update_download(download_id, status='cancelled', error='Cancelled by user')
         if job.get('media_type') == 'movie' and job.get('media_id'):
@@ -674,10 +675,42 @@ def _notify_media_servers():
         logger.debug(f"[UsenetDL] Media server refresh error: {exc}")
 
 
+def _is_job_obsolete_or_cancelled(job: dict[str, Any]) -> tuple[bool, str]:
+    """
+    Check if a download job was cancelled by the user, or if its target show/movie
+    was deleted or already marked as watched while queued/downloading/unpacking.
+    """
+    job_id = int(job['id'])
+    with _state_lock:
+        if job_id in _cancelled_ids:
+            _cancelled_ids.discard(job_id)
+            return True, 'Cancelled by user'
+
+    if job.get('media_type') == 'episode':
+        show_rec = db.get_show(int(job['media_id'])) if job.get('media_id') else None
+        if job.get('media_id') and not show_rec:
+            return True, 'Cancelled (TV show was deleted from library)'
+        if show_rec and job.get('season') is not None and job.get('episode') is not None:
+            lw_s, lw_e = show_rec.get('last_watched_season'), show_rec.get('last_watched_episode')
+            if lw_s is not None and lw_e is not None:
+                if (int(job['season']), int(job['episode'])) <= (int(lw_s), int(lw_e)):
+                    return True, 'Cancelled (episode already marked as watched)'
+    elif job.get('media_type') == 'movie':
+        if job.get('media_id') and db.get_movie(int(job['media_id'])) is None:
+            return True, 'Cancelled (movie was removed from library)'
+    return False, ''
+
+
 # ── Core Job Execution ───────────────────────────────────────────────────────
 
 def _process_job(job: dict[str, Any]):
     job_id = job['id']
+    obsolete, obs_reason = _is_job_obsolete_or_cancelled(job)
+    if obsolete:
+        db.update_download(job_id, status='cancelled', error=obs_reason)
+        _activity_log('info', f"Skipped download #{job_id} ({job['nzb_title']}): {obs_reason}")
+        return
+
     host = (get_config('NNTP_HOST') or '').strip()
     port = int(get_config('NNTP_PORT', 563) or 563)
     use_ssl = bool(get_config('NNTP_SSL', True))
@@ -897,11 +930,26 @@ def _process_job(job: dict[str, Any]):
         if not video_path:
             raise RuntimeError("No video file found after extraction")
 
+        # Re-verify before importing to library in case the episode was watched or show deleted during PAR2/unpacking
+        obsolete, obs_reason = _is_job_obsolete_or_cancelled(job)
+        if obsolete:
+            db.update_download(job_id, status='cancelled', error=obs_reason)
+            if job.get('media_type') == 'movie' and job.get('media_id') and db.get_movie(int(job['media_id'])):
+                db.update_movie_status(int(job['media_id']), 'wanted')
+            _activity_log('info', f"Aborted import for #{job_id} ({job['nzb_title']}): {obs_reason}")
+            return
+
         covered_episodes: set[int] = set()
         dest_path = None
         if job['media_type'] == 'episode':
             req_season = int(job['season'])
             req_ep = int(job['episode'])
+            show_rec = db.get_show(int(job['media_id'])) if job.get('media_id') else None
+            lw_cursor = (
+                (int(show_rec['last_watched_season']), int(show_rec['last_watched_episode']))
+                if (show_rec and show_rec.get('last_watched_season') is not None and show_rec.get('last_watched_episode') is not None)
+                else None
+            )
             pack_map = _find_season_pack_episode_videos([extract_dir, work_dir], req_season)
             if len(pack_map) > 1:
                 # Season Pack: extract requested episode + any active/queued rolling-window episodes in this season
@@ -917,6 +965,8 @@ def _process_job(job: dict[str, Any]):
                         wanted_eps.add(int(adl['episode']))
                 moved_sources: set[str] = set()
                 for ep_num in sorted(wanted_eps):
+                    if lw_cursor and (req_season, ep_num) <= lw_cursor:
+                        continue
                     if ep_num not in pack_map:
                         continue
                     vpath, e_start, e_end = pack_map[ep_num]

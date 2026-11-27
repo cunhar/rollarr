@@ -97,6 +97,20 @@ def trigger_now() -> dict:
     return {'status': 'success', 'message': 'Re-check cycle triggered'}
 
 
+def sync_watched_now() -> int:
+    """Synchronously run a watched-media poll & cleanup pass if Plex or Jellyfin is configured."""
+    plex_url, plex_token = get_plex_credentials()
+    jf_url, jf_key = get_jellyfin_credentials()
+    if not ((plex_url and plex_token) or (jf_url and jf_key)):
+        return 0
+    with _poll_active:
+        try:
+            return _execute_poll()
+        except Exception as exc:
+            logger.warning(f"[PlexPoller] Synchronous watched-media sync failed: {exc}")
+            return 0
+
+
 # ── Plex API helpers ──────────────────────────────────────────────────────────
 
 def _plex_get(path: str, params: dict = None) -> dict | None:
@@ -381,8 +395,30 @@ def _process_episode(item: dict) -> tuple[str, str]:
     source = item.get('_source', 'plex')
     reported_path = _extract_reported_path(item)
 
+    # Resolve show in Rolarr DB / TVMaze first so we can match canonical title & cancel in-flight upgrades
+    show = media_manager.resolve_or_track_show(show_title)
+    target_cleans = {media_manager.clean_title(show_title)}
+    if show and show.get('title'):
+        target_cleans.add(media_manager.clean_title(show['title']))
+
+    # Cancel any queued/active download (e.g. quality upgrade) for this or earlier watched episodes
+    for d in db.list_active_downloads():
+        if (
+            d.get('media_type') == 'episode'
+            and (
+                (show and show.get('id') and d.get('media_id') == show['id'])
+                or media_manager.clean_title(d.get('title') or '') in target_cleans
+            )
+            and d.get('season') is not None
+            and d.get('episode') is not None
+            and (int(d['season']), int(d['episode'])) <= (season_num, episode_num)
+        ):
+            media_manager.usenet_downloader.cancel_download(int(d['id']))
+
     if delete_enabled:
         deleted, detail = media_manager.delete_episode_file(show_title, season_num, episode_num, reported_path=reported_path)
+        if not deleted and show and show.get('title') and show['title'] != show_title:
+            deleted, detail = media_manager.delete_episode_file(show['title'], season_num, episode_num, reported_path=reported_path)
         if source == 'plex':
             deleted_from_plex = _plex_delete_item(rating_key)
             media_note = ", removed from Plex" if deleted_from_plex else ", Plex removal failed"
@@ -392,8 +428,6 @@ def _process_episode(item: dict) -> tuple[str, str]:
     else:
         file_action = "delete disabled (file kept on disk)"
 
-    # Resolve show in Rolarr DB / TVMaze to queue next ROLLING_WINDOW aired episodes
-    show = media_manager.resolve_or_track_show(show_title)
     if not show:
         return 'warning', f"{show_title} {ep_str} watched — {file_action}; show not found on TVMaze"
 
@@ -437,6 +471,12 @@ def _process_movie(item: dict) -> tuple[str, str]:
     delete_enabled = bool(get_config('DELETE_WATCHED_EPISODES', True))
     reported_path = _extract_reported_path(item)
     source = item.get('_source', 'plex')
+
+    # Cancel any queued/active download (e.g. quality upgrade) for this watched movie
+    target_clean = media_manager.clean_title(title)
+    for d in db.list_active_downloads():
+        if d.get('media_type') == 'movie' and media_manager.clean_title(d.get('title') or '') == target_clean:
+            media_manager.usenet_downloader.cancel_download(int(d['id']))
 
     if delete_enabled:
         deleted, detail = media_manager.delete_movie_file(title, year, reported_path=reported_path)

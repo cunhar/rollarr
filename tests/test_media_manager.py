@@ -183,6 +183,82 @@ class TestMediaManagerAndDb(unittest.TestCase):
             self.assertFalse(avail['available'])
             self.assertIn('In Cinemas', avail['label'])
 
+    def test_watched_episode_never_upgrades_and_cancels_active_downloads(self):
+        from services import plex_poller, usenet_downloader
+
+        show = db.upsert_show(tvmaze_id=777, title="The Pastor's Wife", tvdb_id=888, year=2024)
+        ep_dir = os.path.join(self.tv_dir, "The Pastor's Wife", 'Season 01')
+        os.makedirs(ep_dir, exist_ok=True)
+        ep1_path = os.path.join(ep_dir, "The Pastor's Wife - S01E01.720p.mkv")
+        ep2_path = os.path.join(ep_dir, "The Pastor's Wife - S01E02.720p.mkv")
+        for p in (ep1_path, ep2_path):
+            with open(p, 'wb') as f:
+                f.write(b'video')
+
+        def fake_cfg(key, default=None):
+            if key == 'PATH_TV':
+                return self.tv_dir
+            if key == 'PATH_MOVIES':
+                return self.movies_dir
+            if key == 'PREFERRED_RESOLUTION':
+                return '1080p'
+            if key == 'DELETE_WATCHED_EPISODES':
+                return True
+            return default
+
+        # 1. Mark S01E01 as watched via watch cursor while file is still on disk -> _try_upgrade_episode must refuse
+        db.update_show_watch_cursor(show['id'], 1, 1)
+        with patch('services.media_manager.get_config', side_effect=fake_cfg), \
+             patch('services.media_manager.nzbgeek.search_episode') as mock_search:
+            ok_up, _ = media_manager._try_upgrade_episode(show, 1, 1, '720p', '1080p')
+            self.assertFalse(ok_up)
+            mock_search.assert_not_called()
+
+        # 2. If an upgrade download was already queued for S01E02 before poller runs,
+        #    processing S01E02 as watched cancels the queued upgrade & deletes the file
+        dl_upgrade = db.enqueue_download(
+            media_type='episode', media_id=show['id'], title="The Pastor's Wife",
+            season=1, episode=2, nzb_title='The.Pastors.Wife.S01E02.1080p.WEB-DL',
+            nzb_url='http://nzb/up2', nzb_guid='guid-up2', size_bytes=1024,
+        )
+        self.assertTrue(db.has_active_download('episode', "The Pastor's Wife", 1, 2))
+
+        watched_item = {
+            '_source': 'jellyfin',
+            'type': 'episode',
+            'grandparentTitle': "Pastor's Wife",  # Even without leading 'The'
+            'parentIndex': 1,
+            'index': 2,
+            'title': 'Episode 2',
+        }
+        with patch('services.media_manager.get_config', side_effect=fake_cfg), \
+             patch('services.plex_poller.get_config', side_effect=fake_cfg), \
+             patch('services.media_manager.metadata.get_show_episodes', return_value=[]):
+            status, _ = plex_poller._process_episode(watched_item)
+
+        self.assertEqual(status, 'success')
+        self.assertFalse(os.path.exists(ep2_path))
+        self.assertFalse(db.has_active_download('episode', "The Pastor's Wife", 1, 2))
+        self.assertEqual(db.get_download(dl_upgrade['id'])['status'], 'cancelled')
+
+        # 3. Downloader _is_job_obsolete_or_cancelled rejects jobs for watched episodes or deleted shows
+        obsolete, reason = usenet_downloader._is_job_obsolete_or_cancelled(dl_upgrade)
+        self.assertTrue(obsolete)
+        self.assertIn('watched', reason)
+
+        db.delete_show(show['id'])
+        dl_deleted_show = {
+            'id': 9999,
+            'media_type': 'episode',
+            'media_id': show['id'],
+            'title': "The Pastor's Wife",
+            'season': 1,
+            'episode': 3,
+        }
+        obsolete_del, reason_del = usenet_downloader._is_job_obsolete_or_cancelled(dl_deleted_show)
+        self.assertTrue(obsolete_del)
+        self.assertIn('deleted', reason_del)
+
 
 if __name__ == '__main__':
     unittest.main()
