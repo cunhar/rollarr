@@ -125,30 +125,46 @@ function renderDownloadCard(d, mIdx, mTotal) {
     </div>`;
 }
 
+function renderPhysicalDiskBar(pd) {
+    const badgeColor = pd.status === 'ok' ? 'green' : (pd.status === 'warning' ? 'amber' : 'red');
+    const fillColor = pd.status === 'critical' ? '#e05252' : (pd.status === 'warning' ? '#e5a00d' : '#3ecf8e');
+    const mountsStr = (pd.mounts || []).join(' • ');
+    return `
+    <div class="stat-cell" style="margin-bottom:12px;">
+        <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px; margin-bottom:8px;">
+            <div style="display:flex; align-items:center; gap:10px;">
+                <span class="stat-label" style="font-weight:700; text-transform:uppercase;">${escapeHtml(pd.label)}</span>
+                ${mountsStr ? `<span style="font-size:12px; color:var(--text-sub);">Mounts: ${escapeHtml(mountsStr)}</span>` : ''}
+            </div>
+            <span class="badge badge-${badgeColor}">${escapeHtml(pd.free_formatted)} Free (${pd.free_pct}%)</span>
+        </div>
+        <div class="idle-track" style="height:10px; margin-bottom:8px;">
+            <div class="idle-fill" style="width: ${pd.used_pct}%; background: ${fillColor};"></div>
+        </div>
+        <div class="stat-sub">
+            <span>Drive Used: <strong>${escapeHtml(pd.used_formatted)}</strong> / ${escapeHtml(pd.total_formatted)} (${pd.used_pct}%)</span>
+            <span>Rolarr Media &amp; Downloads: <strong>${escapeHtml(pd.tracked_formatted || '0.0 GB')}</strong> (${pd.tracked_pct || 0}% of drive)</span>
+        </div>
+    </div>`;
+}
+
 function renderDiskSpaceCell(d) {
-    const badgeColor = d.status === 'ok' ? 'green' : (d.status === 'warning' ? 'amber' : 'red');
-    const fillColor = d.status === 'critical' ? '#e05252' : (d.status === 'warning' ? '#e5a00d' : '#3ecf8e');
     const folderFmt = d.folder_formatted || '0.0 GB';
     const folderPct = d.folder_pct !== undefined ? d.folder_pct : 0;
     return `
     <div class="stat-cell" style="flex:1;">
         <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
             <span class="stat-label" style="font-weight:600; text-transform:uppercase;">${escapeHtml(d.label)}</span>
-            <span class="badge badge-${badgeColor}">${d.free_pct}% Free</span>
+            <span class="badge badge-dim">${folderPct}% of drive</span>
         </div>
-        <div class="stat-value ${badgeColor}" style="margin-bottom:8px;">${escapeHtml(folderFmt)} <span style="font-size:13px; font-weight:normal; color:var(--text-sub);">in folder (${escapeHtml(d.free_formatted)} free)</span></div>
+        <div class="stat-value" style="margin-bottom:8px;">${escapeHtml(folderFmt)}</div>
         
         <div class="idle-track" style="margin-bottom:8px;">
-            <div class="idle-fill" style="width: ${d.used_pct}%; background: ${fillColor};"></div>
+            <div class="idle-fill" style="width: ${Math.min(100, Math.max(0, folderPct))}%; background: var(--accent);"></div>
         </div>
         
         <div class="stat-sub">
-            <span>Folder Share: ${folderPct}% of drive</span>
-            <span>Drive Used: ${escapeHtml(d.used_formatted)} / ${escapeHtml(d.total_formatted)}</span>
-        </div>
-        <div class="stat-sub" style="margin-top:8px;">
             <span>Path: <code>${escapeHtml(d.configured_path)}</code></span>
-            <span style="opacity:0.7;">${escapeHtml(d.source)}</span>
         </div>
     </div>`;
 }
@@ -1274,6 +1290,10 @@ window.runAutoGrab = runAutoGrab;
 function renderDiskSpace(data) {
     const grid = el('disk-grid');
     if (!grid || !data || !data.disks) return;
+    const physEl = el('physical-disk-bars');
+    if (physEl && data.physical_disks) {
+        physEl.innerHTML = data.physical_disks.map(pd => renderPhysicalDiskBar(pd)).join('');
+    }
     grid.innerHTML = Object.entries(data.disks).map(([key, d]) => renderDiskSpaceCell(d)).join('');
 
     const largestEl = el('disk-largest-container');

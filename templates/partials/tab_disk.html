@@ -6,27 +6,43 @@
         <button class="btn-clear" onclick="pollDiskSpace()">Refresh Storage</button>
     </div>
 
+    <div id="physical-disk-bars" style="margin-bottom:16px;">
+        {% for pd in (disk_info.physical_disks or []) %}
+        {% set pd_class = 'green' if pd.status == 'ok' else ('amber' if pd.status == 'warning' else 'red') %}
+        <div class="stat-cell" style="margin-bottom:12px;">
+            <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px; margin-bottom:8px;">
+                <div style="display:flex; align-items:center; gap:10px;">
+                    <span class="stat-label" style="font-weight:700; text-transform:uppercase;">{{ pd.label }}</span>
+                    <span style="font-size:12px; color:var(--text-sub);">Mounts: {{ pd.mounts | join(' • ') }}</span>
+                </div>
+                <span class="badge badge-{{ pd_class }}">{{ pd.free_formatted }} Free ({{ pd.free_pct }}%)</span>
+            </div>
+            <div class="idle-track" style="height:10px; margin-bottom:8px;">
+                <div class="idle-fill" style="width: {{ pd.used_pct }}%; background: {{ '#e05252' if pd.status == 'critical' else ('#e5a00d' if pd.status == 'warning' else '#3ecf8e') }};"></div>
+            </div>
+            <div class="stat-sub">
+                <span>Drive Used: <strong>{{ pd.used_formatted }}</strong> / {{ pd.total_formatted }} ({{ pd.used_pct }}%)</span>
+                <span>Rolarr Media &amp; Downloads: <strong>{{ pd.tracked_formatted }}</strong> ({{ pd.tracked_pct }}% of drive)</span>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+
     <div class="stat-grid" style="margin-bottom:24px;" id="disk-grid">
         {% for key, d in disk_info.disks.items() %}
-        {% set status_class = 'green' if d.status == 'ok' else ('amber' if d.status == 'warning' else 'red') %}
         <div class="stat-cell" style="flex:1;">
             <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
                 <span class="stat-label" style="font-weight:600; text-transform:uppercase;">{{ d.label }}</span>
-                <span class="badge badge-{{ 'green' if d.status == 'ok' else ('amber' if d.status == 'warning' else 'red') }}">{{ d.free_pct }}% Free</span>
+                <span class="badge badge-dim">{{ d.folder_pct or 0 }}% of drive</span>
             </div>
-            <div class="stat-value {{ status_class }}" style="margin-bottom:8px;">{{ d.folder_formatted or '0.0 GB' }} <span style="font-size:13px; font-weight:normal; color:var(--text-sub);">in folder ({{ d.free_formatted }} free)</span></div>
-            
+            <div class="stat-value" style="margin-bottom:8px;">{{ d.folder_formatted or '0.0 GB' }}</div>
+
             <div class="idle-track" style="margin-bottom:8px;">
-                <div class="idle-fill" style="width: {{ d.used_pct }}%; background: {{ '#e05252' if d.status == 'critical' else ('#e5a00d' if d.status == 'warning' else '#3ecf8e') }};"></div>
+                <div class="idle-fill" style="width: {{ d.folder_pct or 0 }}%; background: var(--accent);"></div>
             </div>
-            
+
             <div class="stat-sub">
-                <span>Folder Share: {{ d.folder_pct or 0 }}% of drive</span>
-                <span>Drive Used: {{ d.used_formatted }} / {{ d.total_formatted }}</span>
-            </div>
-            <div class="stat-sub" style="margin-top:8px;">
                 <span>Path: <code>{{ d.configured_path }}</code></span>
-                <span style="opacity:0.7;">{{ d.source }}</span>
             </div>
         </div>
         {% endfor %}
